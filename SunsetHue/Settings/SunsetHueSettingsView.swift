@@ -95,7 +95,7 @@ struct SunsetHueSettingsView: View {
             Section("API key") {
                 LabeledContent("Status") {
                     Text(appModel.hasAPIKey ? "Configured" : "Not configured")
-                        .foregroundStyle(appModel.hasAPIKey ? .secondary : .orange)
+                        .foregroundStyle(appModel.hasAPIKey ? Color.secondary : Color.orange)
                 }
                 SecureField("Paste your SunsetHue API key", text: $appModel.apiKeyDraft)
                     .focused($isAPIKeyFieldFocused)
