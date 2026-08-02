@@ -45,7 +45,7 @@ struct EmptyLocationsView: View {
                 .foregroundStyle(.orange, .yellow)
             Text("Welcome to SunsetHue")
                 .font(.largeTitle.weight(.semibold))
-            Text("Add a location and API key to see sunrise and sunset forecast quality.")
+            Text("Add a location, then set your API key in Settings → Account.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)

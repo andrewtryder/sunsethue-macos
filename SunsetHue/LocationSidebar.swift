@@ -31,10 +31,10 @@ struct LocationSidebar: View {
                 }
             }
 
-            if appModel.state.lastErrorIsAuthentication || !appModel.hasAPIKey {
+            if appModel.lastErrorIsAuthentication || !appModel.hasAPIKey {
                 Section {
                     Label(
-                        appModel.state.lastErrorMessage ?? "Add an API key to enable forecasts.",
+                        appModel.lastErrorMessage ?? "Add an API key to enable forecasts.",
                         systemImage: "key.slash"
                     )
                     .font(.caption)

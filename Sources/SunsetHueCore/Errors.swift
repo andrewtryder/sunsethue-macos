@@ -11,18 +11,23 @@ public enum SunsetHueError: Error, Equatable, Sendable {
     case invalidJSON
     case invalidResponse(String)
     case missingCredentials
+    case keychainUnavailable
+    case keychainEntitlementMisconfigured
     case invalidCoordinates
     case invalidLocation(String)
     case duplicateLocation
     case unexpectedStatus(Int)
+    case storageCorrupt
+    case storageTooLarge
 
     public var isTransient: Bool {
         switch self {
         case .networkUnavailable, .timeout, .serviceUnavailable, .rateLimited, .unexpectedStatus:
             return true
         case .authentication, .invalidRequest, .oversizedResponse, .invalidJSON,
-             .invalidResponse, .missingCredentials, .invalidCoordinates,
-             .invalidLocation, .duplicateLocation:
+             .invalidResponse, .missingCredentials, .keychainUnavailable,
+             .keychainEntitlementMisconfigured, .invalidCoordinates,
+             .invalidLocation, .duplicateLocation, .storageCorrupt, .storageTooLarge:
             return false
         }
     }
@@ -52,10 +57,18 @@ public enum SunsetHueError: Error, Equatable, Sendable {
             return "Received an invalid response from SunsetHue."
         case .missingCredentials:
             return "Add your SunsetHue API key in the app."
+        case .keychainUnavailable:
+            return "Keychain is unavailable. Unlock your Mac and try again."
+        case .keychainEntitlementMisconfigured:
+            return "Secure storage is misconfigured for this build. Reinstall the signed app from Xcode."
         case .invalidLocation(let message):
             return message
         case .duplicateLocation:
             return "A location with these coordinates already exists."
+        case .storageCorrupt:
+            return "Saved data was damaged and was reset."
+        case .storageTooLarge:
+            return "Saved data exceeded the allowed size and was ignored."
         }
     }
 
@@ -72,10 +85,14 @@ public enum SunsetHueError: Error, Equatable, Sendable {
         case .invalidJSON: return "invalid_json"
         case .invalidResponse(let detail): return "invalid_response:\(detail)"
         case .missingCredentials: return "missing_credentials"
+        case .keychainUnavailable: return "keychain_unavailable"
+        case .keychainEntitlementMisconfigured: return "keychain_entitlement_misconfigured"
         case .invalidCoordinates: return "invalid_coordinates"
         case .invalidLocation(let detail): return "invalid_location:\(detail)"
         case .duplicateLocation: return "duplicate_location"
         case .unexpectedStatus(let code): return "unexpected_status:\(code)"
+        case .storageCorrupt: return "storage_corrupt"
+        case .storageTooLarge: return "storage_too_large"
         }
     }
 }

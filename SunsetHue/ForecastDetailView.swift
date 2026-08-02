@@ -29,7 +29,8 @@ struct ForecastDetailView: View {
                     Text("Last successful update: \(bundle.fetchedAt.formatted(date: .abbreviated, time: .shortened))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel("Last successful update \(bundle.fetchedAt.formatted())")
+                        .accessibilityLabel("Last successful update")
+                        .accessibilityValue(bundle.fetchedAt.formatted())
                 } else if appModel.isRefreshing {
                     ProgressView("Loading forecast…")
                         .frame(maxWidth: .infinity, minHeight: 200)
@@ -59,8 +60,8 @@ struct ForecastDetailView: View {
             Text("\(location.latitude), \(location.longitude) · \(location.timeZoneIdentifier)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            if let message = appModel.state.lastErrorMessage {
-                Label(message, systemImage: appModel.state.lastErrorIsAuthentication ? "key.slash" : "wifi.exclamationmark")
+            if let message = appModel.lastErrorMessage {
+                Label(message, systemImage: appModel.lastErrorIsAuthentication ? "key.slash" : "wifi.exclamationmark")
                     .font(.callout)
                     .foregroundStyle(.orange)
                     .accessibilityLabel(message)
@@ -68,7 +69,9 @@ struct ForecastDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background {
+            AtmospherePanelBackground()
+        }
     }
 }
 
@@ -99,6 +102,7 @@ struct DayForecastSection: View {
 }
 
 struct EventForecastCard: View {
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     let forecast: EventForecast
     let timeZone: TimeZone
 
@@ -107,26 +111,38 @@ struct EventForecastCard: View {
             HStack {
                 Image(systemName: forecast.eventType == .sunrise ? "sunrise.fill" : "sunset.fill")
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(forecast.eventType == .sunrise ? .orange : .pink)
+                    .foregroundStyle(eventColor)
                     .accessibilityHidden(true)
                 Text(forecast.eventType.displayName)
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                if differentiateWithoutColor {
+                    Text(forecast.eventType == .sunrise ? "AM" : "PM")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
                 Spacer()
                 if let percent = PresentationFormatting.percentage(fromNormalized: forecast.quality) {
                     Text(percent)
                         .font(.title.weight(.bold).monospacedDigit())
-                        .accessibilityLabel("Quality \(percent)")
+                        .accessibilityLabel("Forecast quality")
+                        .accessibilityValue(
+                            forecast.qualityText.map { "\(percent), \($0)" } ?? percent
+                        )
                 } else {
                     Text("Unavailable")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel("Quality unavailable")
+                        .accessibilityLabel("Forecast quality")
+                        .accessibilityValue("Unavailable")
                 }
             }
 
             if let text = forecast.qualityText {
                 Text(text)
                     .font(.subheadline.weight(.medium))
+                    .accessibilityHidden(true)
             }
 
             labeled("Event time", PresentationFormatting.timeString(forecast.eventTime, timeZone: timeZone) ?? "—")
@@ -139,21 +155,42 @@ struct EventForecastCard: View {
                 if let direction = forecast.direction {
                     CompassView(degrees: direction)
                         .frame(width: 28, height: 28)
+                        .accessibilityHidden(true)
                     Text(PresentationFormatting.directionLabel(direction) ?? "—")
-                        .accessibilityLabel("Direction \(Int(direction)) degrees")
+                        .accessibilityLabel("Direction")
+                        .accessibilityValue("\(Int(direction)) degrees")
                 } else {
                     Text("—")
+                        .accessibilityLabel("Direction")
+                        .accessibilityValue("Unavailable")
                 }
             }
 
-            labeled("Golden hour", windowLabel(forecast.goldenHour))
-            labeled("Blue hour", windowLabel(forecast.blueHour))
+            windowRow("Golden hour", forecast.goldenHour)
+            windowRow("Blue hour", forecast.blueHour)
             labeled("Model data", forecast.modelData ? "Available" : "Not available")
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityElement(children: .combine)
+        .background {
+            AtmospherePanelBackground()
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(contrastBorder, lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(forecast.eventType.displayName) forecast")
+    }
+
+    private var eventColor: Color {
+        forecast.eventType == .sunrise ? .orange : .pink
+    }
+
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    private var contrastBorder: Color {
+        contrast == .increased ? Color.primary.opacity(0.35) : Color.clear
     }
 
     private func labeled(_ title: String, _ value: String) -> some View {
@@ -163,6 +200,22 @@ struct EventForecastCard: View {
             Text(value)
         }
         .font(.callout)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
+    }
+
+    private func windowRow(_ title: String, _ window: MagicHourWindow?) -> some View {
+        let value = windowLabel(window)
+        return HStack {
+            Text(title).foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+        }
+        .font(.callout)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 
     private func windowLabel(_ window: MagicHourWindow?) -> String {
@@ -186,32 +239,71 @@ struct CompassView: View {
                 .scaledToFit()
                 .padding(6)
                 .rotationEffect(.degrees(degrees))
-                .accessibilityHidden(true)
         }
-        .accessibilityLabel("Compass pointing \(Int(degrees)) degrees")
+        .accessibilityHidden(true)
+    }
+}
+
+struct AtmospherePanelBackground: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        if reduceTransparency {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(colorScheme == .dark ? Color(nsColor: .windowBackgroundColor) : Color(nsColor: .controlBackgroundColor))
+        } else {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.regularMaterial)
+        }
     }
 }
 
 struct AtmosphereBackground: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        LinearGradient(
-            colors: colorScheme == .dark
-                ? [Color(red: 0.08, green: 0.10, blue: 0.18), Color(red: 0.22, green: 0.12, blue: 0.18), Color(red: 0.05, green: 0.06, blue: 0.10)]
-                : [Color(red: 1.0, green: 0.93, blue: 0.82), Color(red: 0.82, green: 0.90, blue: 1.0), Color(red: 0.96, green: 0.96, blue: 0.98)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        Group {
+            if reduceTransparency {
+                Rectangle().fill(solidColor)
+            } else {
+                LinearGradient(
+                    colors: gradientColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        }
+        .overlay {
+            if contrast == .increased {
+                Rectangle().strokeBorder(Color.primary.opacity(0.2), lineWidth: 2)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: colorScheme)
         .ignoresSafeArea()
+    }
+
+    private var solidColor: Color {
+        colorScheme == .dark
+            ? Color(red: 0.08, green: 0.10, blue: 0.18)
+            : Color(red: 0.96, green: 0.96, blue: 0.98)
+    }
+
+    private var gradientColors: [Color] {
+        colorScheme == .dark
+            ? [Color(red: 0.08, green: 0.10, blue: 0.18), Color(red: 0.22, green: 0.12, blue: 0.18), Color(red: 0.05, green: 0.06, blue: 0.10)]
+            : [Color(red: 1.0, green: 0.93, blue: 0.82), Color(red: 0.82, green: 0.90, blue: 1.0), Color(red: 0.96, green: 0.96, blue: 0.98)]
     }
 }
 
 #Preview("Forecast") {
     let settings = InMemorySettingsStore(state: SharedAppState(locations: [PreviewFixtures.sampleLocation]))
-    let cache = InMemoryForecastCache(store: CachedForecastStore(bundles: [
-        PreviewFixtures.sampleLocationID: PreviewFixtures.sampleBundle(),
-    ]))
+    let cache = InMemoryForecastCache(snapshots: [
+        PreviewFixtures.sampleLocationID: .fromSuccessful(bundle: PreviewFixtures.sampleBundle()),
+    ])
     let model = AppModel(
         settingsStore: settings,
         forecastCache: cache,

@@ -25,6 +25,8 @@ xcodebuild \
   -destination 'platform=macOS' \
   -derivedDataPath "${DERIVED}" \
   -configuration Release \
+  ARCHS='arm64 x86_64' \
+  ONLY_ACTIVE_ARCH=NO \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY=- \
@@ -39,6 +41,24 @@ fi
 if [[ ! -d "${APP_PATH}" ]]; then
   echo "Built app not found under ${DERIVED}/Build/Products" >&2
   exit 1
+fi
+
+verify_universal() {
+  local binary="$1"
+  local label="$2"
+  local archs
+  archs="$(lipo -archs "${binary}")"
+  if [[ "${archs}" != "x86_64 arm64" && "${archs}" != "arm64 x86_64" ]]; then
+    echo "${label} is not universal (got: ${archs})" >&2
+    exit 1
+  fi
+  echo "${label}: ${archs}"
+}
+
+verify_universal "${APP_PATH}/Contents/MacOS/${APP_NAME}" "App"
+WIDGET_BIN="${APP_PATH}/Contents/PlugIns/SunsetHueWidget.appex/Contents/MacOS/SunsetHueWidget"
+if [[ -f "${WIDGET_BIN}" ]]; then
+  verify_universal "${WIDGET_BIN}" "Widget"
 fi
 
 # xcodebuild registers the product with Launch Services / PluginKit. An ad-hoc

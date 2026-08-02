@@ -24,9 +24,14 @@ public protocol HTTPTransport: Sendable {
 
 public struct URLSessionTransport: HTTPTransport {
     private let session: URLSession
+    private let maxResponseBytes: Int
 
-    public init(session: URLSession = URLSessionTransport.makeNonRedirectingSession()) {
+    public init(
+        session: URLSession = URLSessionTransport.makeNonRedirectingSession(),
+        maxResponseBytes: Int = SunsetHueConstants.maxResponseBytes
+    ) {
         self.session = session
+        self.maxResponseBytes = maxResponseBytes
     }
 
     public static func makeSession(
@@ -40,19 +45,12 @@ public struct URLSessionTransport: HTTPTransport {
             throw SunsetHueError.invalidRequest
         }
 
-        let data: Data
+        let bytes: URLSession.AsyncBytes
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (bytes, response) = try await session.bytes(for: request)
         } catch let error as URLError {
-            switch error.code {
-            case .timedOut:
-                throw SunsetHueError.timeout
-            case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
-                throw SunsetHueError.networkUnavailable
-            default:
-                throw SunsetHueError.networkUnavailable
-            }
+            throw mapURLError(error, cancelledAsOversized: false)
         } catch {
             throw SunsetHueError.networkUnavailable
         }
@@ -63,11 +61,31 @@ public struct URLSessionTransport: HTTPTransport {
 
         if let contentLength = http.value(forHTTPHeaderField: "Content-Length"),
            let length = Int(contentLength),
-           length > SunsetHueConstants.maxResponseBytes {
+           length > maxResponseBytes {
+            bytes.task.cancel()
             throw SunsetHueError.oversizedResponse
         }
-        if data.count > SunsetHueConstants.maxResponseBytes {
-            throw SunsetHueError.oversizedResponse
+
+        var body = Data()
+        body.reserveCapacity(min(maxResponseBytes, 16 * 1024))
+        var cancelledForSize = false
+        do {
+            for try await byte in bytes {
+                body.append(byte)
+                if body.count > maxResponseBytes {
+                    cancelledForSize = true
+                    bytes.task.cancel()
+                    throw SunsetHueError.oversizedResponse
+                }
+            }
+        } catch let error as SunsetHueError {
+            throw error
+        } catch let error as URLError {
+            throw mapURLError(error, cancelledAsOversized: cancelledForSize)
+        } catch is CancellationError {
+            throw cancelledForSize ? SunsetHueError.oversizedResponse : SunsetHueError.networkUnavailable
+        } catch {
+            throw SunsetHueError.networkUnavailable
         }
 
         var headers: [String: String] = [:]
@@ -77,7 +95,20 @@ public struct URLSessionTransport: HTTPTransport {
             }
         }
 
-        return HTTPResponse(statusCode: http.statusCode, headers: headers, body: data)
+        return HTTPResponse(statusCode: http.statusCode, headers: headers, body: body)
+    }
+
+    private func mapURLError(_ error: URLError, cancelledAsOversized: Bool) -> SunsetHueError {
+        switch error.code {
+        case .timedOut:
+            return .timeout
+        case .cancelled:
+            return cancelledAsOversized ? .oversizedResponse : .networkUnavailable
+        case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+            return .networkUnavailable
+        default:
+            return .networkUnavailable
+        }
     }
 }
 
@@ -124,8 +155,6 @@ public final class MockHTTPTransport: HTTPTransport, @unchecked Sendable {
             guard !stubs.isEmpty else {
                 throw SunsetHueError.networkUnavailable
             }
-            // Prefer a stub whose JSON `data.type` matches the request `type` query
-            // so concurrent forecast fetches do not race on FIFO order.
             if let requestedType = URLComponents(url: request.url ?? URL(fileURLWithPath: "/"), resolvingAgainstBaseURL: false)?
                 .queryItems?
                 .first(where: { $0.name == "type" })?

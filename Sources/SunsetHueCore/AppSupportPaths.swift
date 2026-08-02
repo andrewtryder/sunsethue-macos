@@ -1,82 +1,86 @@
 import Foundation
 
-/// Shared on-disk locations.
-/// Prefer the App Group container when sandboxed (required for WidgetKit).
-/// Fall back to ~/Library/Application Support/SunsetHue for unsigned non-sandbox builds.
 public enum AppSupportPaths: Sendable {
-    public static let folderName = "SunsetHue"
+    public static let settingsFileName = "app-state.json"
+    public static let legacyCacheFileName = "forecast-cache.json"
+    public static let cacheDirectoryName = "forecast-cache"
 
-    public static var rootDirectory: URL {
+    public static func preferredContainerURL() -> URL {
         if let groupURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: SunsetHueConstants.appGroupIdentifier
         ) {
-            return groupURL.appendingPathComponent(folderName, isDirectory: true)
+            return groupURL
         }
-        return applicationSupportDirectory
+        // Fall back to legacy group for older signed installs mid-migration.
+        if SunsetHueConstants.appGroupIdentifier != SunsetHueConstants.legacyAppGroupIdentifier,
+           let legacyURL = FileManager.default.containerURL(
+               forSecurityApplicationGroupIdentifier: SunsetHueConstants.legacyAppGroupIdentifier
+           ) {
+            return legacyURL
+        }
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let directory = support.appendingPathComponent("SunsetHue", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 
-    public static var appStateURL: URL {
-        rootDirectory.appendingPathComponent("app-state.json", isDirectory: false)
+    public static func settingsURL() -> URL {
+        preferredContainerURL().appendingPathComponent(settingsFileName)
     }
 
-    public static var forecastCacheURL: URL {
-        rootDirectory.appendingPathComponent("forecast-cache.json", isDirectory: false)
+    public static func cacheDirectoryURL() -> URL {
+        let directory = preferredContainerURL().appendingPathComponent(cacheDirectoryName, isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 
-    public static func ensureRootDirectory() throws {
-        try migrateLegacySharedFilesIfNeeded()
-        try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+    public static func cacheFileURL(for locationID: UUID) -> URL {
+        cacheDirectoryURL().appendingPathComponent("\(locationID.uuidString).json")
     }
 
-    public static var usesAppGroupContainer: Bool {
-        FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: SunsetHueConstants.appGroupIdentifier
-        ) != nil
+    public static func legacyCacheURL() -> URL {
+        preferredContainerURL().appendingPathComponent(legacyCacheFileName)
     }
 
-    /// Copy settings/cache from pre-Sequoia `group.*` containers or Application Support
-    /// into the Team-ID-prefixed App Group the widget can actually read.
-    public static func migrateLegacySharedFilesIfNeeded() throws {
+    /// Copies settings + legacy/per-location caches from the legacy App Group into the Team-ID group once.
+    public static func migrateLegacyAppGroupContainerIfNeeded() {
+        let modernID = SunsetHueConstants.appGroupIdentifier
+        let legacyID = SunsetHueConstants.legacyAppGroupIdentifier
+        guard modernID != legacyID else { return }
+        guard let modern = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: modernID),
+              let legacy = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: legacyID)
+        else { return }
+
         let fm = FileManager.default
-        let destination = rootDirectory
-        try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: modern, withIntermediateDirectories: true)
 
-        let destinations = [
-            destination.appendingPathComponent("app-state.json"),
-            destination.appendingPathComponent("forecast-cache.json")
-        ]
-        guard destinations.contains(where: { !fm.fileExists(atPath: $0.path) }) else {
-            return
+        let modernSettings = modern.appendingPathComponent(settingsFileName)
+        let legacySettings = legacy.appendingPathComponent(settingsFileName)
+        if !fm.fileExists(atPath: modernSettings.path), fm.fileExists(atPath: legacySettings.path) {
+            try? fm.copyItem(at: legacySettings, to: modernSettings)
         }
 
-        for sourceRoot in legacyRoots() {
-            for fileName in ["app-state.json", "forecast-cache.json"] {
-                let source = sourceRoot.appendingPathComponent(fileName)
-                let target = destination.appendingPathComponent(fileName)
-                guard fm.fileExists(atPath: source.path), !fm.fileExists(atPath: target.path) else {
-                    continue
+        let modernLegacyCache = modern.appendingPathComponent(legacyCacheFileName)
+        let legacyLegacyCache = legacy.appendingPathComponent(legacyCacheFileName)
+        if !fm.fileExists(atPath: modernLegacyCache.path), fm.fileExists(atPath: legacyLegacyCache.path) {
+            try? fm.copyItem(at: legacyLegacyCache, to: modernLegacyCache)
+        }
+
+        let modernCacheDir = modern.appendingPathComponent(cacheDirectoryName, isDirectory: true)
+        let legacyCacheDir = legacy.appendingPathComponent(cacheDirectoryName, isDirectory: true)
+        if fm.fileExists(atPath: legacyCacheDir.path) {
+            try? fm.createDirectory(at: modernCacheDir, withIntermediateDirectories: true)
+            if let contents = try? fm.contentsOfDirectory(
+                at: legacyCacheDir,
+                includingPropertiesForKeys: nil
+            ) {
+                for file in contents where file.pathExtension == "json" {
+                    let dest = modernCacheDir.appendingPathComponent(file.lastPathComponent)
+                    if !fm.fileExists(atPath: dest.path) {
+                        try? fm.copyItem(at: file, to: dest)
+                    }
                 }
-                // Skip no-op when source is already the destination path.
-                guard source.standardizedFileURL != target.standardizedFileURL else { continue }
-                try? fm.copyItem(at: source, to: target)
             }
         }
-    }
-
-    private static var applicationSupportDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support", isDirectory: true)
-            .appendingPathComponent(folderName, isDirectory: true)
-    }
-
-    private static func legacyRoots() -> [URL] {
-        var roots: [URL] = []
-        if let legacyGroup = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: SunsetHueConstants.legacyAppGroupIdentifier
-        ) {
-            roots.append(legacyGroup.appendingPathComponent(folderName, isDirectory: true))
-        }
-        roots.append(applicationSupportDirectory)
-        return roots
     }
 }

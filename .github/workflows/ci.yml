@@ -7,9 +7,17 @@ on:
 
 jobs:
   test-and-build:
-    name: Test and Build
-    runs-on: macos-15
-    timeout-minutes: 45
+    name: Test and Build (${{ matrix.purpose }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            purpose: current-runtime
+          - os: macos-15-intel
+            purpose: intel-runtime
 
     steps:
       - name: Checkout
@@ -17,7 +25,6 @@ jobs:
 
       - name: Select Xcode
         run: |
-          # Prefer newest installed Xcode (project format 77 needs Xcode 16+)
           if [[ -d /Applications/Xcode.app ]]; then
             sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           else
@@ -39,27 +46,36 @@ jobs:
       - name: Run package tests
         run: swift test --package-path .
 
-      - name: Build app and widget (unsigned)
+      - name: Build Release (universal, unsigned)
         run: |
           xcodebuild \
             -scheme SunsetHue \
             -destination 'platform=macOS' \
             -derivedDataPath build/DerivedData \
+            -configuration Release \
+            ARCHS='arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=- \
             build
 
-      - name: Build widget scheme (unsigned)
+      - name: Verify universal binaries
         run: |
-          xcodebuild \
-            -scheme SunsetHueWidget \
-            -destination 'platform=macOS' \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=- \
-            build
+          APP="build/DerivedData/Build/Products/Release/SunsetHue.app"
+          test -d "$APP"
+          ARCHS_APP="$(lipo -archs "$APP/Contents/MacOS/SunsetHue")"
+          test "$ARCHS_APP" = "x86_64 arm64" -o "$ARCHS_APP" = "arm64 x86_64"
+          WIDGET="$APP/Contents/PlugIns/SunsetHueWidget.appex/Contents/MacOS/SunsetHueWidget"
+          ARCHS_WIDGET="$(lipo -archs "$WIDGET")"
+          test "$ARCHS_WIDGET" = "x86_64 arm64" -o "$ARCHS_WIDGET" = "arm64 x86_64"
+          echo "App: $ARCHS_APP"
+          echo "Widget: $ARCHS_WIDGET"
+
+      - name: Smoke launch Release app
+        run: |
+          chmod +x scripts/smoke-launch.sh
+          ./scripts/smoke-launch.sh build/DerivedData/Build/Products/Release/SunsetHue.app
 
       - name: Scan for accidental secrets
         run: |
@@ -75,3 +91,51 @@ jobs:
             exit 1
           fi
           echo "Secret scan passed"
+
+  thread-sanitizer:
+    name: Package Tests (TSan)
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          if [[ -d /Applications/Xcode.app ]]; then
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          else
+            latest="$(find /Applications -maxdepth 1 -type d -name 'Xcode_*.app' | sort -V | tail -1)"
+            sudo xcode-select -s "${latest}/Contents/Developer"
+          fi
+
+      - name: Run package tests with Thread Sanitizer
+        run: |
+          swift test --package-path . \
+            -Xswiftc -sanitize=thread \
+            -Xlinker -sanitize=thread
+
+  address-sanitizer:
+    name: Package Tests (ASan)
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          if [[ -d /Applications/Xcode.app ]]; then
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          else
+            latest="$(find /Applications -maxdepth 1 -type d -name 'Xcode_*.app' | sort -V | tail -1)"
+            sudo xcode-select -s "${latest}/Contents/Developer"
+          fi
+
+      - name: Run package tests with Address Sanitizer
+        run: |
+          swift test --package-path . \
+            -Xswiftc -sanitize=address \
+            -Xlinker -sanitize=address

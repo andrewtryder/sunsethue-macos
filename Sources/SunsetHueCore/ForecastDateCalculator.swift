@@ -33,20 +33,61 @@ public struct ForecastDateCalculator: Sendable {
         timeZone: TimeZone,
         now: Date = Date(),
         rateLimitRetryAfter: Int? = nil,
-        minimumIntervalSeconds: Int = SunsetHueConstants.minTimelineReloadSeconds
+        minimumIntervalSeconds: Int = SunsetHueConstants.minTimelineReloadSeconds,
+        jitterSeconds: Int = 0,
+        cacheFetchedAt: Date? = nil
     ) -> Date {
         let hours = SunsetHueConstants.validRefreshIntervalHours.contains(refreshIntervalHours)
             ? refreshIntervalHours
             : SunsetHueConstants.defaultRefreshIntervalHours
-        let intervalDate = now.addingTimeInterval(TimeInterval(hours * 3600))
+        let intervalBase = cacheFetchedAt ?? now
+        let intervalDate = intervalBase.addingTimeInterval(TimeInterval(hours * 3600 + max(0, jitterSeconds)))
         let midnightDate = nextMidnightRefresh(timeZone: timeZone, now: now)
+            .addingTimeInterval(TimeInterval(max(0, jitterSeconds)))
         var candidates = [intervalDate, midnightDate]
         if let retryAfter = rateLimitRetryAfter {
-            candidates.append(now.addingTimeInterval(TimeInterval(retryAfter)))
+            let bounded = min(max(0, retryAfter), SunsetHueConstants.maxRetryAfterSeconds)
+            candidates.append(now.addingTimeInterval(TimeInterval(bounded)))
         }
         let earliest = candidates.min() ?? intervalDate
         let floor = now.addingTimeInterval(TimeInterval(minimumIntervalSeconds))
         return max(earliest, floor)
+    }
+
+    /// Visual-change dates from cached forecasts (sunrise/sunset/golden-hour) plus local midnight.
+    public func timelineDisplayDates(
+        bundle: LocationForecastBundle?,
+        timeZone: TimeZone,
+        now: Date = Date(),
+        until reloadDate: Date
+    ) -> [Date] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        var dates: [Date] = [now]
+        if let bundle {
+            for forecast in bundle.forecasts {
+                if let eventTime = forecast.eventTime, eventTime > now, eventTime <= reloadDate {
+                    dates.append(eventTime)
+                }
+                if let start = forecast.goldenHour?.start, start > now, start <= reloadDate {
+                    dates.append(start)
+                }
+                if let end = forecast.goldenHour?.end, end > now, end <= reloadDate {
+                    dates.append(end)
+                }
+            }
+        }
+
+        let midnight = nextMidnightRefresh(timeZone: timeZone, now: now, delaySeconds: 0)
+        if midnight > now, midnight <= reloadDate {
+            dates.append(midnight)
+        }
+
+        let unique = Array(Set(dates.map { $0.timeIntervalSinceReferenceDate }))
+            .sorted()
+            .map { Date(timeIntervalSinceReferenceDate: $0) }
+        return unique.filter { $0 >= now && $0 <= reloadDate }
     }
 
     public func dayOffset(

@@ -5,9 +5,9 @@ import SunsetHueCore
 struct LocationEditorView: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var locationProvider = CurrentLocationProvider()
-    @State private var testMessage: String?
-    @State private var isTesting = false
+    var locationProvider: any CurrentLocationProviding = CoreCurrentLocationProvider()
+    @State private var statusMessage: String?
+    @State private var isLocating = false
 
     private var draft: Binding<LocationEditorDraft> {
         $appModel.editorDraft
@@ -23,31 +23,27 @@ struct LocationEditorView: View {
                     TextField("IANA Time Zone", text: draft.timeZoneIdentifier)
                         .help("Example: America/New_York")
                     Button("Use Current Location") {
-                        locationProvider.request {
-                            if let coordinate = locationProvider.coordinate {
-                                appModel.editorDraft.latitude = String(format: "%.5f", coordinate.latitude)
-                                appModel.editorDraft.longitude = String(format: "%.5f", coordinate.longitude)
-                                if let tz = locationProvider.timeZoneIdentifier {
-                                    appModel.editorDraft.timeZoneIdentifier = tz
-                                }
-                            }
-                            if let error = locationProvider.errorMessage {
-                                testMessage = error
+                        Task {
+                            isLocating = true
+                            defer { isLocating = false }
+                            do {
+                                let result = try await locationProvider.requestLocation()
+                                appModel.editorDraft.latitude = String(format: "%.5f", result.latitude)
+                                appModel.editorDraft.longitude = String(format: "%.5f", result.longitude)
+                                appModel.editorDraft.timeZoneIdentifier = result.timeZoneIdentifier
+                                statusMessage = nil
+                            } catch {
+                                statusMessage = error.localizedDescription
                             }
                         }
                     }
-                    if let locationError = locationProvider.errorMessage {
-                        Text(locationError)
+                    .disabled(isLocating)
+                    if let statusMessage {
+                        Text(statusMessage)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .accessibilityLabel(statusMessage)
                     }
-                }
-
-                Section("Credentials") {
-                    SecureField("SunsetHue API Key", text: draft.apiKey)
-                    Text("Stored only in the Keychain (shared with the widget). Never written to disk files or logs.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
                 Section("Forecast Options") {
@@ -60,30 +56,6 @@ struct LocationEditorView: View {
                         Text("6 hours").tag(6)
                         Text("12 hours").tag(12)
                         Text("24 hours").tag(24)
-                    }
-                }
-
-                Section {
-                    Button {
-                        Task {
-                            isTesting = true
-                            testMessage = await appModel.testConnection(draft: appModel.editorDraft)
-                            isTesting = false
-                        }
-                    } label: {
-                        if isTesting {
-                            ProgressView()
-                        } else {
-                            Text("Test Connection")
-                        }
-                    }
-                    .disabled(isTesting)
-
-                    if let testMessage {
-                        Text(testMessage)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(testMessage)
                     }
                 }
             }
@@ -102,17 +74,14 @@ struct LocationEditorView: View {
             }
         }
         .padding()
+        .accessibilityLabel(appModel.isEditingExisting ? "Edit location" : "Add location")
     }
 }
 
 @MainActor
-final class CurrentLocationProvider: NSObject, ObservableObject, CLLocationManagerDelegate {
-    @Published var coordinate: CLLocationCoordinate2D?
-    @Published var timeZoneIdentifier: String?
-    @Published var errorMessage: String?
-
+final class CoreCurrentLocationProvider: NSObject, ObservableObject, CurrentLocationProviding, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private var completion: (() -> Void)?
+    private var continuation: CheckedContinuation<CurrentLocationResult, Error>?
 
     override init() {
         super.init()
@@ -120,24 +89,24 @@ final class CurrentLocationProvider: NSObject, ObservableObject, CLLocationManag
         manager.desiredAccuracy = kCLLocationAccuracyKilometer
     }
 
-    func request(completion: @escaping () -> Void) {
-        self.completion = completion
-        errorMessage = nil
-        switch manager.authorizationStatus {
-        case .authorizedAlways:
-            manager.requestLocation()
-        case .notDetermined:
-            manager.requestWhenInUseAuthorization()
-        case .denied, .restricted:
-            errorMessage = "Location access denied. Enter coordinates manually."
-            completion()
-        default:
-            // macOS may report authorized-when-in-use equivalents via raw values.
-            if manager.authorizationStatus.rawValue > 0 {
+    func requestLocation() async throws -> CurrentLocationResult {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            switch manager.authorizationStatus {
+            case .authorizedAlways:
                 manager.requestLocation()
-            } else {
-                errorMessage = "Unable to access location. Enter coordinates manually."
-                completion()
+            case .notDetermined:
+                manager.requestWhenInUseAuthorization()
+            case .denied, .restricted:
+                continuation.resume(throwing: LocationProviderError.denied)
+                self.continuation = nil
+            default:
+                if manager.authorizationStatus.rawValue > 0 {
+                    manager.requestLocation()
+                } else {
+                    continuation.resume(throwing: LocationProviderError.unavailable)
+                    self.continuation = nil
+                }
             }
         }
     }
@@ -153,18 +122,35 @@ final class CurrentLocationProvider: NSObject, ObservableObject, CLLocationManag
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         Task { @MainActor in
             guard let location = locations.last else { return }
-            coordinate = location.coordinate
-            timeZoneIdentifier = TimeZone.current.identifier
-            completion?()
-            completion = nil
+            continuation?.resume(
+                returning: CurrentLocationResult(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude,
+                    timeZoneIdentifier: TimeZone.current.identifier
+                )
+            )
+            continuation = nil
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            errorMessage = "Could not determine current location. Enter coordinates manually."
-            completion?()
-            completion = nil
+            continuation?.resume(throwing: LocationProviderError.unavailable)
+            continuation = nil
+        }
+    }
+}
+
+enum LocationProviderError: LocalizedError {
+    case denied
+    case unavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .denied:
+            return "Location access denied. Enter coordinates manually."
+        case .unavailable:
+            return "Could not determine current location. Enter coordinates manually."
         }
     }
 }

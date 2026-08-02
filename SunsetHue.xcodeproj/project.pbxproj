@@ -11,6 +11,7 @@
 		064B2DCAE6E6F4B75547B4C1 /* WidgetContentResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF21FADF4DCF6AB50896A591 /* WidgetContentResolver.swift */; };
 		0A1CB0233EC3BBF92A487889 /* SunsetHueApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC72BF1D99B03BFCD34DADF4 /* SunsetHueApp.swift */; };
 		1B4D2F25D5C3E6A91C7ADE38 /* LocationEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */; };
+		2480618CA768F49DF5E41F24 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D2F534FE4110E00ACE57A2 /* UpdateChecker.swift */; };
 		296DAD914126AD9AFE392A32 /* WidgetPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D22300345B1F259F9C11B6 /* WidgetPreviews.swift */; };
 		3067046961D2568378EDD472 /* SunsetHueWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4CE1D8B70204B8780F49EC2E /* SunsetHueWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5C2CC0A0396760B042C255F2 /* LocationSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D56605CC77B37096F15E578 /* LocationSidebar.swift */; };
@@ -19,10 +20,13 @@
 		75589202BA50FD80C120B018 /* WidgetConfigurationIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BAA6CE9E5C03CBEBD504865 /* WidgetConfigurationIntent.swift */; };
 		79B4E0A2E8A26D6639D01E86 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6B332A47F6075706699D2319 /* Assets.xcassets */; };
 		A8A740A25CBC3F652B82E3FE /* SunsetHueCore in Frameworks */ = {isa = PBXBuildFile; productRef = 10C60963C95E03499F710C0F /* SunsetHueCore */; };
+		B7751AC7E652D45864EAB4F6 /* SunsetHueMenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17270D7994572484406BA607 /* SunsetHueMenuBarView.swift */; };
 		C28174242C887CCC6E91214E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */; };
 		DA11E511FE5B36B9394DA5D8 /* ForecastDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */; };
+		DECC18151C1D68C211B4D00D /* LaunchAtLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9B0AB6AEFEF21973164E8C /* LaunchAtLoginController.swift */; };
 		E1417E3A82ABEFD585F96984 /* SunsetHueWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586CC032CBDAC8BEC8055BC1 /* SunsetHueWidget.swift */; };
 		E1A6AC8A35552FAFBB000CA0 /* SunsetHueWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F15A0B4177B5E2ACBA8F2A6 /* SunsetHueWidgetBundle.swift */; };
+		EFA457B127CCCC8D5732CC41 /* SunsetHueSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7FBF934904433F9CC294FE7 /* SunsetHueSettingsView.swift */; };
 		F1B0A865C7F393A4E0D9B4A7 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65E370BFF1D15AFFF837FAF8 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -51,6 +55,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		17270D7994572484406BA607 /* SunsetHueMenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueMenuBarView.swift; sourceTree = "<group>"; };
 		1F15A0B4177B5E2ACBA8F2A6 /* SunsetHueWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueWidgetBundle.swift; sourceTree = "<group>"; };
 		3BBF4EDCF2CD3B7B764727DB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4815E36D2032FEDBEE28245D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -67,10 +72,13 @@
 		7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationEditorView.swift; sourceTree = "<group>"; };
 		9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastDetailView.swift; sourceTree = "<group>"; };
 		AF21FADF4DCF6AB50896A591 /* WidgetContentResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetContentResolver.swift; sourceTree = "<group>"; };
+		B8D2F534FE4110E00ACE57A2 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		B9D22300345B1F259F9C11B6 /* WidgetPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetPreviews.swift; sourceTree = "<group>"; };
 		BC72BF1D99B03BFCD34DADF4 /* SunsetHueApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueApp.swift; sourceTree = "<group>"; };
 		CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D0E47FB8CA49606C63177352 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		D7FBF934904433F9CC294FE7 /* SunsetHueSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueSettingsView.swift; sourceTree = "<group>"; };
+		DA9B0AB6AEFEF21973164E8C /* LaunchAtLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginController.swift; sourceTree = "<group>"; };
 		FD82936D5A90D80B5FE26803 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -126,6 +134,14 @@
 			path = Config;
 			sourceTree = "<group>";
 		};
+		591CF2992BCFE045AA06FB2A /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				D7FBF934904433F9CC294FE7 /* SunsetHueSettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
 		B1C67AA26FCE2E69A0A65D0C = {
 			isa = PBXGroup;
 			children = (
@@ -140,15 +156,19 @@
 		CAD021CDFBD51FC2BF073641 /* SunsetHue */ = {
 			isa = PBXGroup;
 			children = (
+				591CF2992BCFE045AA06FB2A /* Settings */,
 				65E370BFF1D15AFFF837FAF8 /* AppDelegate.swift */,
 				D0E47FB8CA49606C63177352 /* AppModel.swift */,
 				6B332A47F6075706699D2319 /* Assets.xcassets */,
 				CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */,
 				9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */,
 				4815E36D2032FEDBEE28245D /* Info.plist */,
+				DA9B0AB6AEFEF21973164E8C /* LaunchAtLoginController.swift */,
 				7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */,
 				5D56605CC77B37096F15E578 /* LocationSidebar.swift */,
 				BC72BF1D99B03BFCD34DADF4 /* SunsetHueApp.swift */,
+				17270D7994572484406BA607 /* SunsetHueMenuBarView.swift */,
+				B8D2F534FE4110E00ACE57A2 /* UpdateChecker.swift */,
 			);
 			path = SunsetHue;
 			sourceTree = "<group>";
@@ -280,9 +300,13 @@
 				64326D0EF99DD0063740FDD0 /* AppModel.swift in Sources */,
 				C28174242C887CCC6E91214E /* ContentView.swift in Sources */,
 				DA11E511FE5B36B9394DA5D8 /* ForecastDetailView.swift in Sources */,
+				DECC18151C1D68C211B4D00D /* LaunchAtLoginController.swift in Sources */,
 				1B4D2F25D5C3E6A91C7ADE38 /* LocationEditorView.swift in Sources */,
 				5C2CC0A0396760B042C255F2 /* LocationSidebar.swift in Sources */,
 				0A1CB0233EC3BBF92A487889 /* SunsetHueApp.swift in Sources */,
+				B7751AC7E652D45864EAB4F6 /* SunsetHueMenuBarView.swift in Sources */,
+				EFA457B127CCCC8D5732CC41 /* SunsetHueSettingsView.swift in Sources */,
+				2480618CA768F49DF5E41F24 /* UpdateChecker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -371,6 +395,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD)";
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -422,7 +447,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -431,6 +456,8 @@
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_CONCISE_MAGIC_FILE = YES;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -461,6 +488,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD)";
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -506,14 +534,17 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_CONCISE_MAGIC_FILE = YES;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

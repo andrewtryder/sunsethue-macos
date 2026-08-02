@@ -9,13 +9,11 @@
 		<string>$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue</string>
 		<string>group.com.andrewtryder.SunsetHue</string>
 	</array>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.personal-information.location</key>
 	<true/>
-	<key>keychain-access-groups</key>
-	<array>
-		<string>$(AppIdentifierPrefix)com.andrewtryder.SunsetHue.shared</string>
-	</array>
 </dict>
 </plist>
