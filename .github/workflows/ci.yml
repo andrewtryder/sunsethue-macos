@@ -111,10 +111,7 @@ jobs:
           fi
 
       - name: Run package tests with Thread Sanitizer
-        run: |
-          swift test --package-path . \
-            -Xswiftc -sanitize=thread \
-            -Xlinker -sanitize=thread
+        run: swift test --package-path . --sanitize=thread
 
   address-sanitizer:
     name: Package Tests (ASan)
@@ -135,7 +132,4 @@ jobs:
           fi
 
       - name: Run package tests with Address Sanitizer
-        run: |
-          swift test --package-path . \
-            -Xswiftc -sanitize=address \
-            -Xlinker -sanitize=address
+        run: swift test --package-path . --sanitize=address

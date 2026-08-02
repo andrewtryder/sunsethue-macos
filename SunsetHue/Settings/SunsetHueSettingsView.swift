@@ -14,6 +14,7 @@ struct SunsetHueSettingsView: View {
     @State private var isCheckingUpdates = false
     @State private var accountTestMessage: String?
     @State private var isTestingAccount = false
+    @FocusState private var isAPIKeyFieldFocused: Bool
 
     var body: some View {
         TabView {
@@ -91,39 +92,54 @@ struct SunsetHueSettingsView: View {
 
     private var accountTab: some View {
         Form {
-            LabeledContent("API key") {
-                Text(appModel.hasAPIKey ? "Configured" : "Not configured")
-            }
-            SecureField("Replace API key", text: $appModel.apiKeyDraft)
-            HStack {
-                Button("Save Key") {
-                    Task { await appModel.saveAPIKey(appModel.apiKeyDraft) }
+            Section("API key") {
+                LabeledContent("Status") {
+                    Text(appModel.hasAPIKey ? "Configured" : "Not configured")
+                        .foregroundStyle(appModel.hasAPIKey ? .secondary : .orange)
                 }
-                .disabled(appModel.apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Button("Test Connection") {
-                    Task {
-                        isTestingAccount = true
-                        accountTestMessage = await appModel.testConnectionWithStoredOrDraftKey(
-                            appModel.apiKeyDraft.isEmpty ? nil : appModel.apiKeyDraft
-                        )
-                        isTestingAccount = false
+                SecureField("Paste your SunsetHue API key", text: $appModel.apiKeyDraft)
+                    .focused($isAPIKeyFieldFocused)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("API key")
+                Text("Paste your key above, then click Save Key. Get a key at sunsethue.com/dev-api.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Save Key") {
+                        Task { await appModel.saveAPIKey(appModel.apiKeyDraft) }
                     }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(appModel.apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Test Connection") {
+                        Task {
+                            isTestingAccount = true
+                            accountTestMessage = await appModel.testConnectionWithStoredOrDraftKey(
+                                appModel.apiKeyDraft.isEmpty ? nil : appModel.apiKeyDraft
+                            )
+                            isTestingAccount = false
+                        }
+                    }
+                    .disabled(isTestingAccount)
+                    Button("Remove Key", role: .destructive) {
+                        Task { await appModel.removeAPIKey() }
+                    }
+                    .disabled(!appModel.hasAPIKey)
                 }
-                .disabled(isTestingAccount)
-                Button("Remove Key", role: .destructive) {
-                    Task { await appModel.removeAPIKey() }
+                if let accountStatusMessage = appModel.accountStatusMessage {
+                    Text(accountStatusMessage).font(.caption)
                 }
-                .disabled(!appModel.hasAPIKey)
-            }
-            if let accountStatusMessage = appModel.accountStatusMessage {
-                Text(accountStatusMessage).font(.caption)
-            }
-            if let accountTestMessage {
-                Text(accountTestMessage).font(.caption).foregroundStyle(.secondary)
+                if let accountTestMessage {
+                    Text(accountTestMessage).font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear {
+            if !appModel.hasAPIKey {
+                isAPIKeyFieldFocused = true
+            }
+        }
     }
 
     private var updatesTab: some View {
