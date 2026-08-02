@@ -1,0 +1,58 @@
+# Xcode
+build/
+dist/
+DerivedData/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Secrets / local signing
+*.p12
+*.mobileprovision
+*.provisionprofile
+Config/Local.xcconfig
+.env
+.env.*
+secrets/
+**/Secrets.swift
+
+# Node tooling (commitlint)
+node_modules/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# Testing / coverage
+coverage/
+*.xcresult

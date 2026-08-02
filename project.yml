@@ -1,0 +1,100 @@
+name: SunsetHue
+options:
+  bundleIdPrefix: com.andrewtryder
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  developmentLanguage: en
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0" # x-release-please-version
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+packages:
+  SunsetHueCore:
+    path: .
+targets:
+  SunsetHue:
+    type: application
+    platform: macOS
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    sources:
+      - path: SunsetHue
+        excludes:
+          - "*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.andrewtryder.SunsetHue
+        PRODUCT_NAME: SunsetHue
+        INFOPLIST_KEY_CFBundleDisplayName: SunsetHue
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Andrew Tryder. All rights reserved."
+        INFOPLIST_KEY_NSLocationUsageDescription: SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.
+        CODE_SIGN_ENTITLEMENTS: SunsetHue/SunsetHue.entitlements
+        COMBINE_HIDPI_IMAGES: YES
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: SunsetHue/Info.plist
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - package: SunsetHueCore
+        product: SunsetHueCore
+      - target: SunsetHueWidget
+        embed: true
+    scheme:
+      testTargets: []
+  SunsetHueWidget:
+    type: app-extension
+    platform: macOS
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    sources:
+      - path: SunsetHueWidget
+        excludes:
+          - "*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.andrewtryder.SunsetHue.Widget
+        PRODUCT_NAME: SunsetHueWidget
+        INFOPLIST_KEY_CFBundleDisplayName: SunsetHue
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Andrew Tryder. All rights reserved."
+        CODE_SIGN_ENTITLEMENTS: SunsetHueWidget/SunsetHueWidget.entitlements
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
+          - "@executable_path/../../../../Frameworks"
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: SunsetHueWidget/Info.plist
+    dependencies:
+      - package: SunsetHueCore
+        product: SunsetHueCore
+schemes:
+  SunsetHue:
+    build:
+      targets:
+        SunsetHue: all
+        SunsetHueWidget: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+  SunsetHueWidget:
+    build:
+      targets:
+        SunsetHueWidget: all
+        SunsetHue: all
+    run:
+      config: Debug
+

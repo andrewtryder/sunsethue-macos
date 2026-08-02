@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test-and-build:
+    name: Test and Build
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Verify version metadata
+        run: python3 scripts/verify_release_metadata.py
+
+      - name: Run package tests
+        run: swift test --package-path .
+
+      - name: Build app and widget (unsigned)
+        run: |
+          xcodebuild \
+            -scheme SunsetHue \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=- \
+            build
+
+      - name: Build widget scheme (unsigned)
+        run: |
+          xcodebuild \
+            -scheme SunsetHueWidget \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=- \
+            build
+
+      - name: Scan for accidental secrets
+        run: |
+          set -euo pipefail
+          brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
+          if rg -n --hidden \
+            -g '!**/Fixtures/**' -g '!**/.git/**' -g '!**/build/**' -g '!**/.build/**' -g '!**/DerivedData/**' \
+            -e 'x-api-key:\s*[A-Za-z0-9_-]{20,}' \
+            -e 'SUNSETHUE_API_KEY\s*=\s*['\''"][^'\''"]+['\''"]' \
+            -e 'sk_live_[A-Za-z0-9]+' \
+            . ; then
+            echo "Potential secret pattern found" >&2
+            exit 1
+          fi
+          echo "Secret scan passed"

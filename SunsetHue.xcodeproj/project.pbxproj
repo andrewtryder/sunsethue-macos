@@ -1,0 +1,572 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02F9100AF71ADE3CD876B456 /* SunsetHueTimelineProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67C12B301705DF5F9C2FF464 /* SunsetHueTimelineProvider.swift */; };
+		064B2DCAE6E6F4B75547B4C1 /* WidgetContentResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF21FADF4DCF6AB50896A591 /* WidgetContentResolver.swift */; };
+		0A1CB0233EC3BBF92A487889 /* SunsetHueApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC72BF1D99B03BFCD34DADF4 /* SunsetHueApp.swift */; };
+		1B4D2F25D5C3E6A91C7ADE38 /* LocationEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */; };
+		296DAD914126AD9AFE392A32 /* WidgetPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D22300345B1F259F9C11B6 /* WidgetPreviews.swift */; };
+		3067046961D2568378EDD472 /* SunsetHueWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4CE1D8B70204B8780F49EC2E /* SunsetHueWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5C2CC0A0396760B042C255F2 /* LocationSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D56605CC77B37096F15E578 /* LocationSidebar.swift */; };
+		64326D0EF99DD0063740FDD0 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0E47FB8CA49606C63177352 /* AppModel.swift */; };
+		65A18F0491BE4BC367937ED4 /* SunsetHueCore in Frameworks */ = {isa = PBXBuildFile; productRef = C6D5D9CD20835ED55C167C4F /* SunsetHueCore */; };
+		75589202BA50FD80C120B018 /* WidgetConfigurationIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BAA6CE9E5C03CBEBD504865 /* WidgetConfigurationIntent.swift */; };
+		79B4E0A2E8A26D6639D01E86 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6B332A47F6075706699D2319 /* Assets.xcassets */; };
+		A8A740A25CBC3F652B82E3FE /* SunsetHueCore in Frameworks */ = {isa = PBXBuildFile; productRef = 10C60963C95E03499F710C0F /* SunsetHueCore */; };
+		C28174242C887CCC6E91214E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */; };
+		DA11E511FE5B36B9394DA5D8 /* ForecastDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */; };
+		E1417E3A82ABEFD585F96984 /* SunsetHueWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586CC032CBDAC8BEC8055BC1 /* SunsetHueWidget.swift */; };
+		E1A6AC8A35552FAFBB000CA0 /* SunsetHueWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F15A0B4177B5E2ACBA8F2A6 /* SunsetHueWidgetBundle.swift */; };
+		F1B0A865C7F393A4E0D9B4A7 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65E370BFF1D15AFFF837FAF8 /* AppDelegate.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		098B1C678532C46862B90A33 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1BC9B33DE54F914794C56DC6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 71E878F9181E8732800ADDC4;
+			remoteInfo = SunsetHueWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		3D2689B8AB9534D3B075F1F1 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				3067046961D2568378EDD472 /* SunsetHueWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		1F15A0B4177B5E2ACBA8F2A6 /* SunsetHueWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueWidgetBundle.swift; sourceTree = "<group>"; };
+		3BBF4EDCF2CD3B7B764727DB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		4815E36D2032FEDBEE28245D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		4CE1D8B70204B8780F49EC2E /* SunsetHueWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SunsetHueWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		586CC032CBDAC8BEC8055BC1 /* SunsetHueWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueWidget.swift; sourceTree = "<group>"; };
+		5D56605CC77B37096F15E578 /* LocationSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSidebar.swift; sourceTree = "<group>"; };
+		65E370BFF1D15AFFF837FAF8 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		65EEC050761A055B392397E8 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		67C12B301705DF5F9C2FF464 /* SunsetHueTimelineProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueTimelineProvider.swift; sourceTree = "<group>"; };
+		6A5C197A40BFDD7EBC1F8EB7 /* SunsetHue.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SunsetHue.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B332A47F6075706699D2319 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6BAA6CE9E5C03CBEBD504865 /* WidgetConfigurationIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetConfigurationIntent.swift; sourceTree = "<group>"; };
+		791123633E8EB0E3998A29AD /* sunsethue-macos */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "sunsethue-macos"; path = .; sourceTree = SOURCE_ROOT; };
+		7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationEditorView.swift; sourceTree = "<group>"; };
+		9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastDetailView.swift; sourceTree = "<group>"; };
+		AF21FADF4DCF6AB50896A591 /* WidgetContentResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetContentResolver.swift; sourceTree = "<group>"; };
+		B9D22300345B1F259F9C11B6 /* WidgetPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetPreviews.swift; sourceTree = "<group>"; };
+		BC72BF1D99B03BFCD34DADF4 /* SunsetHueApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueApp.swift; sourceTree = "<group>"; };
+		CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		D0E47FB8CA49606C63177352 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		FD82936D5A90D80B5FE26803 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		04A2A11208347A999ED10390 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				65A18F0491BE4BC367937ED4 /* SunsetHueCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DE18FFB618BAEC3FDC8742CA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A8A740A25CBC3F652B82E3FE /* SunsetHueCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		020006DBEE54E0A8D988FC06 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				6A5C197A40BFDD7EBC1F8EB7 /* SunsetHue.app */,
+				4CE1D8B70204B8780F49EC2E /* SunsetHueWidget.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4B2F3D72A3CC6A6B17783B27 /* SunsetHueWidget */ = {
+			isa = PBXGroup;
+			children = (
+				3BBF4EDCF2CD3B7B764727DB /* Info.plist */,
+				67C12B301705DF5F9C2FF464 /* SunsetHueTimelineProvider.swift */,
+				586CC032CBDAC8BEC8055BC1 /* SunsetHueWidget.swift */,
+				1F15A0B4177B5E2ACBA8F2A6 /* SunsetHueWidgetBundle.swift */,
+				6BAA6CE9E5C03CBEBD504865 /* WidgetConfigurationIntent.swift */,
+				AF21FADF4DCF6AB50896A591 /* WidgetContentResolver.swift */,
+				B9D22300345B1F259F9C11B6 /* WidgetPreviews.swift */,
+			);
+			path = SunsetHueWidget;
+			sourceTree = "<group>";
+		};
+		56011362336AC6C37C0043D2 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				65EEC050761A055B392397E8 /* Debug.xcconfig */,
+				FD82936D5A90D80B5FE26803 /* Release.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		B1C67AA26FCE2E69A0A65D0C = {
+			isa = PBXGroup;
+			children = (
+				56011362336AC6C37C0043D2 /* Config */,
+				DE21F0EF1345CB2385EF6BAE /* Packages */,
+				CAD021CDFBD51FC2BF073641 /* SunsetHue */,
+				4B2F3D72A3CC6A6B17783B27 /* SunsetHueWidget */,
+				020006DBEE54E0A8D988FC06 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CAD021CDFBD51FC2BF073641 /* SunsetHue */ = {
+			isa = PBXGroup;
+			children = (
+				65E370BFF1D15AFFF837FAF8 /* AppDelegate.swift */,
+				D0E47FB8CA49606C63177352 /* AppModel.swift */,
+				6B332A47F6075706699D2319 /* Assets.xcassets */,
+				CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */,
+				9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */,
+				4815E36D2032FEDBEE28245D /* Info.plist */,
+				7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */,
+				5D56605CC77B37096F15E578 /* LocationSidebar.swift */,
+				BC72BF1D99B03BFCD34DADF4 /* SunsetHueApp.swift */,
+			);
+			path = SunsetHue;
+			sourceTree = "<group>";
+		};
+		DE21F0EF1345CB2385EF6BAE /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				791123633E8EB0E3998A29AD /* sunsethue-macos */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		248EFCAD45BF9DE6CD079E12 /* SunsetHue */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5F1A9136C8596285EC20577A /* Build configuration list for PBXNativeTarget "SunsetHue" */;
+			buildPhases = (
+				FA9F4AA26EA89BD64374B82B /* Sources */,
+				465DDD2FE499994E1311DE6D /* Resources */,
+				04A2A11208347A999ED10390 /* Frameworks */,
+				3D2689B8AB9534D3B075F1F1 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3631A87CE1DD620055B3217E /* PBXTargetDependency */,
+			);
+			name = SunsetHue;
+			packageProductDependencies = (
+				C6D5D9CD20835ED55C167C4F /* SunsetHueCore */,
+			);
+			productName = SunsetHue;
+			productReference = 6A5C197A40BFDD7EBC1F8EB7 /* SunsetHue.app */;
+			productType = "com.apple.product-type.application";
+		};
+		71E878F9181E8732800ADDC4 /* SunsetHueWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 63F35C0A44D1CC2495AEF4AA /* Build configuration list for PBXNativeTarget "SunsetHueWidget" */;
+			buildPhases = (
+				10D121D2784A274654C754F5 /* Sources */,
+				DE18FFB618BAEC3FDC8742CA /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SunsetHueWidget;
+			packageProductDependencies = (
+				10C60963C95E03499F710C0F /* SunsetHueCore */,
+			);
+			productName = SunsetHueWidget;
+			productReference = 4CE1D8B70204B8780F49EC2E /* SunsetHueWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1BC9B33DE54F914794C56DC6 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					248EFCAD45BF9DE6CD079E12 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					71E878F9181E8732800ADDC4 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 5F54144A642390AD7F6888F2 /* Build configuration list for PBXProject "SunsetHue" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = B1C67AA26FCE2E69A0A65D0C;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7201DA891F430BC64CE1F96A /* XCLocalSwiftPackageReference "." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 020006DBEE54E0A8D988FC06 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				248EFCAD45BF9DE6CD079E12 /* SunsetHue */,
+				71E878F9181E8732800ADDC4 /* SunsetHueWidget */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		465DDD2FE499994E1311DE6D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				79B4E0A2E8A26D6639D01E86 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		10D121D2784A274654C754F5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				02F9100AF71ADE3CD876B456 /* SunsetHueTimelineProvider.swift in Sources */,
+				E1417E3A82ABEFD585F96984 /* SunsetHueWidget.swift in Sources */,
+				E1A6AC8A35552FAFBB000CA0 /* SunsetHueWidgetBundle.swift in Sources */,
+				75589202BA50FD80C120B018 /* WidgetConfigurationIntent.swift in Sources */,
+				064B2DCAE6E6F4B75547B4C1 /* WidgetContentResolver.swift in Sources */,
+				296DAD914126AD9AFE392A32 /* WidgetPreviews.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA9F4AA26EA89BD64374B82B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F1B0A865C7F393A4E0D9B4A7 /* AppDelegate.swift in Sources */,
+				64326D0EF99DD0063740FDD0 /* AppModel.swift in Sources */,
+				C28174242C887CCC6E91214E /* ContentView.swift in Sources */,
+				DA11E511FE5B36B9394DA5D8 /* ForecastDetailView.swift in Sources */,
+				1B4D2F25D5C3E6A91C7ADE38 /* LocationEditorView.swift in Sources */,
+				5C2CC0A0396760B042C255F2 /* LocationSidebar.swift in Sources */,
+				0A1CB0233EC3BBF92A487889 /* SunsetHueApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3631A87CE1DD620055B3217E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 71E878F9181E8732800ADDC4 /* SunsetHueWidget */;
+			targetProxy = 098B1C678532C46862B90A33 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		34C9EBA51FF6C10822FBC2DA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 65EEC050761A055B392397E8 /* Debug.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SunsetHueWidget/SunsetHueWidget.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SunsetHueWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SunsetHue;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Andrew Tryder. All rights reserved.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.andrewtryder.SunsetHue.Widget;
+				PRODUCT_NAME = SunsetHueWidget;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		CB459D5F22764CA752982BB2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FD82936D5A90D80B5FE26803 /* Release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = SunsetHue/SunsetHue.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SunsetHue/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SunsetHue;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Andrew Tryder. All rights reserved.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.andrewtryder.SunsetHue;
+				PRODUCT_NAME = SunsetHue;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		D2CBDCC86BBF8A39478F61FC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 65EEC050761A055B392397E8 /* Debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = SunsetHue/SunsetHue.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SunsetHue/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SunsetHue;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Andrew Tryder. All rights reserved.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.andrewtryder.SunsetHue;
+				PRODUCT_NAME = SunsetHue;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		D381709FDEF1DD0B61462829 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D5E64B3B294B1D159DF1B16F /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FD82936D5A90D80B5FE26803 /* Release.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SunsetHueWidget/SunsetHueWidget.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SunsetHueWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SunsetHue;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Andrew Tryder. All rights reserved.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.andrewtryder.SunsetHue.Widget;
+				PRODUCT_NAME = SunsetHueWidget;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		DCFF027B6FFA0BEF33B7F78E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5F1A9136C8596285EC20577A /* Build configuration list for PBXNativeTarget "SunsetHue" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D2CBDCC86BBF8A39478F61FC /* Debug */,
+				CB459D5F22764CA752982BB2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5F54144A642390AD7F6888F2 /* Build configuration list for PBXProject "SunsetHue" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D381709FDEF1DD0B61462829 /* Debug */,
+				DCFF027B6FFA0BEF33B7F78E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		63F35C0A44D1CC2495AEF4AA /* Build configuration list for PBXNativeTarget "SunsetHueWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				34C9EBA51FF6C10822FBC2DA /* Debug */,
+				D5E64B3B294B1D159DF1B16F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		7201DA891F430BC64CE1F96A /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		10C60963C95E03499F710C0F /* SunsetHueCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SunsetHueCore;
+		};
+		C6D5D9CD20835ED55C167C4F /* SunsetHueCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SunsetHueCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 1BC9B33DE54F914794C56DC6 /* Project object */;
+}

@@ -1,0 +1,12 @@
+// Free Apple ID Personal Team is enough for local widgets (no $99 program).
+//
+//   cp Config/Local.xcconfig.example Config/Local.xcconfig
+//
+// Team ID: Xcode → Settings → Accounts → select your Apple ID → Team ID
+// (10-character string like A1B2C3D4E5)
+
+CODE_SIGN_STYLE = Automatic
+CODE_SIGNING_REQUIRED = YES
+CODE_SIGNING_ALLOWED = YES
+CODE_SIGN_IDENTITY = Apple Development
+DEVELOPMENT_TEAM = YOURTEAMID

@@ -1,0 +1,22 @@
+// Shared build settings for SunsetHue targets.
+// Default distribution is unsigned / free on GitHub (no Apple Developer team required).
+
+#include "Version.xcconfig"
+
+PRODUCT_NAME = $(TARGET_NAME)
+MACOSX_DEPLOYMENT_TARGET = 14.0
+SWIFT_VERSION = 5.0
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+
+// Unsigned by default for free GitHub releases.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+CODE_SIGNING_REQUIRED = NO
+CODE_SIGNING_ALLOWED = NO
+DEVELOPMENT_TEAM =
+
+SUNSETHUE_APP_BUNDLE_ID = com.andrewtryder.SunsetHue
+SUNSETHUE_WIDGET_BUNDLE_ID = com.andrewtryder.SunsetHue.Widget
+
+INFOPLIST_KEY_CFBundleDisplayName = SunsetHue
+INFOPLIST_KEY_NSHumanReadableCopyright = Copyright © 2026 Andrew Tryder. All rights reserved.

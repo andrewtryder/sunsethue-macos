@@ -1,0 +1,6 @@
+#include "Version.xcconfig"
+// Optional Personal Team for local Release runs; CI/package-unsigned override signing on the CLI.
+#include? "Local.xcconfig"
+
+CODE_SIGN_STYLE = Automatic
+CODE_SIGNING_ALLOWED = YES
