@@ -9,39 +9,73 @@ final class AppModel: ObservableObject {
     @Published var state: SharedAppState
     @Published var selectedLocationID: UUID?
     @Published var bundle: LocationForecastBundle?
+    @Published var snapshot: CachedLocationSnapshot?
     @Published var isRefreshing = false
     @Published var bannerMessage: String?
     @Published var isPresentingEditor = false
     @Published var editorDraft: LocationEditorDraft = .empty
     @Published var isEditingExisting = false
+    @Published var lastErrorMessage: String?
+    @Published var lastErrorIsAuthentication = false
+    @Published var apiKeyDraft = ""
+    @Published var accountStatusMessage: String?
 
-    private let settingsStore: SharedSettingsStore
-    private let forecastCache: ForecastCache
-    private let credentialStore: CredentialStore
-    private let forecastService: ForecastService
+    let settingsStore: any SharedSettingsStore
+    let forecastCache: any ForecastCache
+    let credentialStore: CredentialStore
+    let refreshCoordinator: ForecastRefreshCoordinator
     private let logger = Logger(subsystem: "com.andrewtryder.SunsetHue", category: "App")
+    private var wakeObserver: NSObjectProtocol?
 
     init(
-        settingsStore: SharedSettingsStore = SharedStorageFactory.makeSettingsStore(),
-        forecastCache: ForecastCache = SharedStorageFactory.makeForecastCache(),
+        settingsStore: any SharedSettingsStore = SharedStorageFactory.makeSettingsStore(),
+        forecastCache: any ForecastCache = SharedStorageFactory.makeForecastCache(),
         credentialStore: CredentialStore = KeychainCredentialStore(),
         forecastService: ForecastService = ForecastService()
     ) {
         self.settingsStore = settingsStore
         self.forecastCache = forecastCache
         self.credentialStore = credentialStore
-        self.forecastService = forecastService
-        self.state = (try? settingsStore.load()) ?? SharedAppState()
-        self.selectedLocationID = self.state.selectedLocationID ?? self.state.locations.first?.id
-        if let id = selectedLocationID {
-            self.bundle = try? forecastCache.loadBundle(for: id)
+        self.refreshCoordinator = ForecastRefreshCoordinator(
+            settingsStore: settingsStore,
+            forecastCache: forecastCache,
+            credentialStore: credentialStore,
+            forecastService: forecastService
+        )
+        self.state = SharedAppState()
+        Task { await bootstrap() }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.refreshCoordinator.applicationDidWake()
+                await self?.reloadSelectedSnapshot()
+            }
         }
-        // loadAPIKey migrates legacy file-keychain items once; do not rewrite on every launch.
-        _ = try? credentialStore.loadAPIKey()
-        // Ensure App Group migration is visible to WidgetKit immediately.
-        persistState()
-        reloadWidgets()
-        Task { await refreshSelected(force: false) }
+    }
+
+    deinit {
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        }
+    }
+
+    private func bootstrap() async {
+        do {
+            let loaded = try await settingsStore.load()
+            state = loaded
+            selectedLocationID = loaded.selectedLocationID ?? loaded.locations.first?.id
+            await reloadSelectedSnapshot()
+            await persistState()
+            await refreshCoordinator.refreshAllStaleLocations()
+            await reloadSelectedSnapshot()
+            await refreshCoordinator.scheduleNextRefresh()
+        } catch {
+            logger.error("Failed to bootstrap shared storage")
+            bannerMessage = SunsetHueError.storageCorrupt.userMessage
+        }
     }
 
     var selectedLocation: SavedLocation? {
@@ -50,15 +84,57 @@ final class AppModel: ObservableObject {
     }
 
     var hasAPIKey: Bool {
-        (try? credentialStore.loadAPIKey())?.isEmpty == false
+        do {
+            return try credentialStore.loadAPIKey()?.isEmpty == false
+        } catch {
+            return false
+        }
+    }
+
+    func applicationDidBecomeActive() {
+        Task {
+            await refreshCoordinator.refreshAllStaleLocations()
+            await reloadSelectedSnapshot()
+        }
     }
 
     func selectLocation(id: UUID) {
         selectedLocationID = id
         state.selectedLocationID = id
-        persistState()
-        bundle = try? forecastCache.loadBundle(for: id)
-        Task { await refreshSelected(force: false) }
+        Task {
+            await persistState()
+            await reloadSelectedSnapshot()
+            await refreshCoordinator.refreshLocation(id: id, force: false)
+            await reloadSelectedSnapshot()
+        }
+    }
+
+    func selectNextLocation() {
+        guard !state.locations.isEmpty else { return }
+        let current = selectedLocationID.flatMap { id in state.locations.firstIndex(where: { $0.id == id }) } ?? 0
+        let next = (current + 1) % state.locations.count
+        selectLocation(id: state.locations[next].id)
+    }
+
+    func selectPreviousLocation() {
+        guard !state.locations.isEmpty else { return }
+        let current = selectedLocationID.flatMap { id in state.locations.firstIndex(where: { $0.id == id }) } ?? 0
+        let previous = (current - 1 + state.locations.count) % state.locations.count
+        selectLocation(id: state.locations[previous].id)
+    }
+
+    func selectLocation(at index: Int) {
+        guard state.locations.indices.contains(index) else { return }
+        selectLocation(id: state.locations[index].id)
+    }
+
+    func editSelectedLocation() {
+        guard let location = selectedLocation else { return }
+        beginEditLocation(location)
+    }
+
+    func refreshSelectedFromCommand() {
+        Task { await refreshSelected(force: true) }
     }
 
     func handle(url: URL) {
@@ -74,15 +150,14 @@ final class AppModel: ObservableObject {
     }
 
     func beginAddLocation() {
-        let apiKey = (try? credentialStore.loadAPIKey()) ?? ""
-        editorDraft = .empty(apiKey: apiKey)
+        let defaults = AppPreferenceDefaults.shared
+        editorDraft = .empty(using: defaults)
         isEditingExisting = false
         isPresentingEditor = true
     }
 
     func beginEditLocation(_ location: SavedLocation) {
-        let apiKey = (try? credentialStore.loadAPIKey()) ?? ""
-        editorDraft = LocationEditorDraft(location: location, apiKey: apiKey)
+        editorDraft = LocationEditorDraft(location: location)
         isEditingExisting = true
         isPresentingEditor = true
     }
@@ -92,27 +167,19 @@ final class AppModel: ObservableObject {
         if selectedLocationID == location.id {
             selectedLocationID = state.locations.first?.id
             state.selectedLocationID = selectedLocationID
-            if let selectedLocationID {
-                bundle = try? forecastCache.loadBundle(for: selectedLocationID)
-            } else {
-                bundle = nil
-            }
         }
-        persistState()
-        reloadWidgets()
+        Task {
+            try? await forecastCache.deleteLocation(location.id)
+            await reloadSelectedSnapshot()
+            await persistState()
+            WidgetCenter.shared.reloadTimelines(ofKind: SunsetHueConstants.widgetKind)
+            await refreshCoordinator.scheduleNextRefresh()
+        }
     }
 
     func saveEditor() async {
         do {
-            let draft = editorDraft
-            let trimmedKey = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedKey.isEmpty else {
-                bannerMessage = SunsetHueError.missingCredentials.userMessage
-                return
-            }
-            try credentialStore.saveAPIKey(trimmedKey)
-
-            let location = try draft.makeLocation().validated(againstExisting: state.locations)
+            let location = try editorDraft.makeLocation().validated(againstExisting: state.locations)
             if let index = state.locations.firstIndex(where: { $0.id == location.id }) {
                 state.locations[index] = location
             } else {
@@ -120,12 +187,11 @@ final class AppModel: ObservableObject {
             }
             selectedLocationID = location.id
             state.selectedLocationID = location.id
-            state.lastErrorMessage = nil
-            state.lastErrorIsAuthentication = false
-            persistState()
+            await persistState()
             isPresentingEditor = false
-            await refreshSelected(force: true)
-            reloadWidgets()
+            await refreshCoordinator.refreshLocation(id: location.id, force: true)
+            await reloadSelectedSnapshot()
+            await refreshCoordinator.scheduleNextRefresh()
         } catch let error as SunsetHueError {
             bannerMessage = error.userMessage
         } catch {
@@ -133,14 +199,49 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func testConnection(draft: LocationEditorDraft) async -> String {
+    func saveAPIKey(_ key: String) async {
         do {
-            let location = try draft.makeLocation().validated()
+            try credentialStore.saveAPIKey(key)
+            accountStatusMessage = "API key saved."
+            apiKeyDraft = ""
+            await refreshCoordinator.refreshAllStaleLocations()
+            await reloadSelectedSnapshot()
+            WidgetCenter.shared.reloadTimelines(ofKind: SunsetHueConstants.widgetKind)
+        } catch let error as SunsetHueError {
+            accountStatusMessage = error.userMessage
+        } catch {
+            accountStatusMessage = "Unable to save API key."
+        }
+    }
+
+    func removeAPIKey() async {
+        do {
+            try credentialStore.deleteAPIKey()
+            accountStatusMessage = "API key removed."
+            lastErrorIsAuthentication = true
+            lastErrorMessage = SunsetHueError.missingCredentials.userMessage
+            WidgetCenter.shared.reloadTimelines(ofKind: SunsetHueConstants.widgetKind)
+        } catch {
+            accountStatusMessage = "Unable to remove API key."
+        }
+    }
+
+    func testConnectionWithStoredOrDraftKey(_ draftKey: String?) async -> String {
+        do {
+            let key: String
+            if let draftKey, !draftKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                key = draftKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            } else if let stored = try credentialStore.loadAPIKey(), !stored.isEmpty {
+                key = stored
+            } else {
+                return SunsetHueError.missingCredentials.userMessage
+            }
+            guard let location = selectedLocation ?? state.locations.first else {
+                return "Add a location before testing the connection."
+            }
             guard let timeZone = location.timeZone else {
                 return SunsetHueError.invalidLocation("Time zone identifier is invalid.").userMessage
             }
-            let key = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !key.isEmpty else { return SunsetHueError.missingCredentials.userMessage }
             let client = SunsetHueClient(apiKey: key)
             let forecast = try await client.testConnection(coordinates: location.coordinates, timeZone: timeZone)
             if forecast.isQualityAvailable, let percent = PresentationFormatting.percentage(fromNormalized: forecast.quality) {
@@ -159,78 +260,93 @@ final class AppModel: ObservableObject {
         if isRefreshing { return }
         isRefreshing = true
         defer { isRefreshing = false }
+        _ = await refreshCoordinator.refreshLocation(id: location.id, force: force)
+        await reloadSelectedSnapshot()
+        await refreshCoordinator.scheduleNextRefresh()
+    }
 
-        do {
-            guard let apiKey = try credentialStore.loadAPIKey(), !apiKey.isEmpty else {
-                bannerMessage = SunsetHueError.missingCredentials.userMessage
-                state.lastErrorMessage = bannerMessage
-                state.lastErrorIsAuthentication = true
-                persistState()
-                return
-            }
-
-            let previous = try forecastCache.loadBundle(for: location.id)
-            if !force, let previous, Date().timeIntervalSince(previous.fetchedAt) < 60 {
-                bundle = previous
-                return
-            }
-
-            let outcome = await forecastService.refreshPreservingCache(
-                location: location,
-                apiKey: apiKey,
-                previous: previous
-            )
-
-            if let refreshed = outcome.bundle, !outcome.usedCache {
-                try forecastCache.saveBundle(refreshed)
-                bundle = refreshed
-                state.lastSuccessfulUpdate = refreshed.fetchedAt
-                state.lastErrorMessage = nil
-                state.lastErrorIsAuthentication = false
-                bannerMessage = nil
-                persistState()
-                reloadWidgets()
-            } else if let cached = outcome.bundle, outcome.usedCache {
-                bundle = cached
-                if let error = outcome.error {
-                    bannerMessage = error.userMessage
-                    state.lastErrorMessage = error.userMessage
-                    state.lastErrorIsAuthentication = error.isAuthenticationFailure
-                    persistState()
-                    if error.isAuthenticationFailure {
-                        reloadWidgets()
-                    }
-                }
-            } else if let error = outcome.error {
-                bannerMessage = error.userMessage
-                state.lastErrorMessage = error.userMessage
-                state.lastErrorIsAuthentication = error.isAuthenticationFailure
-                persistState()
-                reloadWidgets()
-            }
-        } catch {
-            logger.error("Refresh failed unexpectedly")
-            bannerMessage = SunsetHueError.networkUnavailable.userMessage
+    private func reloadSelectedSnapshot() async {
+        guard let id = selectedLocationID ?? state.locations.first?.id else {
+            bundle = nil
+            snapshot = nil
+            lastErrorMessage = nil
+            lastErrorIsAuthentication = false
+            return
+        }
+        let loaded = try? await forecastCache.loadSnapshot(for: id)
+        snapshot = loaded
+        bundle = loaded?.bundle
+        switch loaded?.status {
+        case .authenticationRequired:
+            lastErrorIsAuthentication = true
+            lastErrorMessage = SunsetHueError.missingCredentials.userMessage
+        case .temporarilyUnavailable, .rateLimited, .stale:
+            lastErrorIsAuthentication = false
+            lastErrorMessage = loaded?.status == .stale ? nil : SunsetHueError.networkUnavailable.userMessage
+        case .current, .none:
+            lastErrorMessage = nil
+            lastErrorIsAuthentication = false
         }
     }
 
-    private func persistState() {
+    private func persistState() async {
         do {
-            try settingsStore.save(state)
+            try await settingsStore.save(state)
         } catch {
             logger.error("Failed to persist shared settings")
         }
     }
+}
 
-    private func reloadWidgets() {
-        WidgetCenter.shared.reloadAllTimelines()
+struct AppPreferenceDefaults {
+    static let shared = AppPreferenceDefaults()
+
+    private let defaults = UserDefaults.standard
+
+    var defaultForecastDays: Int {
+        get {
+            let value = defaults.object(forKey: "defaultForecastDays") as? Int
+            return value ?? SunsetHueConstants.defaultForecastDays
+        }
+        nonmutating set { defaults.set(newValue, forKey: "defaultForecastDays") }
+    }
+
+    var defaultRefreshIntervalHours: Int {
+        get {
+            let value = defaults.object(forKey: "defaultRefreshIntervalHours") as? Int
+            return value ?? SunsetHueConstants.defaultRefreshIntervalHours
+        }
+        nonmutating set { defaults.set(newValue, forKey: "defaultRefreshIntervalHours") }
+    }
+
+    var defaultIncludeSunrise: Bool {
+        get {
+            if defaults.object(forKey: "defaultIncludeSunrise") == nil { return true }
+            return defaults.bool(forKey: "defaultIncludeSunrise")
+        }
+        nonmutating set { defaults.set(newValue, forKey: "defaultIncludeSunrise") }
+    }
+
+    var defaultIncludeSunset: Bool {
+        get {
+            if defaults.object(forKey: "defaultIncludeSunset") == nil { return true }
+            return defaults.bool(forKey: "defaultIncludeSunset")
+        }
+        nonmutating set { defaults.set(newValue, forKey: "defaultIncludeSunset") }
+    }
+
+    var openMainWindowOnLaunch: Bool {
+        get {
+            if defaults.object(forKey: "openMainWindowOnLaunch") == nil { return true }
+            return defaults.bool(forKey: "openMainWindowOnLaunch")
+        }
+        nonmutating set { defaults.set(newValue, forKey: "openMainWindowOnLaunch") }
     }
 }
 
 struct LocationEditorDraft: Equatable {
     var id: UUID
     var name: String
-    var apiKey: String
     var latitude: String
     var longitude: String
     var timeZoneIdentifier: String
@@ -240,28 +356,26 @@ struct LocationEditorDraft: Equatable {
     var refreshIntervalHours: Int
 
     static var empty: LocationEditorDraft {
-        empty(apiKey: "")
+        empty(using: .shared)
     }
 
-    static func empty(apiKey: String) -> LocationEditorDraft {
+    static func empty(using defaults: AppPreferenceDefaults) -> LocationEditorDraft {
         LocationEditorDraft(
             id: UUID(),
             name: "",
-            apiKey: apiKey,
             latitude: "",
             longitude: "",
             timeZoneIdentifier: TimeZone.current.identifier,
-            forecastDays: 3,
-            includeSunrise: true,
-            includeSunset: true,
-            refreshIntervalHours: 6
+            forecastDays: defaults.defaultForecastDays,
+            includeSunrise: defaults.defaultIncludeSunrise,
+            includeSunset: defaults.defaultIncludeSunset,
+            refreshIntervalHours: defaults.defaultRefreshIntervalHours
         )
     }
 
-    init(location: SavedLocation, apiKey: String) {
+    init(location: SavedLocation) {
         self.id = location.id
         self.name = location.name
-        self.apiKey = apiKey
         self.latitude = String(location.latitude)
         self.longitude = String(location.longitude)
         self.timeZoneIdentifier = location.timeZoneIdentifier
@@ -274,7 +388,6 @@ struct LocationEditorDraft: Equatable {
     init(
         id: UUID,
         name: String,
-        apiKey: String,
         latitude: String,
         longitude: String,
         timeZoneIdentifier: String,
@@ -285,7 +398,6 @@ struct LocationEditorDraft: Equatable {
     ) {
         self.id = id
         self.name = name
-        self.apiKey = apiKey
         self.latitude = latitude
         self.longitude = longitude
         self.timeZoneIdentifier = timeZoneIdentifier

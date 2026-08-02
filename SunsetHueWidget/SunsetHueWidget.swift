@@ -40,6 +40,8 @@ struct SunsetHueWidgetView: View {
             OnboardingWidgetView(message: entry.statusMessage ?? "Open SunsetHue to get started.")
         case .authentication:
             AuthWidgetView(locationName: entry.location?.name, message: entry.statusMessage)
+        case .unavailable:
+            OnboardingWidgetView(message: entry.statusMessage ?? "Forecast unavailable.")
         default:
             switch family {
             case .systemSmall:

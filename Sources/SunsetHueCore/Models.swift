@@ -271,24 +271,43 @@ public struct RefreshOutcome: Sendable {
 }
 
 public struct SharedAppState: Codable, Hashable, Sendable {
+    public var schemaVersion: Int
     public var locations: [SavedLocation]
     public var selectedLocationID: UUID?
-    public var lastErrorMessage: String?
-    public var lastErrorIsAuthentication: Bool
-    public var lastSuccessfulUpdate: Date?
+
+    public enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case locations
+        case selectedLocationID
+        // Legacy fields ignored on decode / omitted on encode.
+        case lastErrorMessage
+        case lastErrorIsAuthentication
+        case lastSuccessfulUpdate
+    }
 
     public init(
+        schemaVersion: Int = SunsetHueConstants.currentSettingsSchemaVersion,
         locations: [SavedLocation] = [],
-        selectedLocationID: UUID? = nil,
-        lastErrorMessage: String? = nil,
-        lastErrorIsAuthentication: Bool = false,
-        lastSuccessfulUpdate: Date? = nil
+        selectedLocationID: UUID? = nil
     ) {
+        self.schemaVersion = schemaVersion
         self.locations = locations
         self.selectedLocationID = selectedLocationID
-        self.lastErrorMessage = lastErrorMessage
-        self.lastErrorIsAuthentication = lastErrorIsAuthentication
-        self.lastSuccessfulUpdate = lastSuccessfulUpdate
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
+            ?? SunsetHueConstants.currentSettingsSchemaVersion
+        locations = try container.decodeIfPresent([SavedLocation].self, forKey: .locations) ?? []
+        selectedLocationID = try container.decodeIfPresent(UUID.self, forKey: .selectedLocationID)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(locations, forKey: .locations)
+        try container.encodeIfPresent(selectedLocationID, forKey: .selectedLocationID)
     }
 
     public var selectedLocation: SavedLocation? {
@@ -297,10 +316,144 @@ public struct SharedAppState: Codable, Hashable, Sendable {
     }
 }
 
+/// Widget-safe per-location forecast snapshot (no secrets).
+public enum RefreshStatus: Codable, Hashable, Sendable {
+    case current
+    case stale
+    case authenticationRequired
+    case rateLimited(retryAfter: Date?)
+    case temporarilyUnavailable
+}
+
+public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
+    public var schemaVersion: Int
+    public let locationID: UUID
+    public var fetchedAt: Date
+    public var lastAttemptAt: Date
+    public var forecasts: [EventForecast]
+    public var status: RefreshStatus
+
+    public enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case locationID
+        case fetchedAt
+        case lastAttemptAt
+        case forecasts
+        case status
+        // Legacy LocationCacheDocument fields (decode-only migration).
+        case lastErrorMessage
+        case lastErrorIsAuthentication
+        case bundle
+    }
+
+    public init(
+        schemaVersion: Int = SunsetHueConstants.currentCacheSchemaVersion,
+        locationID: UUID,
+        fetchedAt: Date,
+        lastAttemptAt: Date,
+        forecasts: [EventForecast],
+        status: RefreshStatus
+    ) {
+        self.schemaVersion = schemaVersion
+        self.locationID = locationID
+        self.fetchedAt = fetchedAt
+        self.lastAttemptAt = lastAttemptAt
+        self.forecasts = forecasts
+        self.status = status
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let status = try container.decodeIfPresent(RefreshStatus.self, forKey: .status),
+           container.contains(.forecasts) {
+            schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
+                ?? SunsetHueConstants.currentCacheSchemaVersion
+            locationID = try container.decode(UUID.self, forKey: .locationID)
+            fetchedAt = try container.decode(Date.self, forKey: .fetchedAt)
+            lastAttemptAt = try container.decodeIfPresent(Date.self, forKey: .lastAttemptAt) ?? fetchedAt
+            forecasts = try container.decode([EventForecast].self, forKey: .forecasts)
+            self.status = status
+            return
+        }
+
+        // Migrate legacy LocationCacheDocument.
+        let bundle = try container.decodeIfPresent(LocationForecastBundle.self, forKey: .bundle)
+        locationID = bundle?.locationID ?? UUID()
+        fetchedAt = try container.decodeIfPresent(Date.self, forKey: .fetchedAt) ?? Date.distantPast
+        lastAttemptAt = fetchedAt
+        forecasts = bundle?.forecasts ?? []
+        schemaVersion = SunsetHueConstants.currentCacheSchemaVersion
+        let auth = try container.decodeIfPresent(Bool.self, forKey: .lastErrorIsAuthentication) ?? false
+        let hasError = try container.decodeIfPresent(String.self, forKey: .lastErrorMessage) != nil
+        if auth {
+            status = .authenticationRequired
+        } else if hasError {
+            status = .temporarilyUnavailable
+        } else if forecasts.isEmpty {
+            status = .temporarilyUnavailable
+        } else {
+            status = .current
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(locationID, forKey: .locationID)
+        try container.encode(fetchedAt, forKey: .fetchedAt)
+        try container.encode(lastAttemptAt, forKey: .lastAttemptAt)
+        try container.encode(forecasts, forKey: .forecasts)
+        try container.encode(status, forKey: .status)
+    }
+
+    public var bundle: LocationForecastBundle? {
+        guard !forecasts.isEmpty else { return nil }
+        return LocationForecastBundle(locationID: locationID, fetchedAt: fetchedAt, forecasts: forecasts)
+    }
+
+    public func isFresh(refreshIntervalHours: Int, now: Date = Date()) -> Bool {
+        let hours = SunsetHueConstants.validRefreshIntervalHours.contains(refreshIntervalHours)
+            ? refreshIntervalHours
+            : SunsetHueConstants.defaultRefreshIntervalHours
+        return now.timeIntervalSince(fetchedAt) < TimeInterval(hours * 3600)
+            && status == .current
+    }
+
+    public static func fromSuccessful(bundle: LocationForecastBundle, attemptedAt: Date = Date()) -> CachedLocationSnapshot {
+        CachedLocationSnapshot(
+            locationID: bundle.locationID,
+            fetchedAt: bundle.fetchedAt,
+            lastAttemptAt: attemptedAt,
+            forecasts: bundle.forecasts,
+            status: .current
+        )
+    }
+}
+
+/// Legacy monolithic cache shape (migration only).
 public struct CachedForecastStore: Codable, Hashable, Sendable {
     public var bundles: [UUID: LocationForecastBundle]
 
     public init(bundles: [UUID: LocationForecastBundle] = [:]) {
         self.bundles = bundles
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let dict = try? container.decode([String: LocationForecastBundle].self, forKey: .bundles) {
+            var mapped: [UUID: LocationForecastBundle] = [:]
+            for (key, value) in dict {
+                if let id = UUID(uuidString: key) {
+                    mapped[id] = value
+                }
+            }
+            bundles = mapped
+        } else {
+            bundles = try container.decodeIfPresent([UUID: LocationForecastBundle].self, forKey: .bundles) ?? [:]
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case bundles
     }
 }

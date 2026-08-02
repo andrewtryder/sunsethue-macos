@@ -1,10 +1,10 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "SunsetHueCore",
     platforms: [
-        .macOS(.v14),
+        .macOS(.v15),
     ],
     products: [
         .library(
@@ -15,7 +15,11 @@ let package = Package(
     targets: [
         .target(
             name: "SunsetHueCore",
-            path: "Sources/SunsetHueCore"
+            path: "Sources/SunsetHueCore",
+            swiftSettings: [
+                .enableUpcomingFeature("ConciseMagicFile"),
+                .swiftLanguageMode(.v5),
+            ]
         ),
         .testTarget(
             name: "SunsetHueCoreTests",
@@ -23,6 +27,10 @@ let package = Package(
             path: "Tests/SunsetHueCoreTests",
             resources: [
                 .copy("Fixtures"),
+            ],
+            swiftSettings: [
+                .enableUpcomingFeature("ConciseMagicFile"),
+                .swiftLanguageMode(.v5),
             ]
         ),
     ]

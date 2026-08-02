@@ -2,7 +2,7 @@ name: SunsetHue
 options:
   bundleIdPrefix: com.andrewtryder
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "15.0"
   createIntermediateGroups: true
   groupSortPosition: top
   developmentLanguage: en
@@ -11,10 +11,18 @@ settings:
     MARKETING_VERSION: "1.1.0" # x-release-please-version
     CURRENT_PROJECT_VERSION: 1
     SWIFT_VERSION: "5.0"
-    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_UPCOMING_FEATURE_CONCISE_MAGIC_FILE: YES
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ARCHS: "$(ARCHS_STANDARD)"
+  configs:
+    Release:
+      ONLY_ACTIVE_ARCH: NO
+    Debug:
+      ONLY_ACTIVE_ARCH: YES
 packages:
   SunsetHueCore:
     path: .

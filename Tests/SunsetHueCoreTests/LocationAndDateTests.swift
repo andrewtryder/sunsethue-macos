@@ -109,6 +109,12 @@ final class LocationAndDateTests: XCTestCase {
         )
         // Floor of 15 minutes wins over 30s retry.
         XCTAssertEqual(rateLimited.timeIntervalSince(now), 15 * 60, accuracy: 1)
+
+        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let jitter = SunsetHueConstants.timelineJitterSeconds(for: id)
+        XCTAssertGreaterThanOrEqual(jitter, 0)
+        XCTAssertLessThan(jitter, SunsetHueConstants.maxTimelineJitterSeconds)
+        XCTAssertEqual(jitter, SunsetHueConstants.timelineJitterSeconds(for: id))
     }
 
     func testDeepLinkParsing() {

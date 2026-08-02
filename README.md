@@ -52,7 +52,7 @@ On `main`, release-please opens version PRs from Conventional Commits and, when 
 
 ### Keychain password prompts
 
-The API key is stored in the **data-protection keychain** with Keychain Sharing (signed builds), so opening the app from a widget deep link should not ask for your login password. If macOS still prompts once after upgrading, open the app, edit a location, and re-save the API key — that migrates the old file-keychain item. Prefer a single install (for example `/Applications/SunsetHue.app`) while testing widgets so Launch Services does not start a second copy from Xcode DerivedData.
+The API key is stored in the **app-only data-protection Keychain** (`api-key-v2`, `AfterFirstUnlockThisDeviceOnly`). The widget never reads the Keychain or contacts SunsetHue — it only renders sanitized App Group cache snapshots written by the main app. Re-enter your API key once after upgrading to this architecture (Settings → Account).
 
 ### Widget gallery (important)
 
@@ -65,7 +65,7 @@ To see the widget on your own Mac (still free — no $99 program):
 1. Create a free [Apple ID](https://appleid.apple.com) if you do not have one.
 2. Xcode → Settings → Accounts → add that Apple ID.
 3. Copy `Config/Local.xcconfig.example` → `Config/Local.xcconfig` and set your **Personal Team** ID, **or** in the `SunsetHue` and `SunsetHueWidget` targets enable **Automatically manage signing** and pick your Personal Team.
-4. Confirm both targets have **App Sandbox**, **App Groups** (`$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue`), and **Keychain Sharing** (entitlements are in the repo; Xcode may ask to register the App Group — accept).
+4. Confirm both targets have **App Sandbox** and **App Groups** (`$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue`). The widget does **not** need network or Keychain entitlements.
 5. **Product → Run** from Xcode (Debug, signed — not the unsigned Release DMG).
 6. Right-click the desktop → **Edit Widgets** → search **SunsetHue**.
 
@@ -77,7 +77,7 @@ Paid Apple Developer Program is only needed for notarized distribution to other 
 
 ## Requirements
 
-- macOS 14 or newer
+- macOS 15 or newer
 - To build from source: Xcode 15+ (Xcode 26 recommended) and optionally [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 - A SunsetHue API key from [sunsethue.com/dev-api](https://sunsethue.com/dev-api)
 
@@ -104,18 +104,17 @@ Paid Apple Developer Program is only needed for notarized distribution to other 
 
 Organization / copyright display name: **Andrew Tryder**.
 
-Optional App Group / Keychain Sharing identifiers remain documented only for contributors who later add a paid Apple team:
+Optional App Group identifier for signed Personal Team builds:
 
 | Optional (signed builds) | Value |
 |--------------------------|--------|
 | App Group | `$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue` (macOS 15+ Team-ID form) |
-| Keychain Access Group | `$(AppIdentifierPrefix)com.andrewtryder.SunsetHue.shared` |
 
 ## Obtaining an API key
 
 1. Visit [https://sunsethue.com/dev-api](https://sunsethue.com/dev-api).
 2. Create an API key with SunsetHue.
-3. Paste it into the app. It is stored **only** in the Keychain.
+3. Paste it into **Settings → Account**. It is stored **only** in the app Keychain.
 
 ## Building from source
 
@@ -136,8 +135,10 @@ Or open `SunsetHue.xcodeproj` in Xcode and run the `SunsetHue` scheme (signing c
 
 ## Privacy behavior
 
-- API key: Keychain only
-- Locations, preferences, cached forecasts, timestamps, non-sensitive errors: Application Support JSON files
+- API key: app-only Keychain (`api-key-v2`)
+- Locations and selection: `app-state.json` (app writes only; widgets read)
+- Per-location forecast cache: `forecast-cache/<uuid>.json` (app writes sanitized snapshots; widgets read)
+- See [PRIVACY.md](PRIVACY.md) for the full statement.
 - Never log API keys, request headers, or precise private coordinates at normal log levels
 - Optional Core Location fills coordinates only when requested; manual entry always works
 
