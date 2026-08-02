@@ -35,7 +35,7 @@ public enum SunsetHueConstants: Sendable {
         ) as? String
     }
     /// Keep in sync with Config/Version.xcconfig and project.yml (release-please).
-    public static let marketingVersion = "1.0.0" // x-release-please-version
+    public static let marketingVersion = "1.1.0" // x-release-please-version
     public static let userAgent = "SunsetHue-macOS/\(marketingVersion)"
     public static let validRefreshIntervalHours: Set<Int> = [6, 12, 24]
     public static let defaultRefreshIntervalHours = 6
