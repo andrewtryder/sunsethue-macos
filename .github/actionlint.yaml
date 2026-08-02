@@ -1,0 +1,5 @@
+# Extra runner labels accepted by actionlint (GitHub-hosted names not yet in its built-in list).
+self-hosted-runner:
+  labels:
+    - macos-26
+    - macos-15-intel
