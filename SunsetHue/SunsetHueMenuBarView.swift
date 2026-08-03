@@ -1,55 +1,65 @@
 import SwiftUI
+import AppKit
 import SunsetHueCore
 
 struct SunsetHueMenuBarView: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        if let location = appModel.selectedLocation {
-            Text(location.name)
-            if let snapshot = appModel.snapshot {
-                Text(statusText(for: snapshot))
+        if appModel.state.locations.isEmpty {
+            Text("No locations yet")
+            Button("Open SunsetHue") {
+                MainWindowPresenter.present(openWindow: openWindow)
+            }
+        } else {
+            ForEach(appModel.menuBarLocationRows) { row in
+                Button {
+                    appModel.selectLocation(id: row.id)
+                    MainWindowPresenter.present(openWindow: openWindow)
+                } label: {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(row.name)
+                        Text(row.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            if let status = appModel.menuBarRefreshStatusLine {
+                Text(status)
                     .foregroundStyle(.secondary)
             }
             Divider()
-            Button("Open SunsetHue") {
-                openWindow(id: "main")
-                NSApp.activate(ignoringOtherApps: true)
-            }
-            Button("Refresh") {
-                appModel.refreshSelectedFromCommand()
+            Button("Refresh All") {
+                appModel.refreshAllFromCommand()
             }
             .keyboardShortcut("r", modifiers: [.command])
-            Button("Settings…") {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            }
-            .keyboardShortcut(",", modifiers: [.command])
-        } else {
-            Text("No locations yet")
-            Button("Open SunsetHue") {
-                openWindow(id: "main")
-                NSApp.activate(ignoringOtherApps: true)
+            Button("Open SunsetHue…") {
+                MainWindowPresenter.present(openWindow: openWindow)
             }
         }
+
+        SettingsLink {
+            Text("Settings…")
+        }
+        .keyboardShortcut(",", modifiers: [.command])
+
         Divider()
         Button("Quit SunsetHue") {
             NSApp.terminate(nil)
         }
     }
+}
 
-    private func statusText(for snapshot: CachedLocationSnapshot) -> String {
-        switch snapshot.status {
-        case .current:
-            return "Updated \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))"
-        case .stale:
-            return "Stale — open app to refresh"
-        case .authenticationRequired:
-            return "API key needed"
-        case .rateLimited:
-            return "Rate limited"
-        case .temporarilyUnavailable:
-            return "Temporarily unavailable"
+enum SettingsPresenter {
+    @MainActor
+    static func present(openSettings: OpenSettingsAction) {
+        NSApp.activate(ignoringOtherApps: true)
+        // Defer one run-loop turn so MenuBarExtra can dismiss before the Settings window appears.
+        DispatchQueue.main.async {
+            openSettings()
         }
     }
 }

@@ -56,10 +56,20 @@ verify_universal() {
 }
 
 verify_universal "${APP_PATH}/Contents/MacOS/${APP_NAME}" "App"
-WIDGET_BIN="${APP_PATH}/Contents/PlugIns/SunsetHueWidget.appex/Contents/MacOS/SunsetHueWidget"
-if [[ -f "${WIDGET_BIN}" ]]; then
-  verify_universal "${WIDGET_BIN}" "Widget"
-fi
+
+# Public unsigned DMG is main-app only. Widgets need a signed Personal Team build.
+strip_widget() {
+  local app="$1"
+  local plugins="${app}/Contents/PlugIns"
+  local appex="${plugins}/SunsetHueWidget.appex"
+  if [[ -d "${appex}" ]]; then
+    pluginkit -r "${appex}" >/dev/null 2>&1 || true
+    rm -rf "${appex}"
+  fi
+  if [[ -d "${plugins}" ]] && [[ -z "$(ls -A "${plugins}" 2>/dev/null || true)" ]]; then
+    rmdir "${plugins}" 2>/dev/null || true
+  fi
+}
 
 # xcodebuild registers the product with Launch Services / PluginKit. An ad-hoc
 # unsigned .app poisons desktop widgets while developing a signed Debug build.
@@ -75,6 +85,11 @@ unregister_app() {
   fi
 }
 unregister_app "${APP_PATH}"
+strip_widget "${APP_PATH}"
+if [[ -d "${APP_PATH}/Contents/PlugIns/SunsetHueWidget.appex" ]]; then
+  echo "Failed to strip widget appex from unsigned package" >&2
+  exit 1
+fi
 
 # Stage app + first-run readme, then assemble DMG root (drag-to-install).
 STAGE="${DIST}/stage"
@@ -83,6 +98,7 @@ rm -rf "${STAGE}" "${DMG_ROOT}"
 mkdir -p "${STAGE}" "${DMG_ROOT}"
 ditto "${APP_PATH}" "${STAGE}/${APP_NAME}.app"
 unregister_app "${STAGE}/${APP_NAME}.app"
+strip_widget "${STAGE}/${APP_NAME}.app"
 
 cat > "${STAGE}/README-FIRST.txt" <<EOF
 SunsetHue for macOS (unsigned build)
@@ -92,13 +108,13 @@ This build is distributed free on GitHub without Apple notarization.
 Install from the DMG:
 1. Drag SunsetHue.app to Applications
 2. Right-click SunsetHue.app → Open → Open
-   (or remove quarantine: xattr -dr com.apple.quarantine /Applications/SunsetHue.app)
+   (or System Settings → Privacy & Security → Open Anyway)
 3. Add your SunsetHue API key and a location in the app.
 
 Notes:
 - Settings/cache live in ~/Library/Application Support/SunsetHue/
 - The API key is stored in your login Keychain only
-- Desktop widgets require a signed Personal Team build from Xcode (not this unsigned DMG)
+- This DMG does not include the desktop widget; widgets require a signed Personal Team build from Xcode
 - Unofficial; not affiliated with SunsetHue or Apple
 EOF
 

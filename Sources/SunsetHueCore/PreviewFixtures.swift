@@ -68,6 +68,80 @@ public enum PreviewFixtures {
         )
     }
 
+    public static var longNameLocation: SavedLocation {
+        SavedLocation(
+            id: sampleLocationID,
+            name: "Sandown Harbor North Scenic Overlook, NH",
+            latitude: sampleCoordinates.latitude,
+            longitude: sampleCoordinates.longitude,
+            timeZoneIdentifier: "America/New_York",
+            forecastDays: 3,
+            includeSunrise: true,
+            includeSunset: true,
+            refreshIntervalHours: 6
+        )
+    }
+
+    /// Quality-band edge cases (normalized 0...1).
+    public static func qualityBandForecast(
+        quality: Double?,
+        qualityText: String? = nil,
+        eventType: EventType = .sunset,
+        on day: Date = Date(),
+        hourUTC: Int = 23,
+        minute: Int = 6
+    ) -> EventForecast {
+        makeForecast(
+            eventType: eventType,
+            modelData: quality != nil,
+            quality: quality,
+            qualityText: qualityText,
+            cloudCover: quality.map { min(1, max(0, 1 - $0)) } ?? 1,
+            direction: eventType == .sunset ? 278 : 62,
+            day: day,
+            hourUTC: hourUTC,
+            minute: minute
+        )
+    }
+
+    public static func perfectSunset(on day: Date = Date()) -> EventForecast {
+        makeForecast(
+            eventType: .sunset,
+            modelData: true,
+            quality: 1.0,
+            qualityText: "Excellent",
+            cloudCover: 0.05,
+            direction: 278,
+            day: day,
+            hourUTC: 23,
+            minute: 10
+        )
+    }
+
+    public static func threeDayCompleteBundle(fetchedAt: Date = Date()) -> LocationForecastBundle {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = sampleTimeZone
+        let today = calendar.startOfDay(for: fetchedAt)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let dayAfter = calendar.date(byAdding: .day, value: 2, to: today)!
+        return LocationForecastBundle(
+            locationID: sampleLocationID,
+            fetchedAt: fetchedAt,
+            forecasts: [
+                averageSunrise(on: today),
+                excellentSunset(on: today),
+                qualityBandForecast(quality: 0.0, qualityText: "Poor", eventType: .sunrise, on: tomorrow, hourUTC: 10, minute: 6)
+                    .withForecastDate(tomorrow),
+                qualityBandForecast(quality: 0.36, qualityText: "Fair", eventType: .sunset, on: tomorrow, hourUTC: 23, minute: 5)
+                    .withForecastDate(tomorrow),
+                qualityBandForecast(quality: 0.18, eventType: .sunrise, on: dayAfter, hourUTC: 10, minute: 7)
+                    .withForecastDate(dayAfter),
+                qualityBandForecast(quality: 0.62, qualityText: "Good", eventType: .sunset, on: dayAfter, hourUTC: 23, minute: 4)
+                    .withForecastDate(dayAfter),
+            ]
+        )
+    }
+
     public static func sampleBundle(fetchedAt: Date = Date()) -> LocationForecastBundle {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = sampleTimeZone

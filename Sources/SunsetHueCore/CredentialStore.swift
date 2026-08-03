@@ -9,8 +9,23 @@ public protocol CredentialStore: Sendable {
 
 /// App-only Keychain store. The widget never reads credentials.
 ///
-/// Uses the data-protection keychain without a custom access group.
+/// Prefer the Data Protection Keychain when the process has the required
+/// entitlements (signed builds). Fall back to the traditional login Keychain
+/// when Data Protection returns entitlement/owner errors (typical for unsigned
+/// GitHub Release DMGs). Both backends remain Keychain storage — never plaintext.
 public struct KeychainCredentialStore: CredentialStore {
+    private enum Backend: CaseIterable {
+        case dataProtection
+        case login
+
+        var usesDataProtection: Bool {
+            switch self {
+            case .dataProtection: return true
+            case .login: return false
+            }
+        }
+    }
+
     private let service: String
     private let account: String
 
@@ -23,26 +38,22 @@ public struct KeychainCredentialStore: CredentialStore {
     }
 
     public func loadAPIKey() throws -> String? {
-        var query = baseQuery()
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound {
-            return nil
+        var lastError: SunsetHueError?
+        for backend in Backend.allCases {
+            do {
+                if let key = try loadAPIKey(backend: backend) {
+                    return key
+                }
+            } catch let error as SunsetHueError {
+                if Self.shouldTryFallback(error) {
+                    lastError = error
+                    continue
+                }
+                throw error
+            }
         }
-        if status == errSecInteractionNotAllowed {
-            throw SunsetHueError.keychainUnavailable
-        }
-        guard status == errSecSuccess else {
-            throw mapKeychainStatus(status)
-        }
-        guard let data = item as? Data, let key = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        if let lastError { throw lastError }
+        return nil
     }
 
     public func saveAPIKey(_ apiKey: String) throws {
@@ -54,41 +65,115 @@ public struct KeychainCredentialStore: CredentialStore {
             throw SunsetHueError.missingCredentials
         }
 
-        try deleteAPIKey()
-
-        var query = baseQuery()
-        query[kSecValueData as String] = data
-        query[kSecAttrLabel as String] = "SunsetHue API Key"
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw mapKeychainStatus(status)
+        var lastError: SunsetHueError?
+        for backend in Backend.allCases {
+            do {
+                try upsertAPIKey(data: data, backend: backend)
+                // Remove a stale copy from the other backend so load is unambiguous.
+                try? deleteAPIKey(backend: backend == .dataProtection ? .login : .dataProtection)
+                return
+            } catch let error as SunsetHueError {
+                if Self.shouldTryFallback(error) {
+                    lastError = error
+                    continue
+                }
+                throw error
+            }
         }
+        throw lastError ?? .keychainUnavailable
     }
 
     public func deleteAPIKey() throws {
-        _ = SecItemDelete(baseQuery() as CFDictionary)
+        var lastError: SunsetHueError?
+        var deletedAny = false
+        for backend in Backend.allCases {
+            do {
+                try deleteAPIKey(backend: backend)
+                deletedAny = true
+            } catch let error as SunsetHueError {
+                if Self.shouldTryFallback(error) {
+                    lastError = error
+                    continue
+                }
+                throw error
+            }
+        }
+        if !deletedAny, let lastError {
+            throw lastError
+        }
     }
 
-    private func baseQuery() -> [String: Any] {
-        [
+    // MARK: - Backend operations
+
+    private func loadAPIKey(backend: Backend) throws -> String? {
+        var query = baseQuery(backend: backend)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound {
+            return nil
+        }
+        guard status == errSecSuccess else {
+            throw KeychainStatusMapper.error(for: status)
+        }
+        guard let data = item as? Data, let key = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func upsertAPIKey(data: Data, backend: Backend) throws {
+        let query = baseQuery(backend: backend)
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrLabel as String: "SunsetHue API Key",
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return
+        }
+        if updateStatus != errSecItemNotFound {
+            throw KeychainStatusMapper.error(for: updateStatus)
+        }
+
+        var addQuery = query
+        addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrLabel as String] = "SunsetHue API Key"
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw KeychainStatusMapper.error(for: addStatus)
+        }
+    }
+
+    private func deleteAPIKey(backend: Backend) throws {
+        let status = SecItemDelete(baseQuery(backend: backend) as CFDictionary)
+        if status == errSecSuccess || status == errSecItemNotFound {
+            return
+        }
+        throw KeychainStatusMapper.error(for: status)
+    }
+
+    private func baseQuery(backend: Backend) -> [String: Any] {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecUseDataProtectionKeychain as String: true,
         ]
+        if backend.usesDataProtection {
+            query[kSecUseDataProtectionKeychain as String] = true
+        }
+        return query
     }
 
-    private func mapKeychainStatus(_ status: OSStatus) -> SunsetHueError {
-        switch status {
-        case errSecInteractionNotAllowed:
-            return .keychainUnavailable
-        case errSecItemNotFound:
-            return .missingCredentials
-        default:
-            return .keychainUnavailable
-        }
+    private static func shouldTryFallback(_ error: SunsetHueError) -> Bool {
+        error == .keychainEntitlementMisconfigured
     }
 }
 

@@ -72,7 +72,7 @@ public struct SunsetHueClient: Sendable {
         }
 
         try Self.raiseForStatus(response)
-        logger.debug("Fetched \(eventType.rawValue, privacy: .public) for local date \(dateString, privacy: .public)")
+        logger.debug("Forecast request succeeded for \(eventType.rawValue, privacy: .public)")
         return try ResponseParser.parseEventForecast(data: response.body, expectedEventType: eventType)
     }
 

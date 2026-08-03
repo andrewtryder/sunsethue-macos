@@ -18,7 +18,7 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         let state = SharedAppState(locations: [location], selectedLocationID: location.id)
         try await settings.save(state)
         let loaded = try await settings.load()
-        XCTAssertEqual(loaded.locations.count, 1)
+        XCTAssertEqual(loaded.value.locations.count, 1)
 
         let bundle = PreviewFixtures.sampleBundle()
         try await cache.saveSnapshot(.fromSuccessful(bundle: bundle))
@@ -36,7 +36,7 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         let cache = FileForecastCache(rootDirectory: directory)
         let location = PreviewFixtures.sampleLocation
         try await settings.save(SharedAppState(locations: [location], selectedLocationID: location.id))
-        let loadedName = try await settings.load().locations.first?.name
+        let loadedName = try await settings.load().value.locations.first?.name
         XCTAssertEqual(loadedName, "Sample Harbor")
 
         let bundle = PreviewFixtures.sampleBundle()
@@ -99,8 +99,10 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         let settingsURL = directory.appendingPathComponent("app-state.json")
         try Data("{not-json".utf8).write(to: settingsURL)
         let settings = FileSettingsStore(fileURL: settingsURL)
-        let state = try await settings.load()
-        XCTAssertTrue(state.locations.isEmpty)
+        let result = try await settings.load()
+        XCTAssertTrue(result.value.locations.isEmpty)
+        XCTAssertEqual(result.recovery?.reason, .corrupt)
+        XCTAssertNotNil(result.recovery?.quarantineFileName)
         XCTAssertFalse(FileManager.default.fileExists(atPath: settingsURL.path))
     }
 
@@ -194,11 +196,27 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
     func testKeychainStatusMapper() {
         XCTAssertEqual(KeychainStatusMapper.error(for: errSecInteractionNotAllowed), .keychainUnavailable)
         XCTAssertEqual(KeychainStatusMapper.error(for: errSecItemNotFound), .missingCredentials)
+        XCTAssertEqual(KeychainStatusMapper.error(for: errSecMissingEntitlement), .keychainEntitlementMisconfigured)
+        XCTAssertEqual(KeychainStatusMapper.error(for: errSecInvalidOwnerEdit), .keychainEntitlementMisconfigured)
     }
 
     func testPresentationPercentageConversion() {
         XCTAssertEqual(PresentationFormatting.percentage(fromNormalized: 0.45), "45.0%")
         XCTAssertEqual(PresentationFormatting.percentageValue(fromNormalized: 0.456), 45.6)
+    }
+
+    func testPresentationTimeStringRespectsTwelveHourLocale() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let date = calendar.date(from: DateComponents(year: 2026, month: 8, day: 2, hour: 20, minute: 6))!
+        let formatted = PresentationFormatting.timeString(
+            date,
+            timeZone: TimeZone(identifier: "America/New_York")!,
+            locale: Locale(identifier: "en_US")
+        )
+        XCTAssertNotNil(formatted)
+        XCTAssertTrue(formatted?.contains("4:06") == true, "expected 4:06 in \(formatted ?? "nil")")
+        XCTAssertTrue(formatted?.localizedCaseInsensitiveContains("PM") == true, "expected PM in \(formatted ?? "nil")")
     }
 
     private func loadFixture(_ name: String) throws -> Data {

@@ -8,6 +8,72 @@ public struct DiagnosticsExportOptions: Sendable {
     }
 }
 
+public struct DiagnosticsReport: Codable, Equatable, Sendable {
+    public struct Application: Codable, Equatable, Sendable {
+        public var version: String
+        public var build: String
+        public var architecture: String
+        public var macosVersion: String
+
+        enum CodingKeys: String, CodingKey {
+            case version, build, architecture
+            case macosVersion = "macos_version"
+        }
+    }
+
+    public struct Sandbox: Codable, Equatable, Sendable {
+        public var appGroupAvailable: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case appGroupAvailable = "app_group_available"
+        }
+    }
+
+    public struct Credentials: Codable, Equatable, Sendable {
+        public var configured: Bool
+    }
+
+    public struct LocationEntry: Codable, Equatable, Sendable {
+        public var displayID: String
+        public var coordinates: String
+        public var timeZone: String
+        public var forecastDays: Int
+        public var includeSunrise: Bool
+        public var includeSunset: Bool
+        public var refreshIntervalHours: Int
+        public var cacheSchemaVersion: Int?
+        public var cacheAgeSeconds: Int?
+        public var forecastFieldCount: Int
+        public var status: String
+
+        enum CodingKeys: String, CodingKey {
+            case displayID = "display_id"
+            case coordinates
+            case timeZone = "time_zone"
+            case forecastDays = "forecast_days"
+            case includeSunrise = "include_sunrise"
+            case includeSunset = "include_sunset"
+            case refreshIntervalHours = "refresh_interval_hours"
+            case cacheSchemaVersion = "cache_schema_version"
+            case cacheAgeSeconds = "cache_age_seconds"
+            case forecastFieldCount = "forecast_field_count"
+            case status
+        }
+    }
+
+    public var application: Application
+    public var sandbox: Sandbox
+    public var credentials: Credentials
+    public var locations: [LocationEntry]
+    public var widgetCacheSchemaVersion: Int
+    public var notes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case application, sandbox, credentials, locations, notes
+        case widgetCacheSchemaVersion = "widget_cache_schema_version"
+    }
+}
+
 public struct DiagnosticsExporter: Sendable {
     public init() {}
 
@@ -21,49 +87,57 @@ public struct DiagnosticsExporter: Sendable {
         build: String = "1",
         now: Date = Date()
     ) throws -> Data {
-        var locationEntries: [[String: Any]] = []
-        for (index, location) in state.locations.enumerated() {
+        let locationEntries: [DiagnosticsReport.LocationEntry] = state.locations.enumerated().map { index, location in
             let snapshot = snapshots[location.id]
-            let entry: [String: Any] = [
-                "display_id": "location-\(index + 1)",
-                "coordinates": options.includeApproximateCoordinates
+            let age = snapshot.map { max(0, Int(now.timeIntervalSince($0.fetchedAt))) }
+            return DiagnosticsReport.LocationEntry(
+                displayID: "location-\(index + 1)",
+                coordinates: options.includeApproximateCoordinates
                     ? String(format: "%.1f,%.1f", location.latitude, location.longitude)
                     : "redacted",
-                "time_zone": location.timeZoneIdentifier,
-                "forecast_days": location.forecastDays,
-                "include_sunrise": location.includeSunrise,
-                "include_sunset": location.includeSunset,
-                "refresh_interval_hours": location.refreshIntervalHours,
-                "cache_schema_version": snapshot?.schemaVersion ?? NSNull(),
-                "cache_age_seconds": snapshot.map { Int(now.timeIntervalSince($0.fetchedAt)) } as Any,
-                "forecast_field_count": snapshot?.forecasts.count ?? 0,
-                "status": statusString(snapshot?.status),
-            ]
-            locationEntries.append(entry)
-            _ = apiKeyValueForRedactionTests
+                timeZone: location.timeZoneIdentifier,
+                forecastDays: location.forecastDays,
+                includeSunrise: location.includeSunrise,
+                includeSunset: location.includeSunset,
+                refreshIntervalHours: location.refreshIntervalHours,
+                cacheSchemaVersion: snapshot?.schemaVersion,
+                cacheAgeSeconds: age,
+                forecastFieldCount: snapshot?.forecasts.count ?? 0,
+                status: statusString(snapshot?.status)
+            )
         }
 
         let processInfo = ProcessInfo.processInfo
-        let report: [String: Any] = [
-            "application": [
-                "version": appVersion,
-                "build": build,
-                "architecture": architecture(),
-                "macos_version": processInfo.operatingSystemVersionString,
-            ],
-            "sandbox": [
-                "app_group_available": FileManager.default.containerURL(
-                    forSecurityApplicationGroupIdentifier: SunsetHueConstants.appGroupIdentifier
-                ) != nil,
-            ],
-            "credentials": [
-                "configured": apiKeyConfigured,
-            ],
-            "locations": locationEntries,
-            "widget_cache_schema_version": SunsetHueConstants.currentCacheSchemaVersion,
+        var notes = [
+            "Diagnostic exports never include the API key.",
         ]
+        if !options.includeApproximateCoordinates {
+            notes.append(
+                "Time zone identifiers can imply a broad geographic region even when coordinates are redacted."
+            )
+        }
 
-        let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
+        let report = DiagnosticsReport(
+            application: .init(
+                version: appVersion,
+                build: build,
+                architecture: architecture(),
+                macosVersion: processInfo.operatingSystemVersionString
+            ),
+            sandbox: .init(
+                appGroupAvailable: FileManager.default.containerURL(
+                    forSecurityApplicationGroupIdentifier: SunsetHueConstants.appGroupIdentifier
+                ) != nil
+            ),
+            credentials: .init(configured: apiKeyConfigured),
+            locations: locationEntries,
+            widgetCacheSchemaVersion: SunsetHueConstants.currentCacheSchemaVersion,
+            notes: notes
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(report)
         if let secret = apiKeyValueForRedactionTests, !secret.isEmpty {
             if let text = String(data: data, encoding: .utf8), text.contains(secret) {
                 throw SunsetHueError.invalidResponse("diagnostics_leaked_secret")
@@ -80,6 +154,8 @@ public struct DiagnosticsExporter: Sendable {
         case .authenticationRequired: return "authentication_required"
         case .rateLimited: return "rate_limited"
         case .temporarilyUnavailable: return "temporarily_unavailable"
+        case .invalidRequest: return "invalid_request"
+        case .invalidResponse: return "invalid_response"
         }
     }
 

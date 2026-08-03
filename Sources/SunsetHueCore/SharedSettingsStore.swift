@@ -1,7 +1,7 @@
 import Foundation
 
 public protocol SharedSettingsStore: Sendable {
-    func load() async throws -> SharedAppState
+    func load() async throws -> StoreLoadResult<SharedAppState>
     func save(_ state: SharedAppState) async throws
 }
 
@@ -22,21 +22,44 @@ public actor FileSettingsStore: SharedSettingsStore {
         AppSupportPaths.migrateLegacyAppGroupContainerIfNeeded()
     }
 
-    public func load() async throws -> SharedAppState {
+    public func load() async throws -> StoreLoadResult<SharedAppState> {
         do {
             guard let data = try CoordinatedFileIO.readData(
                 from: fileURL,
                 maxBytes: SunsetHueConstants.maxSettingsFileBytes
             ) else {
-                return SharedAppState()
+                return StoreLoadResult(value: SharedAppState())
             }
-            return try decoder.decode(SharedAppState.self, from: data)
+            let state = try decoder.decode(SharedAppState.self, from: data)
+            if state.schemaVersion > SunsetHueConstants.currentSettingsSchemaVersion {
+                let name = CoordinatedFileIO.quarantineCorruptFile(at: fileURL)
+                return StoreLoadResult(
+                    value: SharedAppState(),
+                    recovery: StorageRecovery(
+                        quarantineFileName: name ?? fileURL.lastPathComponent,
+                        reason: .unsupportedSchema
+                    )
+                )
+            }
+            return StoreLoadResult(value: state)
         } catch is DecodingError {
-            CoordinatedFileIO.quarantineCorruptFile(at: fileURL)
-            return SharedAppState()
+            let name = CoordinatedFileIO.quarantineCorruptFile(at: fileURL)
+            return StoreLoadResult(
+                value: SharedAppState(),
+                recovery: StorageRecovery(
+                    quarantineFileName: name ?? fileURL.lastPathComponent,
+                    reason: .corrupt
+                )
+            )
         } catch SunsetHueError.storageTooLarge {
-            CoordinatedFileIO.quarantineCorruptFile(at: fileURL)
-            return SharedAppState()
+            let name = CoordinatedFileIO.quarantineCorruptFile(at: fileURL)
+            return StoreLoadResult(
+                value: SharedAppState(),
+                recovery: StorageRecovery(
+                    quarantineFileName: name ?? fileURL.lastPathComponent,
+                    reason: .tooLarge
+                )
+            )
         }
     }
 
@@ -88,6 +111,10 @@ public actor FileForecastCache: ForecastCache {
                 return nil
             }
             var snapshot = try decoder.decode(CachedLocationSnapshot.self, from: data)
+            if snapshot.schemaVersion > SunsetHueConstants.currentCacheSchemaVersion {
+                CoordinatedFileIO.quarantineCorruptFile(at: url)
+                return nil
+            }
             if snapshot.locationID != locationID {
                 snapshot = CachedLocationSnapshot(
                     schemaVersion: SunsetHueConstants.currentCacheSchemaVersion,
@@ -95,7 +122,9 @@ public actor FileForecastCache: ForecastCache {
                     fetchedAt: snapshot.fetchedAt,
                     lastAttemptAt: snapshot.lastAttemptAt,
                     forecasts: snapshot.forecasts,
-                    status: snapshot.status
+                    status: snapshot.status,
+                    nextAttemptAt: snapshot.nextAttemptAt,
+                    consecutiveFailureCount: snapshot.consecutiveFailureCount
                 )
             }
             return snapshot
@@ -207,15 +236,20 @@ public actor FileForecastCache: ForecastCache {
 
 public actor InMemorySettingsStore: SharedSettingsStore {
     private var state = SharedAppState()
+    private var recovery: StorageRecovery?
 
-    public init(state: SharedAppState = SharedAppState()) {
+    public init(state: SharedAppState = SharedAppState(), recovery: StorageRecovery? = nil) {
         self.state = state
+        self.recovery = recovery
     }
 
-    public func load() async throws -> SharedAppState { state }
+    public func load() async throws -> StoreLoadResult<SharedAppState> {
+        StoreLoadResult(value: state, recovery: recovery)
+    }
 
     public func save(_ state: SharedAppState) async throws {
         self.state = state
+        recovery = nil
     }
 }
 

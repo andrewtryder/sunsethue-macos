@@ -18,9 +18,15 @@ public enum PresentationFormatting: Sendable {
         return String(format: "%.0f°", degrees)
     }
 
-    public static func timeString(_ date: Date?, timeZone: TimeZone, style: DateFormatter.Style = .short) -> String? {
+    public static func timeString(
+        _ date: Date?,
+        timeZone: TimeZone,
+        locale: Locale = .autoupdatingCurrent,
+        style: DateFormatter.Style = .short
+    ) -> String? {
         guard let date else { return nil }
         let formatter = DateFormatter()
+        formatter.locale = locale
         formatter.timeZone = timeZone
         formatter.timeStyle = style
         formatter.dateStyle = .none

@@ -15,8 +15,15 @@ public enum SunsetHueConstants: Sendable {
     public static let minTimelineReloadSeconds = 15 * 60
     public static let maxTimelineJitterSeconds = 15 * 60
     public static let currentSettingsSchemaVersion = 1
-    public static let currentCacheSchemaVersion = 2
+    public static let currentCacheSchemaVersion = 3
     public static let widgetKind = "SunsetHueWidget"
+    /// Temporary-unavailable backoff ladder (seconds), capped at `maxRefreshBackoffSeconds`.
+    public static let temporaryUnavailableBackoffSeconds: [TimeInterval] = [
+        15 * 60, 30 * 60, 60 * 60, 2 * 60 * 60,
+    ]
+    public static let invalidResponseInitialBackoffSeconds: TimeInterval = 60 * 60
+    public static let maxRefreshBackoffSeconds: TimeInterval = 6 * 60 * 60
+    public static let rateLimitJitterMaxSeconds = 60
     /// Pre-Sequoia iOS-style group. Kept for one-time migration only.
     public static let legacyAppGroupIdentifier = "group.com.andrewtryder.SunsetHue"
     /// macOS 15+ requires a Team-ID-prefixed App Group or widget extensions are silently denied access.
@@ -51,16 +58,30 @@ public enum SunsetHueConstants: Sendable {
     public static let userAgent = "SunsetHue-macOS/\(marketingVersion)"
     public static let validRefreshIntervalHours: Set<Int> = [6, 12, 24]
     public static let defaultRefreshIntervalHours = 6
-    public static let defaultForecastDays = 1
+    public static let defaultForecastDays = 2
     public static let maxForecastDays = 3
     public static let coordinateDecimalPlaces = 5
 
-    /// Stable 0..<maxTimelineJitterSeconds derived from a location UUID.
+    /// Deterministic 0..<maxTimelineJitterSeconds derived from a location UUID (FNV-1a).
+    /// Stable across process launches (unlike Swift.Hasher).
     public static func timelineJitterSeconds(for locationID: UUID) -> Int {
-        var hasher = Hasher()
-        hasher.combine(locationID)
-        let value = UInt32(bitPattern: Int32(truncatingIfNeeded: hasher.finalize()))
-        return Int(value % UInt32(maxTimelineJitterSeconds))
+        Int(fnv1a32(uuid: locationID) % UInt32(maxTimelineJitterSeconds))
+    }
+
+    /// Deterministic 0..<rateLimitJitterMaxSeconds for rate-limit retry scheduling.
+    public static func rateLimitJitterSeconds(for locationID: UUID) -> Int {
+        Int(fnv1a32(uuid: locationID) % UInt32(rateLimitJitterMaxSeconds))
+    }
+
+    private static func fnv1a32(uuid: UUID) -> UInt32 {
+        var hash: UInt32 = 2_166_136_261
+        withUnsafeBytes(of: uuid.uuid) { buffer in
+            for byte in buffer {
+                hash ^= UInt32(byte)
+                hash &*= 16_777_619
+            }
+        }
+        return hash
     }
 }
 

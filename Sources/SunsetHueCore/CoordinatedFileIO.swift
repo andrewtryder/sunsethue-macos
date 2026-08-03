@@ -79,11 +79,18 @@ enum CoordinatedFileIO {
         if let deleteError { throw deleteError }
     }
 
-    static func quarantineCorruptFile(at url: URL) {
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+    /// Moves a damaged file aside. Returns the quarantine file name on success.
+    @discardableResult
+    static func quarantineCorruptFile(at url: URL) -> String? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let stamp = Int(Date().timeIntervalSince1970)
-        let dest = url.deletingLastPathComponent()
-            .appendingPathComponent("\(url.lastPathComponent).corrupt-\(stamp)")
-        try? FileManager.default.moveItem(at: url, to: dest)
+        let fileName = "\(url.lastPathComponent).corrupt-\(stamp)"
+        let dest = url.deletingLastPathComponent().appendingPathComponent(fileName)
+        do {
+            try FileManager.default.moveItem(at: url, to: dest)
+            return fileName
+        } catch {
+            return nil
+        }
     }
 }
