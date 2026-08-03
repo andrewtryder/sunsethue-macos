@@ -2,7 +2,9 @@
 
 SunsetHue sends the configured latitude, longitude, forecast date, event type, and API key to api.sunsethue.com over HTTPS when retrieving a forecast. The API key is stored in the macOS Keychain. Forecast data and application preferences are stored locally.
 
-Location Services is accessed only when you select “Use Current Location.” SunsetHue does not continuously monitor your location.
+Location Services is accessed only when you select “Use Current Location.” SunsetHue does not continuously monitor your location. When available, reverse geocoding may resolve a geographic time zone for that coordinate.
+
+Place search sends the search terms you type to Apple through MapKit so nearby places can be suggested. SunsetHue does not retain a local search history of those terms.
 
 When update checking is enabled or “Check Now” is selected, SunsetHue contacts GitHub’s API to determine the latest published version.
 

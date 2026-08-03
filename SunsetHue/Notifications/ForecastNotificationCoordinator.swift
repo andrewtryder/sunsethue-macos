@@ -11,6 +11,29 @@ actor ForecastNotificationCoordinator {
         case ephemeral
     }
 
+    enum EnsureAuthorizationResult: Equatable, Sendable {
+        case authorized
+        case denied
+        case unavailable
+    }
+
+    enum TestNotificationError: LocalizedError, Sendable {
+        case notAuthorized
+        case alertsDisabled
+        case schedulingFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .notAuthorized:
+                return "Notifications are not allowed. Enable them in System Settings."
+            case .alertsDisabled:
+                return "SunsetHue is allowed, but alerts are turned off in System Settings."
+            case .schedulingFailed(let message):
+                return message
+            }
+        }
+    }
+
     private let center: UNUserNotificationCenter
     private let preferencesStore: any NotificationPreferencesStoring
     private let ledgerStore: NotificationDeliveryLedgerStore
@@ -32,24 +55,30 @@ actor ForecastNotificationCoordinator {
         authorizationState = map(settings.authorizationStatus)
     }
 
+    /// Requests permission when undetermined. Returns whether delivery is allowed.
     @discardableResult
-    func requestAuthorization() async throws -> Bool {
+    func ensureAuthorization() async throws -> EnsureAuthorizationResult {
         let settings = await center.notificationSettings()
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral:
             authorizationState = map(settings.authorizationStatus)
-            return true
+            return .authorized
         case .denied:
             authorizationState = .denied
-            return false
+            return .denied
         case .notDetermined:
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
             await refreshAuthorizationStatus()
-            return granted
+            return granted ? .authorized : .denied
         @unknown default:
             await refreshAuthorizationStatus()
-            return false
+            return .unavailable
         }
+    }
+
+    @discardableResult
+    func requestAuthorization() async throws -> Bool {
+        try await ensureAuthorization() == .authorized
     }
 
     func loadPreferences() -> NotificationPreferences {
@@ -180,24 +209,37 @@ actor ForecastNotificationCoordinator {
         }
     }
 
-    func sendTestNotification(location: SavedLocation) async {
-        await refreshAuthorizationStatus()
-        guard authorizationState == .authorized || authorizationState == .provisional else { return }
+    func sendTestNotification(locationName: String, playSound: Bool) async throws {
+        let auth = try await ensureAuthorization()
+        guard auth == .authorized else {
+            throw TestNotificationError.notAuthorized
+        }
+
+        let settings = await center.notificationSettings()
+        if settings.alertSetting == .disabled {
+            throw TestNotificationError.alertsDisabled
+        }
 
         let content = UNMutableNotificationContent()
         content.title = "SunsetHue test notification"
-        content.body = "This is a test for \(location.name). Forecast alerts use the same local notification system."
-        content.userInfo = [
-            "locationID": location.id.uuidString,
-            "kind": "test",
-        ]
-        content.sound = .default
+        content.body = "This is a test for \(locationName). Forecast alerts use the same local notification system."
+        content.userInfo = ["kind": "test"]
+        if playSound {
+            content.sound = .default
+        }
+
+        // Slight delay is more reliable than a nil trigger while Settings is frontmost on macOS.
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         let request = UNNotificationRequest(
             identifier: "test.\(UUID().uuidString)",
             content: content,
-            trigger: nil
+            trigger: trigger
         )
-        try? await center.add(request)
+        do {
+            try await center.add(request)
+        } catch {
+            throw TestNotificationError.schedulingFailed(error.localizedDescription)
+        }
     }
 
     private func removePendingDailyRequests() async {

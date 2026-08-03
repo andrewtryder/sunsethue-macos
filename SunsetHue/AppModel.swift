@@ -24,6 +24,7 @@ final class AppModel: ObservableObject {
     @Published var diagnosticsExportMessage: String?
     @Published var notificationPreferences = NotificationPreferences()
     @Published var notificationAuthorization: ForecastNotificationCoordinator.AuthorizationState = .notDetermined
+    @Published var notificationStatusMessage: String?
 
     let settingsStore: any SharedSettingsStore
     let forecastCache: any ForecastCache
@@ -391,18 +392,31 @@ final class AppModel: ObservableObject {
 
     func updateNotificationPreferences(_ preferences: NotificationPreferences) async {
         var next = preferences
-        let enablingDelivery = next.hasAnyDeliveryRuleEnabled
-        if enablingDelivery {
-            let granted = (try? await notificationCoordinator.requestAuthorization()) ?? false
-            if !granted {
-                // Keep configuration visible but do not re-prompt after denial.
-                await notificationCoordinator.refreshAuthorizationStatus()
-                notificationAuthorization = await notificationCoordinator.authorizationState
+        let previous = notificationPreferences
+        let enablingNotifications =
+            (next.notificationsEnabled && !previous.notificationsEnabled)
+            || (next.dailySummary.enabled && !previous.dailySummary.enabled)
+            || (next.dailySummary.secondTimeEnabled && !previous.dailySummary.secondTimeEnabled)
+            || (next.qualityAlert.enabled && !previous.qualityAlert.enabled)
+
+        let wantsNotifications =
+            next.notificationsEnabled
+            || next.dailySummary.enabled
+            || next.qualityAlert.enabled
+            || next.dailySummary.secondTimeEnabled
+
+        if wantsNotifications {
+            let result = (try? await notificationCoordinator.ensureAuthorization()) ?? .unavailable
+            await notificationCoordinator.refreshAuthorizationStatus()
+            notificationAuthorization = await notificationCoordinator.authorizationState
+            if enablingNotifications, result == .denied {
+                openSystemNotificationSettings()
+                notificationStatusMessage =
+                    "Notifications are disabled in System Settings. Turn them on for SunsetHue to deliver alerts."
             }
         }
 
         // Bump quality revision when threshold or event mode changes.
-        let previous = notificationPreferences
         if next.qualityAlert.threshold != previous.qualityAlert.threshold
             || next.qualityAlert.eventMode != previous.qualityAlert.eventMode {
             next.qualityAlert.revision += 1
@@ -420,15 +434,40 @@ final class AppModel: ObservableObject {
     }
 
     func sendTestNotification() async {
-        guard let location = notificationLocation else { return }
-        _ = try? await notificationCoordinator.requestAuthorization()
-        await notificationCoordinator.sendTestNotification(location: location)
+        notificationStatusMessage = nil
+        let locationName = notificationLocation?.name ?? "SunsetHue"
+        do {
+            try await notificationCoordinator.sendTestNotification(
+                locationName: locationName,
+                playSound: notificationPreferences.playSound
+            )
+            notificationStatusMessage = "Test notification scheduled — it should appear in about a second."
+        } catch ForecastNotificationCoordinator.TestNotificationError.notAuthorized {
+            openSystemNotificationSettings()
+            notificationStatusMessage =
+                "Notifications are not allowed. Enable SunsetHue in System Settings, then try again."
+        } catch ForecastNotificationCoordinator.TestNotificationError.alertsDisabled {
+            openSystemNotificationSettings()
+            notificationStatusMessage =
+                "Alerts are turned off for SunsetHue in System Settings. Enable banners or alerts, then try again."
+        } catch {
+            notificationStatusMessage = error.localizedDescription
+        }
         await reloadNotificationState()
     }
 
     func openSystemNotificationSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
-            NSWorkspace.shared.open(url)
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.andrewtryder.SunsetHue"
+        let candidates = [
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(bundleID)",
+            "x-apple.systempreferences:com.apple.Notifications-Settings?id=\(bundleID)",
+            "x-apple.systempreferences:com.apple.preference.notifications?id=\(bundleID)",
+            "x-apple.systempreferences:com.apple.Notifications-Settings",
+        ]
+        for candidate in candidates {
+            if let url = URL(string: candidate), NSWorkspace.shared.open(url) {
+                return
+            }
         }
     }
 

@@ -76,7 +76,10 @@ struct SunsetHueSettingsView: View {
                     Button("Open System Notification Settings…") {
                         appModel.openSystemNotificationSettings()
                     }
-                    Text("Notifications are disabled in System Settings. Rules stay configured but will not deliver.")
+                    Text("Notifications are disabled in System Settings. Enable SunsetHue there to deliver alerts.")
+                        .sunsetHueMuted()
+                } else if appModel.notificationAuthorization == .notDetermined {
+                    Text("Turning on notifications will ask for permission.")
                         .sunsetHueMuted()
                 }
                 Toggle("Enable notifications", isOn: notificationMasterBinding)
@@ -138,7 +141,11 @@ struct SunsetHueSettingsView: View {
                 Button("Send Test Notification") {
                     Task { await appModel.sendTestNotification() }
                 }
-                .disabled(appModel.notificationLocation == nil)
+                if let notificationStatusMessage = appModel.notificationStatusMessage {
+                    Text(notificationStatusMessage)
+                        .sunsetHueMuted()
+                        .accessibilityLabel(notificationStatusMessage)
+                }
             }
         }
         .formStyle(.grouped)
@@ -337,14 +344,16 @@ struct SunsetHueSettingsView: View {
                 ))
             }
             Section("Defaults for new locations") {
-                Stepper(
-                    value: Binding(
+                Picker(
+                    "Forecast days",
+                    selection: Binding(
                         get: { AppPreferenceDefaults.shared.defaultForecastDays },
                         set: { AppPreferenceDefaults.shared.defaultForecastDays = $0 }
-                    ),
-                    in: 1...3
+                    )
                 ) {
-                    Text("Forecast days: \(AppPreferenceDefaults.shared.defaultForecastDays)")
+                    Text("1").tag(1)
+                    Text("2").tag(2)
+                    Text("3").tag(3)
                 }
                 Picker(
                     "Refresh interval",
