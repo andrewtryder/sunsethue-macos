@@ -27,8 +27,7 @@ struct ForecastDetailView: View {
                         )
                     }
                     Text("Last successful update: \(bundle.fetchedAt.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .sunsetHueMuted()
                         .accessibilityLabel("Last successful update")
                         .accessibilityValue(bundle.fetchedAt.formatted())
                 } else if appModel.isRefreshing {
@@ -47,6 +46,14 @@ struct ForecastDetailView: View {
         .background(AtmosphereBackground())
         .navigationTitle(location.name)
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await appModel.refreshSelected(force: true) }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .disabled(appModel.isRefreshing)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit") { appModel.beginEditLocation(location) }
             }
@@ -84,7 +91,7 @@ struct DayForecastSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
-                .font(.title2.weight(.semibold))
+                .font(SunsetHueTypography.sectionHeader)
             HStack(alignment: .top, spacing: 16) {
                 if let sunrise {
                     EventForecastCard(forecast: sunrise, timeZone: timeZone)
@@ -106,91 +113,89 @@ struct EventForecastCard: View {
     let forecast: EventForecast
     let timeZone: TimeZone
 
+    private var qualityStyle: QualityStyle {
+        QualityStyle.resolve(quality: forecast.quality, qualityText: forecast.qualityText)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: forecast.eventType == .sunrise ? "sunrise.fill" : "sunset.fill")
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(eventColor)
-                    .accessibilityHidden(true)
-                Text(forecast.eventType.displayName)
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
-                if differentiateWithoutColor {
-                    Text(forecast.eventType == .sunrise ? "AM" : "PM")
-                        .font(.caption.weight(.semibold))
+        SectionCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: forecast.eventType.symbolName)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(forecast.eventType.iconColor)
+                        .accessibilityHidden(true)
+                    Text(forecast.eventType.displayName)
+                        .font(SunsetHueTypography.cardTitle)
+                        .accessibilityAddTraits(.isHeader)
+                    if differentiateWithoutColor {
+                        Text(forecast.eventType == .sunrise ? "AM" : "PM")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                    Spacer(minLength: 8)
+                    Text(PresentationFormatting.timeString(forecast.eventTime, timeZone: timeZone) ?? "—")
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
+                }
+
+                HStack(alignment: .center, spacing: 12) {
+                    Text(qualityStyle.percentage)
+                        .font(SunsetHueTypography.heroQuality)
+                        .foregroundStyle(qualityStyle.tint)
+                        .minimumScaleFactor(0.7)
+                        .accessibilityLabel("Forecast quality")
+                        .accessibilityValue("\(qualityStyle.percentage), \(qualityStyle.status)")
+
+                    StatusBadge(quality: qualityStyle)
+                        .accessibilityHidden(true)
+
+                    Spacer(minLength: 0)
+
+                    QualityAccentBar(tint: qualityStyle.tint)
+                        .frame(width: 6, height: 44)
                         .accessibilityHidden(true)
                 }
-                Spacer()
-                if let percent = PresentationFormatting.percentage(fromNormalized: forecast.quality) {
-                    Text(percent)
-                        .font(.title.weight(.bold).monospacedDigit())
-                        .accessibilityLabel("Forecast quality")
-                        .accessibilityValue(
-                            forecast.qualityText.map { "\(percent), \($0)" } ?? percent
-                        )
-                } else {
-                    Text("Unavailable")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Forecast quality")
-                        .accessibilityValue("Unavailable")
+
+                VStack(alignment: .leading, spacing: 6) {
+                    labeled("Cloud cover", PresentationFormatting.percentage(fromNormalized: forecast.cloudCover) ?? "—")
+                    directionRow
+                    windowRow("Golden hour", forecast.goldenHour)
+                    windowRow("Blue hour", forecast.blueHour)
                 }
+                .padding(.top, 2)
+
+                Text("Model data: \(forecast.modelData ? "Available" : "Not available")")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .accessibilityLabel("Model data")
+                    .accessibilityValue(forecast.modelData ? "Available" : "Not available")
             }
-
-            if let text = forecast.qualityText {
-                Text(text)
-                    .font(.subheadline.weight(.medium))
-                    .accessibilityHidden(true)
-            }
-
-            labeled("Event time", PresentationFormatting.timeString(forecast.eventTime, timeZone: timeZone) ?? "—")
-            labeled("Cloud cover", PresentationFormatting.percentage(fromNormalized: forecast.cloudCover) ?? "—")
-
-            HStack(spacing: 8) {
-                Text("Direction")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if let direction = forecast.direction {
-                    CompassView(degrees: direction)
-                        .frame(width: 28, height: 28)
-                        .accessibilityHidden(true)
-                    Text(PresentationFormatting.directionLabel(direction) ?? "—")
-                        .accessibilityLabel("Direction")
-                        .accessibilityValue("\(Int(direction)) degrees")
-                } else {
-                    Text("—")
-                        .accessibilityLabel("Direction")
-                        .accessibilityValue("Unavailable")
-                }
-            }
-
-            windowRow("Golden hour", forecast.goldenHour)
-            windowRow("Blue hour", forecast.blueHour)
-            labeled("Model data", forecast.modelData ? "Available" : "Not available")
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            AtmospherePanelBackground()
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(contrastBorder, lineWidth: 1)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(forecast.eventType.displayName) forecast")
     }
 
-    private var eventColor: Color {
-        forecast.eventType == .sunrise ? .orange : .pink
-    }
-
-    @Environment(\.colorSchemeContrast) private var contrast
-
-    private var contrastBorder: Color {
-        contrast == .increased ? Color.primary.opacity(0.35) : Color.clear
+    private var directionRow: some View {
+        HStack(spacing: 8) {
+            Text("Direction")
+                .foregroundStyle(.secondary)
+            Spacer()
+            if let direction = forecast.direction {
+                CompassView(degrees: direction)
+                    .frame(width: 22, height: 22)
+                    .accessibilityHidden(true)
+                Text(PresentationFormatting.directionLabel(direction) ?? "—")
+                    .accessibilityLabel("Direction")
+                    .accessibilityValue("\(Int(direction)) degrees")
+            } else {
+                Text("—")
+                    .accessibilityLabel("Direction")
+                    .accessibilityValue("Unavailable")
+            }
+        }
+        .font(.callout)
     }
 
     private func labeled(_ title: String, _ value: String) -> some View {
@@ -227,6 +232,15 @@ struct EventForecastCard: View {
     }
 }
 
+private struct QualityAccentBar: View {
+    let tint: Color
+
+    var body: some View {
+        Capsule()
+            .fill(tint.opacity(0.85))
+    }
+}
+
 struct CompassView: View {
     let degrees: Double
 
@@ -245,17 +259,8 @@ struct CompassView: View {
 }
 
 struct AtmospherePanelBackground: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
-        if reduceTransparency {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(colorScheme == .dark ? Color(nsColor: .windowBackgroundColor) : Color(nsColor: .controlBackgroundColor))
-        } else {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.regularMaterial)
-        }
+        SharedPanelBackground()
     }
 }
 

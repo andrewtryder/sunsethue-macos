@@ -22,14 +22,13 @@ struct SunsetHueMenuBarView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(row.name)
                         Text(row.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .sunsetHueMuted()
                     }
                 }
             }
             if let status = appModel.menuBarRefreshStatusLine {
                 Text(status)
-                    .foregroundStyle(.secondary)
+                    .sunsetHueMuted()
             }
             Divider()
             Button("Refresh All") {

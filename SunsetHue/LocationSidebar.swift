@@ -46,30 +46,23 @@ struct LocationSidebar: View {
         .listStyle(.sidebar)
         .navigationTitle("SunsetHue")
         .safeAreaInset(edge: .bottom) {
-            Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? SunsetHueConstants.marketingVersion)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-                .accessibilityLabel("App version")
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            HStack(spacing: 8) {
+                Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? SunsetHueConstants.marketingVersion)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("App version")
+                Spacer(minLength: 0)
                 Button {
                     appModel.beginAddLocation()
                 } label: {
                     Label("Add Location", systemImage: "plus")
                 }
+                .buttonStyle(.borderless)
+                .help("Add Location")
+                .accessibilityLabel("Add Location")
             }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    Task { await appModel.refreshSelected(force: true) }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .disabled(appModel.selectedLocation == nil || appModel.isRefreshing)
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
     }
 }

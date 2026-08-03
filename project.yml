@@ -37,6 +37,7 @@ targets:
       - path: SunsetHue
         excludes:
           - "*.entitlements"
+      - path: SharedUI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.andrewtryder.SunsetHue
@@ -71,6 +72,7 @@ targets:
       - path: SunsetHueWidget
         excludes:
           - "*.entitlements"
+      - path: SharedUI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.andrewtryder.SunsetHue.Widget

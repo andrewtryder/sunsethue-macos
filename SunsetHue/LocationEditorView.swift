@@ -22,7 +22,7 @@ struct LocationEditorView: View {
                     TextField("Longitude", text: draft.longitude)
                     TextField("System time zone (IANA)", text: draft.timeZoneIdentifier)
                         .help("Uses this Mac’s current time zone when filled from Current Location — not inferred from coordinates. Example: America/New_York")
-                    Button("Use Current Location") {
+                    Button {
                         Task {
                             isLocating = true
                             defer { isLocating = false }
@@ -36,6 +36,8 @@ struct LocationEditorView: View {
                                 statusMessage = error.localizedDescription
                             }
                         }
+                    } label: {
+                        Label("Use Current Location", systemImage: "location.fill")
                     }
                     .disabled(isLocating)
                     if isLocating {

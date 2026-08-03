@@ -10,4 +10,8 @@ SunsetHue contains no analytics, advertising, tracking, telemetry, or third-part
 
 The widget does not access the API key or contact SunsetHue directly. It reads sanitized forecast information stored locally by the main application.
 
+When notifications are enabled, SunsetHue schedules local notifications through macOS. No push notification server is used. Notifications may display the selected location name, event time, and forecast quality in Notification Center or on the lock screen, depending on the user’s macOS notification-preview settings.
+
+Threshold notifications are evaluated locally after SunsetHue retrieves a new forecast.
+
 Diagnostic exports exclude the API key and exact coordinates by default.

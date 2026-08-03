@@ -17,12 +17,14 @@ struct SunsetHueSettingsView: View {
     @State private var isTestingAccount = false
     @State private var diagnosticsMessage: String?
     @FocusState private var isAPIKeyFieldFocused: Bool
+    @State private var isReplacingAPIKey = false
+    @State private var confirmRemoveAPIKey = false
 
     private enum SettingsTab: String {
         case general
         case account
+        case notifications
         case updates
-        case privacy
         case diagnostics
     }
 
@@ -37,26 +39,246 @@ struct SunsetHueSettingsView: View {
             accountTab
                 .tabItem { Label("Account", systemImage: "key") }
                 .tag(SettingsTab.account)
+            notificationsTab
+                .tabItem { Label("Notifications", systemImage: "bell") }
+                .tag(SettingsTab.notifications)
             updatesTab
                 .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
                 .tag(SettingsTab.updates)
-            privacyTab
-                .tabItem { Label("Privacy", systemImage: "hand.raised") }
-                .tag(SettingsTab.privacy)
             diagnosticsTab
                 .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
                 .tag(SettingsTab.diagnostics)
         }
-        .frame(width: 520, height: 480)
+        .frame(width: 520, height: 520)
         .onAppear {
             launchAtLogin.refresh()
-            Task { await maybeAutoCheckUpdates() }
+            Task {
+                await appModel.reloadNotificationState()
+                await maybeAutoCheckUpdates()
+            }
         }
+    }
+
+    private var notificationsTab: some View {
+        Form {
+            Section {
+                HStack {
+                    Text("Status")
+                    Spacer()
+                    StatusBadge(
+                        title: notificationStatusLabel,
+                        tone: notificationStatusTone,
+                        accessibilityLabelText: "Notification authorization",
+                        accessibilityValueText: notificationStatusLabel
+                    )
+                }
+                if appModel.notificationAuthorization == .denied {
+                    Button("Open System Notification Settings…") {
+                        appModel.openSystemNotificationSettings()
+                    }
+                    Text("Notifications are disabled in System Settings. Rules stay configured but will not deliver.")
+                        .sunsetHueMuted()
+                }
+                Toggle("Enable notifications", isOn: notificationMasterBinding)
+                if appModel.state.locations.isEmpty {
+                    Text("Add a location before configuring notification delivery.")
+                        .sunsetHueMuted()
+                } else {
+                    Picker("Location", selection: notificationLocationBinding) {
+                        ForEach(appModel.state.locations) { location in
+                            Text(location.name).tag(Optional(location.id))
+                        }
+                    }
+                }
+            }
+
+            Section("Daily summaries") {
+                Toggle("Send first summary at", isOn: dailyFirstEnabledBinding)
+                DatePicker(
+                    "First time",
+                    selection: minutesBinding(\.dailySummary.firstTimeMinutes),
+                    displayedComponents: .hourAndMinute
+                )
+                .sunsetHueDisabledDim(!appModel.notificationPreferences.dailySummary.enabled)
+                Toggle("Send second summary at", isOn: dailySecondEnabledBinding)
+                DatePicker(
+                    "Second time",
+                    selection: minutesBinding(\.dailySummary.secondTimeMinutes),
+                    displayedComponents: .hourAndMinute
+                )
+                .sunsetHueDisabledDim(!appModel.notificationPreferences.dailySummary.secondTimeEnabled)
+                if let tz = appModel.notificationLocation?.timeZoneIdentifier {
+                    Text("Times use \(tz)")
+                        .sunsetHueMuted()
+                }
+            }
+
+            Section("Quality alerts") {
+                Toggle("Notify when quality reaches threshold", isOn: qualityEnabledBinding)
+                Picker("Event", selection: qualityEventBinding) {
+                    ForEach(NotificationEventMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .sunsetHueDisabledDim(!appModel.notificationPreferences.qualityAlert.enabled)
+                Picker("Threshold", selection: qualityThresholdBinding) {
+                    ForEach(Array(stride(from: 50, through: 100, by: 5)), id: \.self) { percent in
+                        Text("\(percent)%").tag(Double(percent) / 100.0)
+                    }
+                }
+                .sunsetHueDisabledDim(!appModel.notificationPreferences.qualityAlert.enabled)
+                Text("Only once per sunrise or sunset forecast occurrence.")
+                    .sunsetHueMuted()
+                Text("Quality alerts are evaluated while SunsetHue is running (Launch at Login makes this more reliable). Daily summaries can still deliver after you quit.")
+                    .sunsetHueMuted()
+            }
+
+            Section {
+                Toggle("Play sound", isOn: playSoundBinding)
+                Button("Send Test Notification") {
+                    Task { await appModel.sendTestNotification() }
+                }
+                .disabled(appModel.notificationLocation == nil)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var notificationStatusLabel: String {
+        switch appModel.notificationAuthorization {
+        case .authorized, .provisional, .ephemeral: return "Allowed"
+        case .denied: return "Denied"
+        case .notDetermined: return "Not requested"
+        }
+    }
+
+    private var notificationStatusTone: StatusTone {
+        switch appModel.notificationAuthorization {
+        case .authorized, .provisional, .ephemeral: return .positive
+        case .denied: return .warning
+        case .notDetermined: return .neutral
+        }
+    }
+
+    private var notificationMasterBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.notificationPreferences.notificationsEnabled },
+            set: { enabled in
+                var prefs = appModel.notificationPreferences
+                prefs.notificationsEnabled = enabled
+                if enabled, prefs.locationID == nil {
+                    prefs.locationID = appModel.selectedLocationID ?? appModel.state.locations.first?.id
+                }
+                Task { await appModel.updateNotificationPreferences(prefs) }
+            }
+        )
+    }
+
+    private var notificationLocationBinding: Binding<UUID?> {
+        Binding(
+            get: { appModel.notificationPreferences.locationID ?? appModel.selectedLocationID },
+            set: { id in
+                var prefs = appModel.notificationPreferences
+                prefs.locationID = id
+                Task { await appModel.updateNotificationPreferences(prefs) }
+            }
+        )
+    }
+
+    private var dailyFirstEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.notificationPreferences.dailySummary.enabled },
+            set: { enabled in
+                var prefs = appModel.notificationPreferences
+                prefs.dailySummary.enabled = enabled
+                if enabled { prefs.notificationsEnabled = true }
+                Task { await appModel.updateNotificationPreferences(prefs) }
+            }
+        )
+    }
+
+    private var dailySecondEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.notificationPreferences.dailySummary.secondTimeEnabled },
+            set: { enabled in
+                var prefs = appModel.notificationPreferences
+                prefs.dailySummary.secondTimeEnabled = enabled
+                if enabled {
+                    prefs.dailySummary.enabled = true
+                    prefs.notificationsEnabled = true
+                }
+                Task { await appModel.updateNotificationPreferences(prefs) }
+            }
+        )
+    }
+
+    private var qualityEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.notificationPreferences.qualityAlert.enabled },
+            set: { enabled in
+                var prefs = appModel.notificationPreferences
+                prefs.qualityAlert.enabled = enabled
+                if enabled { prefs.notificationsEnabled = true }
+                Task { await appModel.updateNotificationPreferences(prefs) }
+            }
+        )
+    }
+
+    private var qualityEventBinding: Binding<NotificationEventMode> {
+        Binding(
+            get: { appModel.notificationPreferences.qualityAlert.eventMode },
+            set: { mode in
+                var prefs = appModel.notificationPreferences
+                prefs.qualityAlert.eventMode = mode
+                Task { await appModel.updateNotificationPreferences(prefs) }
+            }
+        )
+    }
+
+    private var qualityThresholdBinding: Binding<Double> {
+        Binding(
+            get: { appModel.notificationPreferences.qualityAlert.threshold },
+            set: { value in
+                var prefs = appModel.notificationPreferences
+                prefs.qualityAlert.threshold = value
+                Task { await appModel.updateNotificationPreferences(prefs) }
+            }
+        )
+    }
+
+    private var playSoundBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.notificationPreferences.playSound },
+            set: { value in
+                var prefs = appModel.notificationPreferences
+                prefs.playSound = value
+                Task { await appModel.updateNotificationPreferences(prefs) }
+            }
+        )
+    }
+
+    private func minutesBinding(_ keyPath: WritableKeyPath<NotificationPreferences, Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                let minutes = appModel.notificationPreferences[keyPath: keyPath]
+                let calendar = Calendar.current
+                let start = calendar.startOfDay(for: Date())
+                return calendar.date(byAdding: .minute, value: minutes, to: start) ?? Date()
+            },
+            set: { date in
+                let calendar = Calendar.current
+                let start = calendar.startOfDay(for: date)
+                let minutes = Int(date.timeIntervalSince(start) / 60)
+                var prefs = appModel.notificationPreferences
+                prefs[keyPath: keyPath] = min(max(0, minutes), (23 * 60) + 59)
+                Task { await appModel.updateNotificationPreferences(prefs) }
+            }
+        )
     }
 
     private var generalTab: some View {
         Form {
-            Section {
+            Section("App Behavior") {
                 Toggle("Show SunsetHue in menu bar", isOn: Binding(
                     get: { showMenuBarExtra },
                     set: { newValue in
@@ -95,8 +317,7 @@ struct SunsetHueSettingsView: View {
                 }
                 if launchAtLogin.status == .unavailable {
                     Text("Launch at Login is unavailable for this build.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .sunsetHueMuted()
                 }
                 if let error = launchAtLogin.errorMessage {
                     Text(error)
@@ -145,8 +366,7 @@ struct SunsetHueSettingsView: View {
                     set: { AppPreferenceDefaults.shared.defaultIncludeSunset = $0 }
                 ))
                 Text("These defaults apply only to newly added locations.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .sunsetHueMuted()
             }
         }
         .formStyle(.grouped)
@@ -155,47 +375,99 @@ struct SunsetHueSettingsView: View {
     private var accountTab: some View {
         Form {
             Section("API key") {
-                LabeledContent("Status") {
-                    Text(credentialStatusLabel)
-                        .foregroundStyle(appModel.credentialState == .configured ? Color.secondary : Color.orange)
-                }
-                SecureField("Paste your SunsetHue API key", text: $appModel.apiKeyDraft)
-                    .focused($isAPIKeyFieldFocused)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("API key")
-                Text("Paste your key above, then click Save Key. Get a key at sunsethue.com/dev-api.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 HStack {
-                    Button("Save Key") {
-                        Task { await appModel.saveAPIKey(appModel.apiKeyDraft) }
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(appModel.apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    Button("Test Connection") {
-                        Task {
-                            isTestingAccount = true
-                            accountTestMessage = await appModel.testConnectionWithStoredOrDraftKey(
-                                appModel.apiKeyDraft.isEmpty ? nil : appModel.apiKeyDraft
-                            )
-                            isTestingAccount = false
+                    Text("Status")
+                    Spacer()
+                    StatusBadge(
+                        title: credentialStatusLabel,
+                        tone: credentialStatusTone,
+                        accessibilityLabelText: "API key status",
+                        accessibilityValueText: credentialStatusLabel
+                    )
+                }
+
+                if appModel.hasAPIKey && !isReplacingAPIKey {
+                    Text("••••••••••")
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("API key saved")
+                    Text("API key saved in the Keychain.")
+                        .sunsetHueMuted()
+                    HStack {
+                        Button("Replace Key") {
+                            isReplacingAPIKey = true
+                            appModel.apiKeyDraft = ""
+                            isAPIKeyFieldFocused = true
+                        }
+                        Button("Test Connection") {
+                            Task {
+                                isTestingAccount = true
+                                accountTestMessage = await appModel.testConnectionWithStoredOrDraftKey(nil)
+                                isTestingAccount = false
+                            }
+                        }
+                        .disabled(isTestingAccount)
+                        Button("Remove Key", role: .destructive) {
+                            confirmRemoveAPIKey = true
                         }
                     }
-                    .disabled(isTestingAccount)
-                    Button("Remove Key", role: .destructive) {
-                        Task { await appModel.removeAPIKey() }
+                } else {
+                    SecureField("Paste your SunsetHue API key", text: $appModel.apiKeyDraft)
+                        .focused($isAPIKeyFieldFocused)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("API key")
+                    Text("Paste your key above, then click Save Key. Get a key at sunsethue.com/dev-api.")
+                        .sunsetHueMuted()
+                    HStack {
+                        Button("Save Key") {
+                            Task {
+                                await appModel.saveAPIKey(appModel.apiKeyDraft)
+                                if appModel.hasAPIKey {
+                                    isReplacingAPIKey = false
+                                }
+                            }
+                        }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(appModel.apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Button("Test Connection") {
+                            Task {
+                                isTestingAccount = true
+                                accountTestMessage = await appModel.testConnectionWithStoredOrDraftKey(
+                                    appModel.apiKeyDraft.isEmpty ? nil : appModel.apiKeyDraft
+                                )
+                                isTestingAccount = false
+                            }
+                        }
+                        .disabled(isTestingAccount)
+                        if appModel.hasAPIKey {
+                            Button("Cancel") {
+                                isReplacingAPIKey = false
+                                appModel.apiKeyDraft = ""
+                            }
+                        }
                     }
-                    .disabled(!appModel.hasAPIKey)
                 }
+
                 if let accountStatusMessage = appModel.accountStatusMessage {
                     Text(accountStatusMessage).font(.caption)
                 }
                 if let accountTestMessage {
-                    Text(accountTestMessage).font(.caption).foregroundStyle(.secondary)
+                    Text(accountTestMessage).sunsetHueMuted()
                 }
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "Remove API key?",
+            isPresented: $confirmRemoveAPIKey,
+            titleVisibility: .visible
+        ) {
+            Button("Remove Key", role: .destructive) {
+                Task { await appModel.removeAPIKey() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("SunsetHue will stop refreshing forecasts until you save a key again.")
+        }
         .onAppear {
             appModel.refreshCredentialState()
             if appModel.credentialState != .configured {
@@ -209,75 +481,87 @@ struct SunsetHueSettingsView: View {
         case .unknown: return "Checking…"
         case .configured: return "Configured"
         case .missing: return "Not configured"
-        case .unavailable: return "Keychain unavailable — unlock your Mac"
+        case .unavailable: return "Keychain unavailable"
+        }
+    }
+
+    private var credentialStatusTone: StatusTone {
+        switch appModel.credentialState {
+        case .unknown: return .neutral
+        case .configured: return .positive
+        case .missing: return .warning
+        case .unavailable: return .negative
         }
     }
 
     private var updatesTab: some View {
         Form {
-            Toggle("Automatically check for updates once per day", isOn: $autoCheckUpdatesDaily)
-            LabeledContent("Current version") {
-                Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-                    ?? SunsetHueConstants.marketingVersion)
-            }
-            if let latestVersion {
-                LabeledContent("Latest known version") {
-                    Text(latestVersion)
+            Section {
+                Toggle("Automatically check for updates once per day", isOn: $autoCheckUpdatesDaily)
+                LabeledContent("Current version") {
+                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                        ?? SunsetHueConstants.marketingVersion)
+                }
+                if let latestVersion {
+                    LabeledContent("Latest known version") {
+                        Text(latestVersion)
+                    }
                 }
             }
-            Button(isCheckingUpdates ? "Checking…" : "Check Now") {
-                Task { await checkUpdates(force: true) }
+            Section {
+                HStack {
+                    Button(isCheckingUpdates ? "Checking…" : "Check Now") {
+                        Task { await checkUpdates(force: true) }
+                    }
+                    .disabled(isCheckingUpdates)
+                    Button("Open release page") {
+                        NSWorkspace.shared.open(SunsetHueConstants.githubReleasesPageURL)
+                    }
+                }
+                if let updateMessage {
+                    Text(updateMessage)
+                        .sunsetHueMuted()
+                }
+                Text("SunsetHue never downloads or replaces the app automatically.")
+                    .sunsetHueMuted()
             }
-            .disabled(isCheckingUpdates)
-            Button("Open release page") {
-                NSWorkspace.shared.open(SunsetHueConstants.githubReleasesPageURL)
-            }
-            if let updateMessage {
-                Text(updateMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Text("SunsetHue never downloads or replaces the app automatically.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
     }
 
-    private var privacyTab: some View {
-        ScrollView {
-            Text(PrivacyStatement.text)
-                .font(.body)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-        }
-    }
-
     private var diagnosticsTab: some View {
         Form {
-            Toggle("Include approximate coordinates (1 decimal place)", isOn: $includeApproximateCoordinates)
-            Text("Even with coordinates redacted, a time zone can imply a broad geographic region.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Button("Export Diagnostics…") {
-                exportDiagnostics()
+            Section("Privacy") {
+                Toggle("Include approximate coordinates (1 decimal place)", isOn: $includeApproximateCoordinates)
+                Text("Even with coordinates redacted, a time zone can imply a broad geographic region.")
+                    .sunsetHueMuted()
+                Button("Open Privacy Policy…") {
+                    if let url = URL(string: "https://github.com/andrewtryder/sunsethue-macos/blob/main/PRIVACY.md") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
             }
-            if let diagnosticsMessage {
-                Text(diagnosticsMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Button("Open cache folder") {
-                let url = AppSupportPaths.preferredContainerURL()
-                NSWorkspace.shared.open(url)
-            }
-            Button("Copy version information") {
-                let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-                    ?? SunsetHueConstants.marketingVersion
-                let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString("SunsetHue \(version) (\(build))", forType: .string)
+            Section("Export") {
+                HStack {
+                    Button("Export Diagnostics…") {
+                        exportDiagnostics()
+                    }
+                    Button("Open cache folder") {
+                        let url = AppSupportPaths.preferredContainerURL()
+                        NSWorkspace.shared.open(url)
+                    }
+                    Button("Copy version information") {
+                        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                            ?? SunsetHueConstants.marketingVersion
+                        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString("SunsetHue \(version) (\(build))", forType: .string)
+                    }
+                }
+                if let diagnosticsMessage {
+                    Text(diagnosticsMessage)
+                        .sunsetHueMuted()
+                }
             }
         }
         .formStyle(.grouped)
@@ -340,7 +624,8 @@ struct SunsetHueSettingsView: View {
                     apiKeyConfigured: appModel.hasAPIKey,
                     options: DiagnosticsExportOptions(includeApproximateCoordinates: includeApproximateCoordinates),
                     appVersion: version,
-                    build: build
+                    build: build,
+                    notificationPreferences: appModel.notificationPreferences
                 )
             } catch {
                 diagnosticsMessage = "Report generation failed."
@@ -361,20 +646,4 @@ struct SunsetHueSettingsView: View {
             }
         }
     }
-}
-
-enum PrivacyStatement {
-    static let text = """
-    SunsetHue sends the configured latitude, longitude, forecast date, event type, and API key to api.sunsethue.com over HTTPS when retrieving a forecast. The API key is stored in the macOS Keychain. Forecast data and application preferences are stored locally.
-
-    Location Services is accessed only when you select “Use Current Location.” SunsetHue does not continuously monitor your location.
-
-    When update checking is enabled or “Check Now” is selected, SunsetHue contacts GitHub’s API to determine the latest published version.
-
-    SunsetHue contains no analytics, advertising, tracking, telemetry, or third-party crash-reporting service.
-
-    The widget does not access the API key or contact SunsetHue directly. It reads sanitized forecast information stored locally by the main application.
-
-    Diagnostic exports exclude the API key and exact coordinates by default.
-    """
 }
