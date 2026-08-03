@@ -20,8 +20,8 @@ struct LocationEditorView: View {
                     TextField("Display Name", text: draft.name)
                     TextField("Latitude", text: draft.latitude)
                     TextField("Longitude", text: draft.longitude)
-                    TextField("IANA Time Zone", text: draft.timeZoneIdentifier)
-                        .help("Example: America/New_York")
+                    TextField("System time zone (IANA)", text: draft.timeZoneIdentifier)
+                        .help("Uses this Mac’s current time zone when filled from Current Location — not inferred from coordinates. Example: America/New_York")
                     Button("Use Current Location") {
                         Task {
                             isLocating = true
@@ -38,6 +38,10 @@ struct LocationEditorView: View {
                         }
                     }
                     .disabled(isLocating)
+                    if isLocating {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
                     if let statusMessage {
                         Text(statusMessage)
                             .font(.caption)
@@ -82,6 +86,8 @@ struct LocationEditorView: View {
 final class CoreCurrentLocationProvider: NSObject, ObservableObject, CurrentLocationProviding, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var continuation: CheckedContinuation<CurrentLocationResult, Error>?
+    private var timeoutTask: Task<Void, Never>?
+    private let timeoutSeconds: TimeInterval = 20
 
     override init() {
         super.init()
@@ -90,53 +96,104 @@ final class CoreCurrentLocationProvider: NSObject, ObservableObject, CurrentLoca
     }
 
     func requestLocation() async throws -> CurrentLocationResult {
-        try await withCheckedThrowingContinuation { continuation in
-            self.continuation = continuation
-            switch manager.authorizationStatus {
-            case .authorizedAlways:
-                manager.requestLocation()
-            case .notDetermined:
-                manager.requestWhenInUseAuthorization()
-            case .denied, .restricted:
-                continuation.resume(throwing: LocationProviderError.denied)
-                self.continuation = nil
-            default:
-                if manager.authorizationStatus.rawValue > 0 {
-                    manager.requestLocation()
-                } else {
-                    continuation.resume(throwing: LocationProviderError.unavailable)
-                    self.continuation = nil
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CurrentLocationResult, Error>) in
+                if self.continuation != nil {
+                    continuation.resume(throwing: LocationProviderError.busy)
+                    return
                 }
+                self.continuation = continuation
+                self.startTimeout()
+                self.beginAuthorizationOrRequest()
+            }
+        } onCancel: {
+            Task { @MainActor in
+                self.resumeOnce(throwing: CancellationError())
             }
         }
     }
 
+    private func beginAuthorizationOrRequest() {
+        switch manager.authorizationStatus {
+        case .authorizedAlways:
+            manager.requestLocation()
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .denied, .restricted:
+            resumeOnce(throwing: LocationProviderError.denied)
+        default:
+            // macOS may report authorized / when-in-use via higher raw values.
+            if manager.authorizationStatus.rawValue > 2 {
+                manager.requestLocation()
+            } else {
+                resumeOnce(throwing: LocationProviderError.unavailable)
+            }
+        }
+    }
+
+    private func startTimeout() {
+        timeoutTask?.cancel()
+        timeoutTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            resumeOnce(throwing: LocationProviderError.timeout)
+        }
+    }
+
+    private func resumeOnce(returning result: CurrentLocationResult) {
+        timeoutTask?.cancel()
+        timeoutTask = nil
+        guard let continuation else { return }
+        self.continuation = nil
+        continuation.resume(returning: result)
+    }
+
+    private func resumeOnce(throwing error: Error) {
+        timeoutTask?.cancel()
+        timeoutTask = nil
+        guard let continuation else { return }
+        self.continuation = nil
+        continuation.resume(throwing: error)
+    }
+
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
-            if manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus.rawValue > 2 {
+            guard continuation != nil else { return }
+            switch manager.authorizationStatus {
+            case .authorizedAlways:
                 manager.requestLocation()
+            case .denied, .restricted:
+                resumeOnce(throwing: LocationProviderError.denied)
+            case .notDetermined:
+                break
+            default:
+                if manager.authorizationStatus.rawValue > 2 {
+                    manager.requestLocation()
+                }
             }
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         Task { @MainActor in
-            guard let location = locations.last else { return }
-            continuation?.resume(
+            guard let location = locations.last else {
+                resumeOnce(throwing: LocationProviderError.unavailable)
+                return
+            }
+            // System time zone of this Mac — not geographically inferred from coordinates.
+            resumeOnce(
                 returning: CurrentLocationResult(
                     latitude: location.coordinate.latitude,
                     longitude: location.coordinate.longitude,
                     timeZoneIdentifier: TimeZone.current.identifier
                 )
             )
-            continuation = nil
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            continuation?.resume(throwing: LocationProviderError.unavailable)
-            continuation = nil
+            resumeOnce(throwing: LocationProviderError.unavailable)
         }
     }
 }
@@ -144,6 +201,8 @@ final class CoreCurrentLocationProvider: NSObject, ObservableObject, CurrentLoca
 enum LocationProviderError: LocalizedError {
     case denied
     case unavailable
+    case busy
+    case timeout
 
     var errorDescription: String? {
         switch self {
@@ -151,6 +210,10 @@ enum LocationProviderError: LocalizedError {
             return "Location access denied. Enter coordinates manually."
         case .unavailable:
             return "Could not determine current location. Enter coordinates manually."
+        case .busy:
+            return "A location request is already in progress."
+        case .timeout:
+            return "Timed out waiting for location. Enter coordinates manually."
         }
     }
 }

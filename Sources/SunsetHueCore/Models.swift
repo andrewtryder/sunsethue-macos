@@ -323,6 +323,10 @@ public enum RefreshStatus: Codable, Hashable, Sendable {
     case authenticationRequired
     case rateLimited(retryAfter: Date?)
     case temporarilyUnavailable
+    /// Invalid coordinates/location/request — no automatic retry until configuration changes.
+    case invalidRequest
+    /// Malformed or incompatible server response — long backoff.
+    case invalidResponse
 }
 
 public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
@@ -332,6 +336,9 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
     public var lastAttemptAt: Date
     public var forecasts: [EventForecast]
     public var status: RefreshStatus
+    /// Earliest time an automatic retry should run. Nil means status-specific default rules apply.
+    public var nextAttemptAt: Date?
+    public var consecutiveFailureCount: Int
 
     public enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -340,6 +347,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         case lastAttemptAt
         case forecasts
         case status
+        case nextAttemptAt
+        case consecutiveFailureCount
         // Legacy LocationCacheDocument fields (decode-only migration).
         case lastErrorMessage
         case lastErrorIsAuthentication
@@ -352,7 +361,9 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         fetchedAt: Date,
         lastAttemptAt: Date,
         forecasts: [EventForecast],
-        status: RefreshStatus
+        status: RefreshStatus,
+        nextAttemptAt: Date? = nil,
+        consecutiveFailureCount: Int = 0
     ) {
         self.schemaVersion = schemaVersion
         self.locationID = locationID
@@ -360,6 +371,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         self.lastAttemptAt = lastAttemptAt
         self.forecasts = forecasts
         self.status = status
+        self.nextAttemptAt = nextAttemptAt
+        self.consecutiveFailureCount = consecutiveFailureCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -373,6 +386,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
             lastAttemptAt = try container.decodeIfPresent(Date.self, forKey: .lastAttemptAt) ?? fetchedAt
             forecasts = try container.decode([EventForecast].self, forKey: .forecasts)
             self.status = status
+            nextAttemptAt = try container.decodeIfPresent(Date.self, forKey: .nextAttemptAt)
+            consecutiveFailureCount = try container.decodeIfPresent(Int.self, forKey: .consecutiveFailureCount) ?? 0
             return
         }
 
@@ -383,6 +398,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         lastAttemptAt = fetchedAt
         forecasts = bundle?.forecasts ?? []
         schemaVersion = SunsetHueConstants.currentCacheSchemaVersion
+        nextAttemptAt = nil
+        consecutiveFailureCount = 0
         let auth = try container.decodeIfPresent(Bool.self, forKey: .lastErrorIsAuthentication) ?? false
         let hasError = try container.decodeIfPresent(String.self, forKey: .lastErrorMessage) != nil
         if auth {
@@ -404,6 +421,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         try container.encode(lastAttemptAt, forKey: .lastAttemptAt)
         try container.encode(forecasts, forKey: .forecasts)
         try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(nextAttemptAt, forKey: .nextAttemptAt)
+        try container.encode(consecutiveFailureCount, forKey: .consecutiveFailureCount)
     }
 
     public var bundle: LocationForecastBundle? {
@@ -425,8 +444,67 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
             fetchedAt: bundle.fetchedAt,
             lastAttemptAt: attemptedAt,
             forecasts: bundle.forecasts,
-            status: .current
+            status: .current,
+            nextAttemptAt: nil,
+            consecutiveFailureCount: 0
         )
+    }
+
+    /// Next automatic refresh time for this snapshot, or nil when no automatic retry should be scheduled.
+    public func nextScheduledRefresh(
+        refreshIntervalHours: Int,
+        now: Date = Date()
+    ) -> Date? {
+        switch status {
+        case .authenticationRequired, .invalidRequest:
+            return nil
+        case .rateLimited(let retryAfter):
+            let base = retryAfter ?? nextAttemptAt ?? now
+            let jitter = TimeInterval(SunsetHueConstants.rateLimitJitterSeconds(for: locationID))
+            return max(now, base.addingTimeInterval(jitter))
+        case .current:
+            let hours = SunsetHueConstants.validRefreshIntervalHours.contains(refreshIntervalHours)
+                ? refreshIntervalHours
+                : SunsetHueConstants.defaultRefreshIntervalHours
+            return fetchedAt.addingTimeInterval(TimeInterval(hours * 3600))
+        case .stale:
+            return nextAttemptAt ?? now
+        case .temporarilyUnavailable, .invalidResponse:
+            return nextAttemptAt ?? now
+        }
+    }
+}
+
+/// Computes persisted backoff deadlines for failed refreshes.
+public enum RefreshBackoff {
+    public static func nextAttempt(
+        status: RefreshStatus,
+        previousFailureCount: Int,
+        locationID: UUID,
+        from attemptedAt: Date,
+        rateLimitRetryAfter: Date? = nil
+    ) -> (nextAttemptAt: Date?, consecutiveFailureCount: Int) {
+        switch status {
+        case .current, .stale:
+            return (nil, 0)
+        case .authenticationRequired, .invalidRequest:
+            return (nil, previousFailureCount)
+        case .rateLimited:
+            let jitter = TimeInterval(SunsetHueConstants.rateLimitJitterSeconds(for: locationID))
+            let base = rateLimitRetryAfter ?? attemptedAt.addingTimeInterval(15 * 60)
+            return (base.addingTimeInterval(jitter), previousFailureCount + 1)
+        case .temporarilyUnavailable:
+            let count = previousFailureCount + 1
+            let ladder = SunsetHueConstants.temporaryUnavailableBackoffSeconds
+            let index = min(max(count - 1, 0), ladder.count - 1)
+            let delay = min(ladder[index], SunsetHueConstants.maxRefreshBackoffSeconds)
+            return (attemptedAt.addingTimeInterval(delay), count)
+        case .invalidResponse:
+            let count = previousFailureCount + 1
+            let base = SunsetHueConstants.invalidResponseInitialBackoffSeconds
+            let delay = min(base * pow(2.0, Double(max(0, count - 1))), SunsetHueConstants.maxRefreshBackoffSeconds)
+            return (attemptedAt.addingTimeInterval(delay), count)
+        }
     }
 }
 

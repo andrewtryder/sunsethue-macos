@@ -13,14 +13,21 @@
 		1B4D2F25D5C3E6A91C7ADE38 /* LocationEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */; };
 		2480618CA768F49DF5E41F24 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D2F534FE4110E00ACE57A2 /* UpdateChecker.swift */; };
 		296DAD914126AD9AFE392A32 /* WidgetPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D22300345B1F259F9C11B6 /* WidgetPreviews.swift */; };
+		2B2BF8EA9D070C60DC34EB82 /* LargeWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6700903F2CB621C40E4D34E /* LargeWidgetView.swift */; };
 		3067046961D2568378EDD472 /* SunsetHueWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4CE1D8B70204B8780F49EC2E /* SunsetHueWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5C2CC0A0396760B042C255F2 /* LocationSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D56605CC77B37096F15E578 /* LocationSidebar.swift */; };
 		64326D0EF99DD0063740FDD0 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0E47FB8CA49606C63177352 /* AppModel.swift */; };
 		65A18F0491BE4BC367937ED4 /* SunsetHueCore in Frameworks */ = {isa = PBXBuildFile; productRef = C6D5D9CD20835ED55C167C4F /* SunsetHueCore */; };
 		75589202BA50FD80C120B018 /* WidgetConfigurationIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BAA6CE9E5C03CBEBD504865 /* WidgetConfigurationIntent.swift */; };
 		79B4E0A2E8A26D6639D01E86 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6B332A47F6075706699D2319 /* Assets.xcassets */; };
+		7E5339840B8701A5F1D27A38 /* MediumWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F63CEC95B181053114E74BDD /* MediumWidgetView.swift */; };
+		89F0FC6B0B8305C219276E85 /* MagicHourView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E6CF1FEBAABC1AE779F4FB /* MagicHourView.swift */; };
+		9C41AE0555910B68D92D167B /* WidgetQualityStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38442C912123A2335362D2E0 /* WidgetQualityStyle.swift */; };
 		A8A740A25CBC3F652B82E3FE /* SunsetHueCore in Frameworks */ = {isa = PBXBuildFile; productRef = 10C60963C95E03499F710C0F /* SunsetHueCore */; };
+		AC2F64697B2B89BD9EEB8DFD /* SmallWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E629B2E09646540AE921E9F /* SmallWidgetView.swift */; };
 		B7751AC7E652D45864EAB4F6 /* SunsetHueMenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17270D7994572484406BA607 /* SunsetHueMenuBarView.swift */; };
+		BA1BA406B69090BDA6DC8316 /* QualityBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C14BE905BCCDF5083DD7E3 /* QualityBadge.swift */; };
+		BC6170B3F5AD86C10BCEF375 /* WidgetHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 931F3AFDF3EA3535748ACE14 /* WidgetHeader.swift */; };
 		C28174242C887CCC6E91214E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */; };
 		DA11E511FE5B36B9394DA5D8 /* ForecastDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */; };
 		DECC18151C1D68C211B4D00D /* LaunchAtLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9B0AB6AEFEF21973164E8C /* LaunchAtLoginController.swift */; };
@@ -57,9 +64,11 @@
 /* Begin PBXFileReference section */
 		17270D7994572484406BA607 /* SunsetHueMenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueMenuBarView.swift; sourceTree = "<group>"; };
 		1F15A0B4177B5E2ACBA8F2A6 /* SunsetHueWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueWidgetBundle.swift; sourceTree = "<group>"; };
+		38442C912123A2335362D2E0 /* WidgetQualityStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetQualityStyle.swift; sourceTree = "<group>"; };
 		3BBF4EDCF2CD3B7B764727DB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4815E36D2032FEDBEE28245D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4CE1D8B70204B8780F49EC2E /* SunsetHueWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SunsetHueWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		57E6CF1FEBAABC1AE779F4FB /* MagicHourView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagicHourView.swift; sourceTree = "<group>"; };
 		586CC032CBDAC8BEC8055BC1 /* SunsetHueWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueWidget.swift; sourceTree = "<group>"; };
 		5D56605CC77B37096F15E578 /* LocationSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSidebar.swift; sourceTree = "<group>"; };
 		65E370BFF1D15AFFF837FAF8 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -68,8 +77,10 @@
 		6A5C197A40BFDD7EBC1F8EB7 /* SunsetHue.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SunsetHue.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B332A47F6075706699D2319 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6BAA6CE9E5C03CBEBD504865 /* WidgetConfigurationIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetConfigurationIntent.swift; sourceTree = "<group>"; };
+		6E629B2E09646540AE921E9F /* SmallWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmallWidgetView.swift; sourceTree = "<group>"; };
 		791123633E8EB0E3998A29AD /* sunsethue-macos */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "sunsethue-macos"; path = .; sourceTree = SOURCE_ROOT; };
 		7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationEditorView.swift; sourceTree = "<group>"; };
+		931F3AFDF3EA3535748ACE14 /* WidgetHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetHeader.swift; sourceTree = "<group>"; };
 		9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastDetailView.swift; sourceTree = "<group>"; };
 		AF21FADF4DCF6AB50896A591 /* WidgetContentResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetContentResolver.swift; sourceTree = "<group>"; };
 		B8D2F534FE4110E00ACE57A2 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
@@ -79,6 +90,9 @@
 		D0E47FB8CA49606C63177352 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		D7FBF934904433F9CC294FE7 /* SunsetHueSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueSettingsView.swift; sourceTree = "<group>"; };
 		DA9B0AB6AEFEF21973164E8C /* LaunchAtLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginController.swift; sourceTree = "<group>"; };
+		E6700903F2CB621C40E4D34E /* LargeWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LargeWidgetView.swift; sourceTree = "<group>"; };
+		E8C14BE905BCCDF5083DD7E3 /* QualityBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QualityBadge.swift; sourceTree = "<group>"; };
+		F63CEC95B181053114E74BDD /* MediumWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediumWidgetView.swift; sourceTree = "<group>"; };
 		FD82936D5A90D80B5FE26803 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -115,12 +129,19 @@
 			isa = PBXGroup;
 			children = (
 				3BBF4EDCF2CD3B7B764727DB /* Info.plist */,
+				E6700903F2CB621C40E4D34E /* LargeWidgetView.swift */,
+				57E6CF1FEBAABC1AE779F4FB /* MagicHourView.swift */,
+				F63CEC95B181053114E74BDD /* MediumWidgetView.swift */,
+				E8C14BE905BCCDF5083DD7E3 /* QualityBadge.swift */,
+				6E629B2E09646540AE921E9F /* SmallWidgetView.swift */,
 				67C12B301705DF5F9C2FF464 /* SunsetHueTimelineProvider.swift */,
 				586CC032CBDAC8BEC8055BC1 /* SunsetHueWidget.swift */,
 				1F15A0B4177B5E2ACBA8F2A6 /* SunsetHueWidgetBundle.swift */,
 				6BAA6CE9E5C03CBEBD504865 /* WidgetConfigurationIntent.swift */,
 				AF21FADF4DCF6AB50896A591 /* WidgetContentResolver.swift */,
+				931F3AFDF3EA3535748ACE14 /* WidgetHeader.swift */,
 				B9D22300345B1F259F9C11B6 /* WidgetPreviews.swift */,
+				38442C912123A2335362D2E0 /* WidgetQualityStyle.swift */,
 			);
 			path = SunsetHueWidget;
 			sourceTree = "<group>";
@@ -283,12 +304,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2B2BF8EA9D070C60DC34EB82 /* LargeWidgetView.swift in Sources */,
+				89F0FC6B0B8305C219276E85 /* MagicHourView.swift in Sources */,
+				7E5339840B8701A5F1D27A38 /* MediumWidgetView.swift in Sources */,
+				BA1BA406B69090BDA6DC8316 /* QualityBadge.swift in Sources */,
+				AC2F64697B2B89BD9EEB8DFD /* SmallWidgetView.swift in Sources */,
 				02F9100AF71ADE3CD876B456 /* SunsetHueTimelineProvider.swift in Sources */,
 				E1417E3A82ABEFD585F96984 /* SunsetHueWidget.swift in Sources */,
 				E1A6AC8A35552FAFBB000CA0 /* SunsetHueWidgetBundle.swift in Sources */,
 				75589202BA50FD80C120B018 /* WidgetConfigurationIntent.swift in Sources */,
 				064B2DCAE6E6F4B75547B4C1 /* WidgetContentResolver.swift in Sources */,
+				BC6170B3F5AD86C10BCEF375 /* WidgetHeader.swift in Sources */,
 				296DAD914126AD9AFE392A32 /* WidgetPreviews.swift in Sources */,
+				9C41AE0555910B68D92D167B /* WidgetQualityStyle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -448,7 +476,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -535,7 +563,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;

@@ -9,27 +9,45 @@ struct SunsetHueSettingsView: View {
     @AppStorage("diagnosticsIncludeApproximateCoordinates") private var includeApproximateCoordinates = false
     @AppStorage("autoCheckUpdatesDaily") private var autoCheckUpdatesDaily = true
     @AppStorage("lastUpdateCheckDay") private var lastUpdateCheckDay = ""
+    @AppStorage("selectedSettingsTab") private var selectedSettingsTab = SettingsTab.general.rawValue
     @State private var updateMessage: String?
     @State private var latestVersion: String?
     @State private var isCheckingUpdates = false
     @State private var accountTestMessage: String?
     @State private var isTestingAccount = false
+    @State private var diagnosticsMessage: String?
     @FocusState private var isAPIKeyFieldFocused: Bool
 
+    private enum SettingsTab: String {
+        case general
+        case account
+        case updates
+        case privacy
+        case diagnostics
+    }
+
     var body: some View {
-        TabView {
+        TabView(selection: Binding(
+            get: { SettingsTab(rawValue: selectedSettingsTab) ?? .general },
+            set: { selectedSettingsTab = $0.rawValue }
+        )) {
             generalTab
                 .tabItem { Label("General", systemImage: "gearshape") }
+                .tag(SettingsTab.general)
             accountTab
                 .tabItem { Label("Account", systemImage: "key") }
+                .tag(SettingsTab.account)
             updatesTab
                 .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
+                .tag(SettingsTab.updates)
             privacyTab
                 .tabItem { Label("Privacy", systemImage: "hand.raised") }
+                .tag(SettingsTab.privacy)
             diagnosticsTab
                 .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
+                .tag(SettingsTab.diagnostics)
         }
-        .frame(width: 520, height: 420)
+        .frame(width: 520, height: 480)
         .onAppear {
             launchAtLogin.refresh()
             Task { await maybeAutoCheckUpdates() }
@@ -38,20 +56,65 @@ struct SunsetHueSettingsView: View {
 
     private var generalTab: some View {
         Form {
-            Toggle("Show SunsetHue in menu bar", isOn: $showMenuBarExtra)
-            Toggle("Launch at login", isOn: Binding(
-                get: { launchAtLogin.isEnabled },
-                set: { launchAtLogin.setEnabled($0) }
-            ))
-            if let error = launchAtLogin.errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+            Section {
+                Toggle("Show SunsetHue in menu bar", isOn: Binding(
+                    get: { showMenuBarExtra },
+                    set: { newValue in
+                        if !newValue,
+                           !AppPreferenceDefaults.shared.openMainWindowOnLaunch,
+                           launchAtLogin.isEnabled {
+                            launchAtLogin.errorMessage =
+                                "Keep the menu bar icon, the main window on launch, or turn off Launch at Login so SunsetHue stays reachable."
+                            return
+                        }
+                        showMenuBarExtra = newValue
+                    }
+                ))
+                Toggle("Launch at login", isOn: Binding(
+                    get: { launchAtLogin.isEnabled },
+                    set: { enabled in
+                        if enabled,
+                           !showMenuBarExtra,
+                           !AppPreferenceDefaults.shared.openMainWindowOnLaunch {
+                            launchAtLogin.errorMessage =
+                                "Enable the menu bar icon or “Open main window when launched” before turning on Launch at Login."
+                            return
+                        }
+                        launchAtLogin.setEnabled(enabled)
+                    }
+                ))
+                if launchAtLogin.status == .requiresApproval {
+                    Text("Launch at Login requires approval in System Settings → General → Login Items.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button("Open Login Items…") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+                if launchAtLogin.status == .unavailable {
+                    Text("Launch at Login is unavailable for this build.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let error = launchAtLogin.errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                Toggle("Open main window when launched", isOn: Binding(
+                    get: { AppPreferenceDefaults.shared.openMainWindowOnLaunch },
+                    set: { newValue in
+                        if !newValue, !showMenuBarExtra, launchAtLogin.isEnabled {
+                            launchAtLogin.errorMessage =
+                                "Keep the menu bar icon or turn off Launch at Login before disabling the main window on launch."
+                            return
+                        }
+                        AppPreferenceDefaults.shared.openMainWindowOnLaunch = newValue
+                    }
+                ))
             }
-            Toggle("Open main window when launched", isOn: Binding(
-                get: { AppPreferenceDefaults.shared.openMainWindowOnLaunch },
-                set: { AppPreferenceDefaults.shared.openMainWindowOnLaunch = $0 }
-            ))
             Section("Defaults for new locations") {
                 Stepper(
                     value: Binding(
@@ -87,15 +150,14 @@ struct SunsetHueSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 
     private var accountTab: some View {
         Form {
             Section("API key") {
                 LabeledContent("Status") {
-                    Text(appModel.hasAPIKey ? "Configured" : "Not configured")
-                        .foregroundStyle(appModel.hasAPIKey ? Color.secondary : Color.orange)
+                    Text(credentialStatusLabel)
+                        .foregroundStyle(appModel.credentialState == .configured ? Color.secondary : Color.orange)
                 }
                 SecureField("Paste your SunsetHue API key", text: $appModel.apiKeyDraft)
                     .focused($isAPIKeyFieldFocused)
@@ -134,11 +196,20 @@ struct SunsetHueSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
         .onAppear {
-            if !appModel.hasAPIKey {
+            appModel.refreshCredentialState()
+            if appModel.credentialState != .configured {
                 isAPIKeyFieldFocused = true
             }
+        }
+    }
+
+    private var credentialStatusLabel: String {
+        switch appModel.credentialState {
+        case .unknown: return "Checking…"
+        case .configured: return "Configured"
+        case .missing: return "Not configured"
+        case .unavailable: return "Keychain unavailable — unlock your Mac"
         }
     }
 
@@ -171,7 +242,6 @@ struct SunsetHueSettingsView: View {
                 .foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
-        .padding()
     }
 
     private var privacyTab: some View {
@@ -187,8 +257,16 @@ struct SunsetHueSettingsView: View {
     private var diagnosticsTab: some View {
         Form {
             Toggle("Include approximate coordinates (1 decimal place)", isOn: $includeApproximateCoordinates)
+            Text("Even with coordinates redacted, a time zone can imply a broad geographic region.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Button("Export Diagnostics…") {
                 exportDiagnostics()
+            }
+            if let diagnosticsMessage {
+                Text(diagnosticsMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Button("Open cache folder") {
                 let url = AppSupportPaths.preferredContainerURL()
@@ -203,7 +281,6 @@ struct SunsetHueSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 
     private func maybeAutoCheckUpdates() async {
@@ -236,29 +313,52 @@ struct SunsetHueSettingsView: View {
     private func exportDiagnostics() {
         Task {
             var snapshots: [UUID: CachedLocationSnapshot] = [:]
+            var cacheReadFailed = false
             for location in appModel.state.locations {
-                if let snapshot = try? await appModel.forecastCache.loadSnapshot(for: location.id) {
-                    snapshots[location.id] = snapshot
+                do {
+                    if let snapshot = try await appModel.forecastCache.loadSnapshot(for: location.id) {
+                        snapshots[location.id] = snapshot
+                    }
+                } catch {
+                    cacheReadFailed = true
                 }
             }
+            if cacheReadFailed && snapshots.isEmpty && !appModel.state.locations.isEmpty {
+                diagnosticsMessage = "Cache could not be read."
+                return
+            }
+
             let exporter = DiagnosticsExporter()
             let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
             let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
                 ?? SunsetHueConstants.marketingVersion
-            guard let data = try? exporter.makeReport(
-                state: appModel.state,
-                snapshots: snapshots,
-                apiKeyConfigured: appModel.hasAPIKey,
-                options: DiagnosticsExportOptions(includeApproximateCoordinates: includeApproximateCoordinates),
-                appVersion: version,
-                build: build
-            ) else { return }
+            let data: Data
+            do {
+                data = try exporter.makeReport(
+                    state: appModel.state,
+                    snapshots: snapshots,
+                    apiKeyConfigured: appModel.hasAPIKey,
+                    options: DiagnosticsExportOptions(includeApproximateCoordinates: includeApproximateCoordinates),
+                    appVersion: version,
+                    build: build
+                )
+            } catch {
+                diagnosticsMessage = "Report generation failed."
+                return
+            }
 
             let panel = NSSavePanel()
             panel.nameFieldStringValue = "SunsetHue-diagnostics.json"
             panel.allowedContentTypes = [.json]
             guard panel.runModal() == .OK, let url = panel.url else { return }
-            try? data.write(to: url, options: .atomic)
+            do {
+                try data.write(to: url, options: .atomic)
+                diagnosticsMessage = cacheReadFailed
+                    ? "Export succeeded (some cache entries could not be read)."
+                    : "Export succeeded."
+            } catch {
+                diagnosticsMessage = "File could not be written."
+            }
         }
     }
 }

@@ -1,13 +1,33 @@
 import Foundation
 import ServiceManagement
 
+enum LaunchAtLoginStatus: Equatable, Sendable {
+    case notRegistered
+    case enabled
+    case requiresApproval
+    case unavailable
+}
+
 @MainActor
 final class LaunchAtLoginController: ObservableObject {
-    @Published private(set) var isEnabled = false
+    @Published private(set) var status: LaunchAtLoginStatus = .notRegistered
     @Published var errorMessage: String?
 
+    var isEnabled: Bool { status == .enabled }
+
     func refresh() {
-        isEnabled = SMAppService.mainApp.status == .enabled
+        switch SMAppService.mainApp.status {
+        case .enabled:
+            status = .enabled
+        case .requiresApproval:
+            status = .requiresApproval
+        case .notFound:
+            status = .unavailable
+        case .notRegistered:
+            status = .notRegistered
+        @unknown default:
+            status = .unavailable
+        }
     }
 
     func setEnabled(_ enabled: Bool) {
@@ -21,7 +41,9 @@ final class LaunchAtLoginController: ObservableObject {
             errorMessage = nil
         } catch {
             refresh()
-            errorMessage = "macOS did not allow the login-item change."
+            errorMessage = error.localizedDescription.isEmpty
+                ? "macOS did not allow the login-item change."
+                : error.localizedDescription
         }
     }
 }

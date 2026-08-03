@@ -18,6 +18,49 @@ struct SunsetHueEntry: TimelineEntry {
     let bundle: LocationForecastBundle?
     let configuration: SunsetHueWidgetConfigurationIntent
     let statusMessage: String?
+
+    init(
+        date: Date,
+        kind: Kind,
+        location: SavedLocation?,
+        bundle: LocationForecastBundle?,
+        configuration: SunsetHueWidgetConfigurationIntent,
+        statusMessage: String?
+    ) {
+        self.date = date
+        self.kind = kind
+        self.location = location
+        self.bundle = bundle
+        self.configuration = configuration
+        self.statusMessage = statusMessage
+    }
+
+    init(
+        date: Date,
+        model: WidgetTimelineEntryModel,
+        configuration: SunsetHueWidgetConfigurationIntent
+    ) {
+        self.date = date
+        self.kind = Kind(model.kind)
+        self.location = model.location
+        self.bundle = model.bundle
+        self.configuration = configuration
+        self.statusMessage = model.statusMessage
+    }
+}
+
+private extension SunsetHueEntry.Kind {
+    init(_ kind: WidgetTimelineEntryModel.Kind) {
+        switch kind {
+        case .placeholder: self = .placeholder
+        case .onboarding: self = .onboarding
+        case .forecast: self = .forecast
+        case .cached: self = .cached
+        case .stale: self = .stale
+        case .authentication: self = .authentication
+        case .unavailable: self = .unavailable
+        }
+    }
 }
 
 struct SunsetHueTimelineProvider: AppIntentTimelineProvider {
@@ -40,7 +83,10 @@ struct SunsetHueTimelineProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: SunsetHueWidgetConfigurationIntent, in context: Context) async -> SunsetHueEntry {
-        await makeEntry(for: configuration, date: Date())
+        if context.isPreview {
+            return placeholder(in: context)
+        }
+        return await makeEntry(for: configuration, date: Date())
     }
 
     func timeline(for configuration: SunsetHueWidgetConfigurationIntent, in context: Context) async -> Timeline<SunsetHueEntry> {
@@ -70,15 +116,12 @@ struct SunsetHueTimelineProvider: AppIntentTimelineProvider {
         for configuration: SunsetHueWidgetConfigurationIntent,
         date: Date
     ) async -> SunsetHueEntry {
-        let state = (try? await settingsStore.load()) ?? SharedAppState()
+        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
         guard !state.locations.isEmpty else {
             return SunsetHueEntry(
                 date: date,
-                kind: .onboarding,
-                location: nil,
-                bundle: nil,
-                configuration: configuration,
-                statusMessage: "Open SunsetHue to add a location."
+                model: WidgetTimelineEntryBuilder.makeOnboarding(message: "Open SunsetHue to add a location."),
+                configuration: configuration
             )
         }
 
@@ -86,72 +129,34 @@ struct SunsetHueTimelineProvider: AppIntentTimelineProvider {
         guard let location else {
             return SunsetHueEntry(
                 date: date,
-                kind: .onboarding,
-                location: nil,
-                bundle: nil,
-                configuration: configuration,
-                statusMessage: "Choose a location in the widget settings."
+                model: WidgetTimelineEntryBuilder.makeOnboarding(message: "Choose a location in the widget settings."),
+                configuration: configuration
             )
         }
 
         let snapshot = try? await forecastCache.loadSnapshot(for: location.id)
-        let bundle = snapshot?.bundle
-
-        guard let snapshot else {
-            return SunsetHueEntry(
-                date: date,
-                kind: contextPreviewKind(configuration: configuration),
-                location: location,
-                bundle: PreviewFixtures.sampleBundle(),
-                configuration: configuration,
-                statusMessage: "Open SunsetHue to refresh"
-            )
-        }
-
-        switch snapshot.status {
-        case .authenticationRequired:
-            return SunsetHueEntry(
-                date: date,
-                kind: .authentication,
-                location: location,
-                bundle: bundle,
-                configuration: configuration,
-                statusMessage: "Open SunsetHue to update the API key"
-            )
-        case .current where snapshot.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: date):
-            return SunsetHueEntry(
+        let model = WidgetTimelineEntryBuilder.makeEntry(location: location, snapshot: snapshot, now: date)
+        var entry = SunsetHueEntry(date: date, model: model, configuration: configuration)
+        if model.kind == .forecast, let bundle = model.bundle {
+            entry = SunsetHueEntry(
                 date: date,
                 kind: .forecast,
                 location: location,
                 bundle: bundle,
                 configuration: configuration,
-                statusMessage: nil
+                statusMessage: WidgetUpdatedCopy.compactUpdated(from: bundle.fetchedAt, now: date)
             )
-        case .current, .stale, .rateLimited, .temporarilyUnavailable:
-            let ageHours = max(1, Int(date.timeIntervalSince(snapshot.fetchedAt) / 3600))
-            let message: String
-            if case .authenticationRequired = snapshot.status {
-                message = "Open SunsetHue to update the API key"
-            } else if bundle == nil {
-                message = snapshot.status == .temporarilyUnavailable
-                    ? "Forecast unavailable — Open SunsetHue"
-                    : "Open SunsetHue to refresh"
-            } else {
-                message = "Updated \(ageHours) hour\(ageHours == 1 ? "" : "s") ago — Open SunsetHue to refresh"
-            }
-            return SunsetHueEntry(
+        } else if model.kind == .stale, let fetchedAt = snapshot?.fetchedAt, model.bundle != nil {
+            entry = SunsetHueEntry(
                 date: date,
-                kind: bundle == nil ? .unavailable : .stale,
+                kind: .stale,
                 location: location,
-                bundle: bundle ?? PreviewFixtures.sampleBundle(),
+                bundle: model.bundle,
                 configuration: configuration,
-                statusMessage: message
+                statusMessage: WidgetUpdatedCopy.compactUpdated(from: fetchedAt, now: date)
             )
         }
-    }
-
-    private func contextPreviewKind(configuration: SunsetHueWidgetConfigurationIntent) -> SunsetHueEntry.Kind {
-        .placeholder
+        return entry
     }
 
     private func resolveLocation(

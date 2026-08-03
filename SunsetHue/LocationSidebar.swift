@@ -31,7 +31,7 @@ struct LocationSidebar: View {
                 }
             }
 
-            if appModel.lastErrorIsAuthentication || !appModel.hasAPIKey {
+            if appModel.lastErrorIsAuthentication || appModel.credentialState == .missing || appModel.credentialState == .unavailable {
                 Section {
                     Label(
                         appModel.lastErrorMessage ?? "Add an API key to enable forecasts.",

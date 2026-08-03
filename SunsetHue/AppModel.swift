@@ -10,6 +10,7 @@ final class AppModel: ObservableObject {
     @Published var selectedLocationID: UUID?
     @Published var bundle: LocationForecastBundle?
     @Published var snapshot: CachedLocationSnapshot?
+    @Published var snapshotsByLocationID: [UUID: CachedLocationSnapshot] = [:]
     @Published var isRefreshing = false
     @Published var bannerMessage: String?
     @Published var isPresentingEditor = false
@@ -19,6 +20,8 @@ final class AppModel: ObservableObject {
     @Published var lastErrorIsAuthentication = false
     @Published var apiKeyDraft = ""
     @Published var accountStatusMessage: String?
+    @Published var credentialState: CredentialState = .unknown
+    @Published var diagnosticsExportMessage: String?
 
     let settingsStore: any SharedSettingsStore
     let forecastCache: any ForecastCache
@@ -26,6 +29,7 @@ final class AppModel: ObservableObject {
     let refreshCoordinator: ForecastRefreshCoordinator
     private let logger = Logger(subsystem: "com.andrewtryder.SunsetHue", category: "App")
     private var wakeObserver: NSObjectProtocol?
+    private var unlockObserver: NSObjectProtocol?
 
     init(
         settingsStore: any SharedSettingsStore = SharedStorageFactory.makeSettingsStore(),
@@ -54,19 +58,35 @@ final class AppModel: ObservableObject {
                 await self?.reloadSelectedSnapshot()
             }
         }
+        unlockObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.screenIsUnlocked"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshCredentialState()
+            }
+        }
     }
 
     deinit {
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
         }
+        if let unlockObserver {
+            DistributedNotificationCenter.default().removeObserver(unlockObserver)
+        }
     }
 
     private func bootstrap() async {
         do {
             let loaded = try await settingsStore.load()
-            state = loaded
-            selectedLocationID = loaded.selectedLocationID ?? loaded.locations.first?.id
+            state = loaded.value
+            if let recovery = loaded.recovery {
+                bannerMessage = recovery.userMessage
+            }
+            selectedLocationID = loaded.value.selectedLocationID ?? loaded.value.locations.first?.id
+            refreshCredentialState()
             await reloadSelectedSnapshot()
             await persistState()
             await refreshCoordinator.refreshAllStaleLocations()
@@ -75,6 +95,7 @@ final class AppModel: ObservableObject {
         } catch {
             logger.error("Failed to bootstrap shared storage")
             bannerMessage = SunsetHueError.storageCorrupt.userMessage
+            refreshCredentialState()
         }
     }
 
@@ -83,15 +104,133 @@ final class AppModel: ObservableObject {
         return state.locations.first(where: { $0.id == selectedLocationID })
     }
 
+    /// Compact status for the menu bar extra label (e.g. "Sunset 82.0%").
+    var menuBarStatusText: String {
+        guard let location = selectedLocation else { return "SunsetHue" }
+        switch snapshot?.status {
+        case .authenticationRequired:
+            return "API key needed"
+        case .rateLimited:
+            return "Rate limited"
+        case .temporarilyUnavailable, .invalidRequest, .invalidResponse:
+            return location.name
+        case .stale, .current, .none:
+            break
+        }
+        guard let event = primaryMenuBarForecast(for: location, bundle: snapshot?.bundle),
+              let percent = PresentationFormatting.percentage(fromNormalized: event.quality) else {
+            return location.name
+        }
+        return "\(event.eventType.displayName) \(percent)"
+    }
+
+    struct MenuBarLocationRow: Identifiable, Equatable {
+        let id: UUID
+        let name: String
+        let detail: String
+    }
+
+    /// One row per configured location for the menu bar dropdown.
+    var menuBarLocationRows: [MenuBarLocationRow] {
+        state.locations.map { location in
+            MenuBarLocationRow(
+                id: location.id,
+                name: location.name,
+                detail: menuBarDetail(for: location)
+            )
+        }
+    }
+
+    var menuBarRefreshStatusLine: String? {
+        guard let snapshot else { return nil }
+        switch snapshot.status {
+        case .current:
+            return "Updated \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))"
+        case .stale:
+            return "Stale — open app to refresh"
+        case .authenticationRequired:
+            return "API key needed"
+        case .rateLimited(let retryAfter):
+            if let retryAfter {
+                return "Rate limited until \(retryAfter.formatted(date: .omitted, time: .shortened))"
+            }
+            return "Rate limited"
+        case .temporarilyUnavailable:
+            return "Temporarily unavailable"
+        case .invalidRequest:
+            return "Coordinates were rejected"
+        case .invalidResponse:
+            return "Incompatible response"
+        }
+    }
+
+    private func menuBarDetail(for location: SavedLocation) -> String {
+        let snapshot = snapshotsByLocationID[location.id]
+        if let event = primaryMenuBarForecast(for: location, bundle: snapshot?.bundle),
+           let timeZone = location.timeZone {
+            let percent = PresentationFormatting.percentage(fromNormalized: event.quality) ?? "—"
+            let time = PresentationFormatting.timeString(event.eventTime, timeZone: timeZone) ?? ""
+            if time.isEmpty {
+                return "\(event.eventType.displayName)  \(percent)"
+            }
+            return "\(event.eventType.displayName)  \(percent)  \(time)"
+        }
+        switch snapshot?.status {
+        case .authenticationRequired: return "API key needed"
+        case .rateLimited: return "Rate limited"
+        case .temporarilyUnavailable: return "Unavailable"
+        case .invalidRequest: return "Invalid location"
+        case .invalidResponse: return "Bad response"
+        case .none: return "No forecast yet"
+        default: return "No forecast yet"
+        }
+    }
+
+    private func primaryMenuBarForecast(
+        for location: SavedLocation,
+        bundle: LocationForecastBundle?
+    ) -> EventForecast? {
+        guard let timeZone = location.timeZone,
+              let bundle else { return nil }
+        let types: [EventType] = [
+            location.includeSunrise ? .sunrise : nil,
+            location.includeSunset ? .sunset : nil
+        ].compactMap { $0 }
+        let events: [EventForecast] = types.compactMap { type in
+            bundle.forecast(dayOffset: 0, eventType: type, timeZone: timeZone)
+        }
+        guard !events.isEmpty else { return nil }
+        let now = Date()
+        let upcoming = events
+            .filter { ($0.eventTime ?? .distantPast) >= now }
+            .sorted { ($0.eventTime ?? .distantFuture) < ($1.eventTime ?? .distantFuture) }
+        return upcoming.first ?? events.last
+    }
+
     var hasAPIKey: Bool {
+        credentialState == .configured
+    }
+
+    func refreshCredentialState() {
         do {
-            return try credentialStore.loadAPIKey()?.isEmpty == false
+            let key = try credentialStore.loadAPIKey()
+            credentialState = (key?.isEmpty == false) ? .configured : .missing
+        } catch let error as SunsetHueError where error == .keychainUnavailable {
+            credentialState = .unavailable
         } catch {
-            return false
+            credentialState = .unavailable
         }
     }
 
     func applicationDidBecomeActive() {
+        refreshCredentialState()
+        Task {
+            await refreshCoordinator.refreshAllStaleLocations()
+            await reloadSelectedSnapshot()
+        }
+    }
+
+    func refreshAllFromCommand() {
         Task {
             await refreshCoordinator.refreshAllStaleLocations()
             await reloadSelectedSnapshot()
@@ -204,12 +343,16 @@ final class AppModel: ObservableObject {
             try credentialStore.saveAPIKey(key)
             accountStatusMessage = "API key saved."
             apiKeyDraft = ""
+            refreshCredentialState()
+            await refreshCoordinator.refreshAuthenticationRequiredLocations()
             await refreshCoordinator.refreshAllStaleLocations()
             await reloadSelectedSnapshot()
             WidgetCenter.shared.reloadTimelines(ofKind: SunsetHueConstants.widgetKind)
         } catch let error as SunsetHueError {
+            refreshCredentialState()
             accountStatusMessage = error.userMessage
         } catch {
+            refreshCredentialState()
             accountStatusMessage = "Unable to save API key."
         }
     }
@@ -218,10 +361,14 @@ final class AppModel: ObservableObject {
         do {
             try credentialStore.deleteAPIKey()
             accountStatusMessage = "API key removed."
+            refreshCredentialState()
             lastErrorIsAuthentication = true
             lastErrorMessage = SunsetHueError.missingCredentials.userMessage
+            await refreshCoordinator.markAllSnapshotsAuthenticationRequired()
+            await reloadSelectedSnapshot()
             WidgetCenter.shared.reloadTimelines(ofKind: SunsetHueConstants.widgetKind)
         } catch {
+            refreshCredentialState()
             accountStatusMessage = "Unable to remove API key."
         }
     }
@@ -266,6 +413,14 @@ final class AppModel: ObservableObject {
     }
 
     private func reloadSelectedSnapshot() async {
+        var all: [UUID: CachedLocationSnapshot] = [:]
+        for location in state.locations {
+            if let snap = try? await forecastCache.loadSnapshot(for: location.id) {
+                all[location.id] = snap
+            }
+        }
+        snapshotsByLocationID = all
+
         guard let id = selectedLocationID ?? state.locations.first?.id else {
             bundle = nil
             snapshot = nil
@@ -273,16 +428,36 @@ final class AppModel: ObservableObject {
             lastErrorIsAuthentication = false
             return
         }
-        let loaded = try? await forecastCache.loadSnapshot(for: id)
+        let loaded = all[id]
         snapshot = loaded
         bundle = loaded?.bundle
         switch loaded?.status {
         case .authenticationRequired:
             lastErrorIsAuthentication = true
-            lastErrorMessage = SunsetHueError.missingCredentials.userMessage
-        case .temporarilyUnavailable, .rateLimited, .stale:
+            if credentialState == .unavailable {
+                lastErrorMessage = SunsetHueError.keychainUnavailable.userMessage
+            } else {
+                lastErrorMessage = SunsetHueError.missingCredentials.userMessage
+            }
+        case .rateLimited(let retryAfter):
             lastErrorIsAuthentication = false
-            lastErrorMessage = loaded?.status == .stale ? nil : SunsetHueError.networkUnavailable.userMessage
+            if let retryAfter {
+                lastErrorMessage = "Rate limited until \(retryAfter.formatted(date: .omitted, time: .shortened))."
+            } else {
+                lastErrorMessage = SunsetHueError.rateLimited(retryAfter: nil).userMessage
+            }
+        case .temporarilyUnavailable:
+            lastErrorIsAuthentication = false
+            lastErrorMessage = SunsetHueError.networkUnavailable.userMessage
+        case .invalidRequest:
+            lastErrorIsAuthentication = false
+            lastErrorMessage = SunsetHueError.invalidCoordinates.userMessage
+        case .invalidResponse:
+            lastErrorIsAuthentication = false
+            lastErrorMessage = "SunsetHue returned an incompatible response."
+        case .stale:
+            lastErrorIsAuthentication = false
+            lastErrorMessage = nil
         case .current, .none:
             lastErrorMessage = nil
             lastErrorIsAuthentication = false

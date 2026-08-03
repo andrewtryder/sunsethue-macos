@@ -27,10 +27,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Keep a normal Dock/app-menu presence so Settings… / ⌘, work even when
+        // interaction starts from the MenuBarExtra.
+        NSApp.setActivationPolicy(.regular)
+
         guard isSecondaryInstance else { return }
         activateExistingInstance()
         NSApp.terminate(nil)
     }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            // Dock click with no visible windows — ask SwiftUI to present the single main Window.
+            NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
+        }
+        return true
+    }
+
+    /// Posted when the Dock icon is clicked and no windows are visible.
+    static let reopenMainWindowNotification = Notification.Name("com.andrewtryder.SunsetHue.reopenMainWindow")
 
     func application(_ application: NSApplication, open urls: [URL]) {
         if isSecondaryInstance {
@@ -56,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let string = notification.userInfo?["url"] as? String,
               let url = URL(string: string) else { return }
         NotificationCenter.default.post(name: Self.localOpenURLNotification, object: url)
+        NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

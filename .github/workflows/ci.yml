@@ -40,6 +40,9 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Verify generated Xcode project matches commit
+        run: git diff --exit-code -- SunsetHue.xcodeproj
+
       - name: Verify version metadata
         run: python3 scripts/verify_release_metadata.py
 
@@ -76,6 +79,18 @@ jobs:
         run: |
           chmod +x scripts/smoke-launch.sh
           ./scripts/smoke-launch.sh build/DerivedData/Build/Products/Release/SunsetHue.app
+
+      - name: Package unsigned DMG and assert widget stripped
+        run: |
+          chmod +x scripts/package-unsigned.sh
+          ./scripts/package-unsigned.sh
+          MOUNT="$(mktemp -d /tmp/sunsethue-dmg.XXXXXX)"
+          hdiutil attach -nobrowse -readonly -mountpoint "${MOUNT}" dist/SunsetHue-macos-unsigned.dmg
+          test -d "${MOUNT}/SunsetHue.app"
+          test ! -d "${MOUNT}/SunsetHue.app/Contents/PlugIns/SunsetHueWidget.appex"
+          hdiutil detach "${MOUNT}"
+          rmdir "${MOUNT}"
+          echo "Unsigned DMG has no widget appex"
 
       - name: Scan for accidental secrets
         run: |

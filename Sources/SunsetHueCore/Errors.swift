@@ -60,7 +60,7 @@ public enum SunsetHueError: Error, Equatable, Sendable {
         case .keychainUnavailable:
             return "Keychain is unavailable. Unlock your Mac and try again."
         case .keychainEntitlementMisconfigured:
-            return "Secure storage is misconfigured for this build. Reinstall the signed app from Xcode."
+            return "Secure storage could not use the Data Protection Keychain for this build."
         case .invalidLocation(let message):
             return message
         case .duplicateLocation:

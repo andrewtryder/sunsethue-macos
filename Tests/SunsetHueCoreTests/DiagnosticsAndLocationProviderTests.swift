@@ -63,4 +63,24 @@ final class DiagnosticsAndLocationProviderTests: XCTestCase {
         let loaded = try await cache.loadSnapshot(for: location.id)
         XCTAssertEqual(loaded?.status, .authenticationRequired)
     }
+
+    func testMarkAllSnapshotsAuthenticationRequiredPreservesForecasts() async throws {
+        let location = PreviewFixtures.sampleLocation
+        let bundle = PreviewFixtures.sampleBundle()
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [location], selectedLocationID: location.id))
+        let cache = InMemoryForecastCache(snapshots: [
+            location.id: .fromSuccessful(bundle: bundle)
+        ])
+        let coordinator = ForecastRefreshCoordinator(
+            settingsStore: settings,
+            forecastCache: cache,
+            credentialStore: InMemoryCredentialStore(apiKey: "temporary"),
+            forecastService: ForecastService(transport: MockHTTPTransport())
+        )
+        await coordinator.markAllSnapshotsAuthenticationRequired()
+        let loaded = try await cache.loadSnapshot(for: location.id)
+        XCTAssertEqual(loaded?.status, .authenticationRequired)
+        XCTAssertEqual(loaded?.forecasts.count, bundle.forecasts.count)
+        XCTAssertNil(loaded?.nextAttemptAt)
+    }
 }

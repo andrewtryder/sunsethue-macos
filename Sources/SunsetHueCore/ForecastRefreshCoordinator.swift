@@ -23,7 +23,7 @@ public actor ForecastRefreshCoordinator {
     }
 
     public func refreshLocation(id: UUID, force: Bool) async -> CachedLocationSnapshot? {
-        let state = (try? await settingsStore.load()) ?? SharedAppState()
+        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
         guard let location = state.locations.first(where: { $0.id == id }) else { return nil }
         return await refresh(location: location, force: force)
     }
@@ -33,10 +33,10 @@ public actor ForecastRefreshCoordinator {
         isRefreshingAll = true
         defer { isRefreshingAll = false }
 
-        let state = (try? await settingsStore.load()) ?? SharedAppState()
+        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
         for location in state.locations {
             let existing = try? await forecastCache.loadSnapshot(for: location.id)
-            let needsRefresh = forceNeeded(existing: existing, location: location)
+            let needsRefresh = forceNeeded(existing: existing, location: location, force: false)
             if needsRefresh {
                 _ = await refresh(location: location, force: false)
             }
@@ -44,24 +44,56 @@ public actor ForecastRefreshCoordinator {
         await scheduleNextRefresh()
     }
 
+    /// Force-refresh every location currently marked authentication-required (e.g. after saving a new API key).
+    public func refreshAuthenticationRequiredLocations() async {
+        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        for location in state.locations {
+            let existing = try? await forecastCache.loadSnapshot(for: location.id)
+            guard existing?.status == .authenticationRequired else { continue }
+            _ = await refresh(location: location, force: true)
+        }
+        await scheduleNextRefresh()
+    }
+
+    /// Mark every cached location as authentication-required while preserving forecast data.
+    public func markAllSnapshotsAuthenticationRequired() async {
+        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        let attemptedAt = Date()
+        for location in state.locations {
+            let previous = try? await forecastCache.loadSnapshot(for: location.id)
+            let snapshot = CachedLocationSnapshot(
+                locationID: location.id,
+                fetchedAt: previous?.fetchedAt ?? attemptedAt,
+                lastAttemptAt: attemptedAt,
+                forecasts: previous?.forecasts ?? [],
+                status: .authenticationRequired,
+                nextAttemptAt: nil,
+                consecutiveFailureCount: previous?.consecutiveFailureCount ?? 0
+            )
+            try? await forecastCache.saveSnapshot(snapshot)
+        }
+        reloadWidgets()
+    }
+
     public func scheduleNextRefresh() async {
         scheduledTask?.cancel()
-        let state = (try? await settingsStore.load()) ?? SharedAppState()
+        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
         let now = Date()
         var nextDates: [Date] = []
         for location in state.locations {
             let snapshot = try? await forecastCache.loadSnapshot(for: location.id)
-            let hours = location.refreshIntervalHours
-            let anchor = snapshot?.fetchedAt ?? now.addingTimeInterval(-TimeInterval(hours * 3600))
-            let due = anchor.addingTimeInterval(TimeInterval(hours * 3600))
-            if due > now {
-                nextDates.append(due)
-            } else {
+            if let snapshot, let next = snapshot.nextScheduledRefresh(
+                refreshIntervalHours: location.refreshIntervalHours,
+                now: now
+            ), next > now {
+                nextDates.append(next)
+            } else if snapshot == nil {
+                // No cache yet: attempt soon once (not a 60s loop on auth failures).
                 nextDates.append(now.addingTimeInterval(60))
             }
         }
         guard let soonest = nextDates.min() else { return }
-        let delay = max(60, soonest.timeIntervalSince(now))
+        let delay = max(1, soonest.timeIntervalSince(now))
         scheduledTask = Task {
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
@@ -73,24 +105,48 @@ public actor ForecastRefreshCoordinator {
         await refreshAllStaleLocations()
     }
 
-    private func forceNeeded(existing: CachedLocationSnapshot?, location: SavedLocation) -> Bool {
+    private func forceNeeded(existing: CachedLocationSnapshot?, location: SavedLocation, force: Bool) -> Bool {
         guard let existing else { return true }
-        switch existing.status {
-        case .authenticationRequired:
+        let now = Date()
+
+        if force {
+            if case .rateLimited(let retryAfter) = existing.status,
+               let retryAfter, retryAfter > now {
+                return false
+            }
             return true
+        }
+
+        switch existing.status {
+        case .authenticationRequired, .invalidRequest:
+            return false
         case .rateLimited(let retryAfter):
-            if let retryAfter, retryAfter > Date() { return false }
+            if let retryAfter, retryAfter > now { return false }
+            if let next = existing.nextAttemptAt, next > now { return false }
             return true
         case .current:
-            return !existing.isFresh(refreshIntervalHours: location.refreshIntervalHours)
-        case .stale, .temporarilyUnavailable:
+            return !existing.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now)
+        case .stale:
+            if let next = existing.nextAttemptAt, next > now { return false }
+            return true
+        case .temporarilyUnavailable, .invalidResponse:
+            if let next = existing.nextAttemptAt, next > now { return false }
             return true
         }
     }
 
     private func refresh(location: SavedLocation, force: Bool) async -> CachedLocationSnapshot? {
         let previous = try? await forecastCache.loadSnapshot(for: location.id)
-        if !force, let previous, previous.isFresh(refreshIntervalHours: location.refreshIntervalHours) {
+        let now = Date()
+
+        if !force {
+            if let previous, !forceNeeded(existing: previous, location: location, force: false) {
+                return previous
+            }
+        } else if let previous,
+                  case .rateLimited(let retryAfter) = previous.status,
+                  let retryAfter, retryAfter > now {
+            // Manual refresh still respects an active rate-limit deadline.
             return previous
         }
 
@@ -132,13 +188,20 @@ public actor ForecastRefreshCoordinator {
             snapshot = CachedLocationSnapshot.fromSuccessful(bundle: bundle, attemptedAt: attemptedAt)
         } else if let error = outcome.error {
             let status = status(from: error)
+            let rateLimitRetry: Date?
+            if case .rateLimited(let retryAfter) = status {
+                rateLimitRetry = retryAfter
+            } else {
+                rateLimitRetry = nil
+            }
             snapshot = makeFailureSnapshot(
                 locationID: location.id,
                 previous: previous,
                 forecasts: outcome.bundle?.forecasts ?? previous?.forecasts ?? [],
                 fetchedAt: outcome.bundle?.fetchedAt ?? previous?.fetchedAt ?? attemptedAt,
                 attemptedAt: attemptedAt,
-                status: status
+                status: status,
+                rateLimitRetryAfter: rateLimitRetry
             )
         } else if let bundle = outcome.bundle {
             snapshot = CachedLocationSnapshot(
@@ -146,7 +209,9 @@ public actor ForecastRefreshCoordinator {
                 fetchedAt: bundle.fetchedAt,
                 lastAttemptAt: attemptedAt,
                 forecasts: bundle.forecasts,
-                status: .stale
+                status: .stale,
+                nextAttemptAt: attemptedAt.addingTimeInterval(15 * 60),
+                consecutiveFailureCount: (previous?.consecutiveFailureCount ?? 0) + 1
             )
         } else {
             snapshot = makeFailureSnapshot(
@@ -169,6 +234,10 @@ public actor ForecastRefreshCoordinator {
         case .rateLimited(let retryAfter):
             let date = retryAfter.map { Date().addingTimeInterval(TimeInterval($0)) }
             return .rateLimited(retryAfter: date)
+        case .invalidRequest, .invalidCoordinates, .invalidLocation:
+            return .invalidRequest
+        case .invalidJSON, .invalidResponse, .oversizedResponse:
+            return .invalidResponse
         default:
             return .temporarilyUnavailable
         }
@@ -180,14 +249,24 @@ public actor ForecastRefreshCoordinator {
         forecasts: [EventForecast]? = nil,
         fetchedAt: Date? = nil,
         attemptedAt: Date,
-        status: RefreshStatus
+        status: RefreshStatus,
+        rateLimitRetryAfter: Date? = nil
     ) -> CachedLocationSnapshot {
-        CachedLocationSnapshot(
+        let backoff = RefreshBackoff.nextAttempt(
+            status: status,
+            previousFailureCount: previous?.consecutiveFailureCount ?? 0,
+            locationID: locationID,
+            from: attemptedAt,
+            rateLimitRetryAfter: rateLimitRetryAfter
+        )
+        return CachedLocationSnapshot(
             locationID: locationID,
             fetchedAt: fetchedAt ?? previous?.fetchedAt ?? attemptedAt,
             lastAttemptAt: attemptedAt,
             forecasts: forecasts ?? previous?.forecasts ?? [],
-            status: status
+            status: status,
+            nextAttemptAt: backoff.nextAttemptAt,
+            consecutiveFailureCount: backoff.consecutiveFailureCount
         )
     }
 
