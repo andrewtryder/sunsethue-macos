@@ -54,7 +54,7 @@ public struct ForecastDateCalculator: Sendable {
         return max(earliest, floor)
     }
 
-    /// Visual-change dates from cached forecasts (sunrise/sunset/golden-hour) plus local midnight.
+    /// Visual-change dates from cached forecasts (sunrise/sunset/golden/blue hour) plus local midnight.
     public func timelineDisplayDates(
         bundle: LocationForecastBundle?,
         timeZone: TimeZone,
@@ -74,6 +74,12 @@ public struct ForecastDateCalculator: Sendable {
                     dates.append(start)
                 }
                 if let end = forecast.goldenHour?.end, end > now, end <= reloadDate {
+                    dates.append(end)
+                }
+                if let start = forecast.blueHour?.start, start > now, start <= reloadDate {
+                    dates.append(start)
+                }
+                if let end = forecast.blueHour?.end, end > now, end <= reloadDate {
                     dates.append(end)
                 }
             }

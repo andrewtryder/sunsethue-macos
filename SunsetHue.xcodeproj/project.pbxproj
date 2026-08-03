@@ -11,10 +11,13 @@
 		064B2DCAE6E6F4B75547B4C1 /* WidgetContentResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF21FADF4DCF6AB50896A591 /* WidgetContentResolver.swift */; };
 		0A1CB0233EC3BBF92A487889 /* SunsetHueApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC72BF1D99B03BFCD34DADF4 /* SunsetHueApp.swift */; };
 		1B4D2F25D5C3E6A91C7ADE38 /* LocationEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */; };
+		247BCFAF14F0E4BEDA632426 /* TimeZonePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D08068459C128ADC9F6ADBD /* TimeZonePickerView.swift */; };
 		2480618CA768F49DF5E41F24 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D2F534FE4110E00ACE57A2 /* UpdateChecker.swift */; };
 		296DAD914126AD9AFE392A32 /* WidgetPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D22300345B1F259F9C11B6 /* WidgetPreviews.swift */; };
 		2B2BF8EA9D070C60DC34EB82 /* LargeWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6700903F2CB621C40E4D34E /* LargeWidgetView.swift */; };
 		3067046961D2568378EDD472 /* SunsetHueWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4CE1D8B70204B8780F49EC2E /* SunsetHueWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		395D836C9DC4D07BEC2F8DB1 /* SunsetHueChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E023A65702AE0C61B58802 /* SunsetHueChrome.swift */; };
+		5336986B8A89F01FB8BDB688 /* SunsetHueChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E023A65702AE0C61B58802 /* SunsetHueChrome.swift */; };
 		5C2CC0A0396760B042C255F2 /* LocationSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D56605CC77B37096F15E578 /* LocationSidebar.swift */; };
 		64326D0EF99DD0063740FDD0 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0E47FB8CA49606C63177352 /* AppModel.swift */; };
 		65A18F0491BE4BC367937ED4 /* SunsetHueCore in Frameworks */ = {isa = PBXBuildFile; productRef = C6D5D9CD20835ED55C167C4F /* SunsetHueCore */; };
@@ -22,19 +25,28 @@
 		79B4E0A2E8A26D6639D01E86 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6B332A47F6075706699D2319 /* Assets.xcassets */; };
 		7E5339840B8701A5F1D27A38 /* MediumWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F63CEC95B181053114E74BDD /* MediumWidgetView.swift */; };
 		89F0FC6B0B8305C219276E85 /* MagicHourView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E6CF1FEBAABC1AE779F4FB /* MagicHourView.swift */; };
+		98048E701C6D8E9ECDD633C0 /* WidgetReload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5207436A66ED58E20A6D1608 /* WidgetReload.swift */; };
+		99848B731CAC49280442E749 /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E6C46F45264B94A96CD9CF /* StatusBadge.swift */; };
 		9C41AE0555910B68D92D167B /* WidgetQualityStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38442C912123A2335362D2E0 /* WidgetQualityStyle.swift */; };
 		A8A740A25CBC3F652B82E3FE /* SunsetHueCore in Frameworks */ = {isa = PBXBuildFile; productRef = 10C60963C95E03499F710C0F /* SunsetHueCore */; };
 		AC2F64697B2B89BD9EEB8DFD /* SmallWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E629B2E09646540AE921E9F /* SmallWidgetView.swift */; };
+		B39AB9D3877008E471EBAF00 /* GeographicTimeZoneResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA4175495A9FB2BBDDDEF772 /* GeographicTimeZoneResolver.swift */; };
 		B7751AC7E652D45864EAB4F6 /* SunsetHueMenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17270D7994572484406BA607 /* SunsetHueMenuBarView.swift */; };
-		BA1BA406B69090BDA6DC8316 /* QualityBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C14BE905BCCDF5083DD7E3 /* QualityBadge.swift */; };
 		BC6170B3F5AD86C10BCEF375 /* WidgetHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 931F3AFDF3EA3535748ACE14 /* WidgetHeader.swift */; };
+		BCD565C52FFC5DAF4E8CB638 /* ForecastNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04980EAB32355FA4CF4A11E2 /* ForecastNotificationCoordinator.swift */; };
 		C28174242C887CCC6E91214E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */; };
+		CD64BEC7AE1C416216553FBB /* QualityStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55E7E5BEEB77FA7FFBC113 /* QualityStyle.swift */; };
+		D071D4A50B1BFFD41207B9FF /* NotificationPreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97BAB534D9CBD19D9013F3A /* NotificationPreferencesStore.swift */; };
+		D8422B6632667B54B255A489 /* QualityStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55E7E5BEEB77FA7FFBC113 /* QualityStyle.swift */; };
 		DA11E511FE5B36B9394DA5D8 /* ForecastDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */; };
 		DECC18151C1D68C211B4D00D /* LaunchAtLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9B0AB6AEFEF21973164E8C /* LaunchAtLoginController.swift */; };
 		E1417E3A82ABEFD585F96984 /* SunsetHueWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586CC032CBDAC8BEC8055BC1 /* SunsetHueWidget.swift */; };
 		E1A6AC8A35552FAFBB000CA0 /* SunsetHueWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F15A0B4177B5E2ACBA8F2A6 /* SunsetHueWidgetBundle.swift */; };
+		E1C33DE842D4C25E8EBBFF9F /* AppForecastRefreshSideEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8051B4B0E6F7A18923DE1352 /* AppForecastRefreshSideEffects.swift */; };
+		EF55606A01BF78E097F6FA34 /* PlaceSearchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C5FB10603207A48BC07A33 /* PlaceSearchController.swift */; };
 		EFA457B127CCCC8D5732CC41 /* SunsetHueSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7FBF934904433F9CC294FE7 /* SunsetHueSettingsView.swift */; };
 		F1B0A865C7F393A4E0D9B4A7 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65E370BFF1D15AFFF837FAF8 /* AppDelegate.swift */; };
+		F82D9B868CF62CFE97E46A2C /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E6C46F45264B94A96CD9CF /* StatusBadge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,12 +74,16 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		04980EAB32355FA4CF4A11E2 /* ForecastNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastNotificationCoordinator.swift; sourceTree = "<group>"; };
 		17270D7994572484406BA607 /* SunsetHueMenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueMenuBarView.swift; sourceTree = "<group>"; };
 		1F15A0B4177B5E2ACBA8F2A6 /* SunsetHueWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueWidgetBundle.swift; sourceTree = "<group>"; };
 		38442C912123A2335362D2E0 /* WidgetQualityStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetQualityStyle.swift; sourceTree = "<group>"; };
 		3BBF4EDCF2CD3B7B764727DB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		3D08068459C128ADC9F6ADBD /* TimeZonePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeZonePickerView.swift; sourceTree = "<group>"; };
 		4815E36D2032FEDBEE28245D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4CE1D8B70204B8780F49EC2E /* SunsetHueWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SunsetHueWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		5207436A66ED58E20A6D1608 /* WidgetReload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetReload.swift; sourceTree = "<group>"; };
+		53E6C46F45264B94A96CD9CF /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
 		57E6CF1FEBAABC1AE779F4FB /* MagicHourView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagicHourView.swift; sourceTree = "<group>"; };
 		586CC032CBDAC8BEC8055BC1 /* SunsetHueWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueWidget.swift; sourceTree = "<group>"; };
 		5D56605CC77B37096F15E578 /* LocationSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSidebar.swift; sourceTree = "<group>"; };
@@ -80,7 +96,9 @@
 		6E629B2E09646540AE921E9F /* SmallWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmallWidgetView.swift; sourceTree = "<group>"; };
 		791123633E8EB0E3998A29AD /* sunsethue-macos */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "sunsethue-macos"; path = .; sourceTree = SOURCE_ROOT; };
 		7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationEditorView.swift; sourceTree = "<group>"; };
+		8051B4B0E6F7A18923DE1352 /* AppForecastRefreshSideEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppForecastRefreshSideEffects.swift; sourceTree = "<group>"; };
 		931F3AFDF3EA3535748ACE14 /* WidgetHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetHeader.swift; sourceTree = "<group>"; };
+		97E023A65702AE0C61B58802 /* SunsetHueChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueChrome.swift; sourceTree = "<group>"; };
 		9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastDetailView.swift; sourceTree = "<group>"; };
 		AF21FADF4DCF6AB50896A591 /* WidgetContentResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetContentResolver.swift; sourceTree = "<group>"; };
 		B8D2F534FE4110E00ACE57A2 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
@@ -88,11 +106,14 @@
 		BC72BF1D99B03BFCD34DADF4 /* SunsetHueApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueApp.swift; sourceTree = "<group>"; };
 		CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D0E47FB8CA49606C63177352 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		D5C5FB10603207A48BC07A33 /* PlaceSearchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceSearchController.swift; sourceTree = "<group>"; };
 		D7FBF934904433F9CC294FE7 /* SunsetHueSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsetHueSettingsView.swift; sourceTree = "<group>"; };
 		DA9B0AB6AEFEF21973164E8C /* LaunchAtLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginController.swift; sourceTree = "<group>"; };
 		E6700903F2CB621C40E4D34E /* LargeWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LargeWidgetView.swift; sourceTree = "<group>"; };
-		E8C14BE905BCCDF5083DD7E3 /* QualityBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QualityBadge.swift; sourceTree = "<group>"; };
+		E97BAB534D9CBD19D9013F3A /* NotificationPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreferencesStore.swift; sourceTree = "<group>"; };
+		EE55E7E5BEEB77FA7FFBC113 /* QualityStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QualityStyle.swift; sourceTree = "<group>"; };
 		F63CEC95B181053114E74BDD /* MediumWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediumWidgetView.swift; sourceTree = "<group>"; };
+		FA4175495A9FB2BBDDDEF772 /* GeographicTimeZoneResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeographicTimeZoneResolver.swift; sourceTree = "<group>"; };
 		FD82936D5A90D80B5FE26803 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -132,7 +153,6 @@
 				E6700903F2CB621C40E4D34E /* LargeWidgetView.swift */,
 				57E6CF1FEBAABC1AE779F4FB /* MagicHourView.swift */,
 				F63CEC95B181053114E74BDD /* MediumWidgetView.swift */,
-				E8C14BE905BCCDF5083DD7E3 /* QualityBadge.swift */,
 				6E629B2E09646540AE921E9F /* SmallWidgetView.swift */,
 				67C12B301705DF5F9C2FF464 /* SunsetHueTimelineProvider.swift */,
 				586CC032CBDAC8BEC8055BC1 /* SunsetHueWidget.swift */,
@@ -163,33 +183,59 @@
 			path = Settings;
 			sourceTree = "<group>";
 		};
+		8106FC7B764E7D300ADD86A7 /* SharedUI */ = {
+			isa = PBXGroup;
+			children = (
+				EE55E7E5BEEB77FA7FFBC113 /* QualityStyle.swift */,
+				53E6C46F45264B94A96CD9CF /* StatusBadge.swift */,
+				97E023A65702AE0C61B58802 /* SunsetHueChrome.swift */,
+			);
+			path = SharedUI;
+			sourceTree = "<group>";
+		};
 		B1C67AA26FCE2E69A0A65D0C = {
 			isa = PBXGroup;
 			children = (
 				56011362336AC6C37C0043D2 /* Config */,
 				DE21F0EF1345CB2385EF6BAE /* Packages */,
+				8106FC7B764E7D300ADD86A7 /* SharedUI */,
 				CAD021CDFBD51FC2BF073641 /* SunsetHue */,
 				4B2F3D72A3CC6A6B17783B27 /* SunsetHueWidget */,
 				020006DBEE54E0A8D988FC06 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
+		C2FF86839DC7619CADB6E237 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				8051B4B0E6F7A18923DE1352 /* AppForecastRefreshSideEffects.swift */,
+				04980EAB32355FA4CF4A11E2 /* ForecastNotificationCoordinator.swift */,
+				E97BAB534D9CBD19D9013F3A /* NotificationPreferencesStore.swift */,
+			);
+			path = Notifications;
+			sourceTree = "<group>";
+		};
 		CAD021CDFBD51FC2BF073641 /* SunsetHue */ = {
 			isa = PBXGroup;
 			children = (
+				C2FF86839DC7619CADB6E237 /* Notifications */,
 				591CF2992BCFE045AA06FB2A /* Settings */,
 				65E370BFF1D15AFFF837FAF8 /* AppDelegate.swift */,
 				D0E47FB8CA49606C63177352 /* AppModel.swift */,
 				6B332A47F6075706699D2319 /* Assets.xcassets */,
 				CF606C82CB6B4B3EAACE9A10 /* ContentView.swift */,
 				9B24AF6C4ABEA1F1CCF7288D /* ForecastDetailView.swift */,
+				FA4175495A9FB2BBDDDEF772 /* GeographicTimeZoneResolver.swift */,
 				4815E36D2032FEDBEE28245D /* Info.plist */,
 				DA9B0AB6AEFEF21973164E8C /* LaunchAtLoginController.swift */,
 				7E2F70E352C3327A75F1E97A /* LocationEditorView.swift */,
 				5D56605CC77B37096F15E578 /* LocationSidebar.swift */,
+				D5C5FB10603207A48BC07A33 /* PlaceSearchController.swift */,
 				BC72BF1D99B03BFCD34DADF4 /* SunsetHueApp.swift */,
 				17270D7994572484406BA607 /* SunsetHueMenuBarView.swift */,
+				3D08068459C128ADC9F6ADBD /* TimeZonePickerView.swift */,
 				B8D2F534FE4110E00ACE57A2 /* UpdateChecker.swift */,
+				5207436A66ED58E20A6D1608 /* WidgetReload.swift */,
 			);
 			path = SunsetHue;
 			sourceTree = "<group>";
@@ -307,8 +353,10 @@
 				2B2BF8EA9D070C60DC34EB82 /* LargeWidgetView.swift in Sources */,
 				89F0FC6B0B8305C219276E85 /* MagicHourView.swift in Sources */,
 				7E5339840B8701A5F1D27A38 /* MediumWidgetView.swift in Sources */,
-				BA1BA406B69090BDA6DC8316 /* QualityBadge.swift in Sources */,
+				D8422B6632667B54B255A489 /* QualityStyle.swift in Sources */,
 				AC2F64697B2B89BD9EEB8DFD /* SmallWidgetView.swift in Sources */,
+				99848B731CAC49280442E749 /* StatusBadge.swift in Sources */,
+				395D836C9DC4D07BEC2F8DB1 /* SunsetHueChrome.swift in Sources */,
 				02F9100AF71ADE3CD876B456 /* SunsetHueTimelineProvider.swift in Sources */,
 				E1417E3A82ABEFD585F96984 /* SunsetHueWidget.swift in Sources */,
 				E1A6AC8A35552FAFBB000CA0 /* SunsetHueWidgetBundle.swift in Sources */,
@@ -325,16 +373,26 @@
 			buildActionMask = 2147483647;
 			files = (
 				F1B0A865C7F393A4E0D9B4A7 /* AppDelegate.swift in Sources */,
+				E1C33DE842D4C25E8EBBFF9F /* AppForecastRefreshSideEffects.swift in Sources */,
 				64326D0EF99DD0063740FDD0 /* AppModel.swift in Sources */,
 				C28174242C887CCC6E91214E /* ContentView.swift in Sources */,
 				DA11E511FE5B36B9394DA5D8 /* ForecastDetailView.swift in Sources */,
+				BCD565C52FFC5DAF4E8CB638 /* ForecastNotificationCoordinator.swift in Sources */,
+				B39AB9D3877008E471EBAF00 /* GeographicTimeZoneResolver.swift in Sources */,
 				DECC18151C1D68C211B4D00D /* LaunchAtLoginController.swift in Sources */,
 				1B4D2F25D5C3E6A91C7ADE38 /* LocationEditorView.swift in Sources */,
 				5C2CC0A0396760B042C255F2 /* LocationSidebar.swift in Sources */,
+				D071D4A50B1BFFD41207B9FF /* NotificationPreferencesStore.swift in Sources */,
+				EF55606A01BF78E097F6FA34 /* PlaceSearchController.swift in Sources */,
+				CD64BEC7AE1C416216553FBB /* QualityStyle.swift in Sources */,
+				F82D9B868CF62CFE97E46A2C /* StatusBadge.swift in Sources */,
 				0A1CB0233EC3BBF92A487889 /* SunsetHueApp.swift in Sources */,
+				5336986B8A89F01FB8BDB688 /* SunsetHueChrome.swift in Sources */,
 				B7751AC7E652D45864EAB4F6 /* SunsetHueMenuBarView.swift in Sources */,
 				EFA457B127CCCC8D5732CC41 /* SunsetHueSettingsView.swift in Sources */,
+				247BCFAF14F0E4BEDA632426 /* TimeZonePickerView.swift in Sources */,
 				2480618CA768F49DF5E41F24 /* UpdateChecker.swift in Sources */,
+				98048E701C6D8E9ECDD633C0 /* WidgetReload.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -382,8 +440,8 @@
 				INFOPLIST_FILE = SunsetHue/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SunsetHue;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Andrew Tryder. All rights reserved.";
-				INFOPLIST_KEY_NSLocationUsageDescription = "SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "SunsetHue can use your current location to fill latitude, longitude, and time zone. Manual entry always remains available.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SunsetHue can use your current location to fill latitude, longitude, and time zone. Manual entry always remains available.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -406,8 +464,8 @@
 				INFOPLIST_FILE = SunsetHue/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SunsetHue;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Andrew Tryder. All rights reserved.";
-				INFOPLIST_KEY_NSLocationUsageDescription = "SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "SunsetHue can use your current location to fill latitude, longitude, and time zone. Manual entry always remains available.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SunsetHue can use your current location to fill latitude, longitude, and time zone. Manual entry always remains available.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

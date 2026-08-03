@@ -123,4 +123,28 @@ final class LocationAndDateTests: XCTestCase {
         XCTAssertEqual(DeepLink.parse(url), .location(id))
         XCTAssertEqual(DeepLink.parse(URL(string: "sunsethue://")!), .openApp)
     }
+
+    func testTimelineDisplayDatesIncludeBlueHourBounds() {
+        let calculator = ForecastDateCalculator()
+        let tz = PreviewFixtures.sampleTimeZone
+        let sunrise = PreviewFixtures.averageSunrise()
+        guard let blueStart = sunrise.blueHour?.start,
+              let blueEnd = sunrise.blueHour?.end else {
+            return XCTFail("Fixture missing blue hour")
+        }
+        let now = blueStart.addingTimeInterval(-60)
+        let until = blueEnd.addingTimeInterval(3600)
+        let dates = calculator.timelineDisplayDates(
+            bundle: LocationForecastBundle(
+                locationID: PreviewFixtures.sampleLocationID,
+                fetchedAt: Date(),
+                forecasts: [sunrise]
+            ),
+            timeZone: tz,
+            now: now,
+            until: until
+        )
+        XCTAssertTrue(dates.contains(blueStart))
+        XCTAssertTrue(dates.contains(blueEnd))
+    }
 }

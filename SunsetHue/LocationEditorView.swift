@@ -1,58 +1,127 @@
 import SwiftUI
 import CoreLocation
+import MapKit
 import SunsetHueCore
 
 struct LocationEditorView: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.dismiss) private var dismiss
     var locationProvider: any CurrentLocationProviding = CoreCurrentLocationProvider()
+    @StateObject private var placeSearch = PlaceSearchController()
     @State private var statusMessage: String?
     @State private var isLocating = false
+    @State private var showTimeZonePicker = false
+    @State private var showAdvanced = false
 
     private var draft: Binding<LocationEditorDraft> {
         $appModel.editorDraft
+    }
+
+    private var hasSelectedCoordinates: Bool {
+        Double(appModel.editorDraft.latitude.trimmingCharacters(in: .whitespacesAndNewlines)) != nil
+            && Double(appModel.editorDraft.longitude.trimmingCharacters(in: .whitespacesAndNewlines)) != nil
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Location") {
-                    TextField("Display Name", text: draft.name)
-                    TextField("Latitude", text: draft.latitude)
-                    TextField("Longitude", text: draft.longitude)
-                    TextField("System time zone (IANA)", text: draft.timeZoneIdentifier)
-                        .help("Uses this Mac’s current time zone when filled from Current Location — not inferred from coordinates. Example: America/New_York")
-                    Button("Use Current Location") {
-                        Task {
-                            isLocating = true
-                            defer { isLocating = false }
-                            do {
-                                let result = try await locationProvider.requestLocation()
-                                appModel.editorDraft.latitude = String(format: "%.5f", result.latitude)
-                                appModel.editorDraft.longitude = String(format: "%.5f", result.longitude)
-                                appModel.editorDraft.timeZoneIdentifier = result.timeZoneIdentifier
-                                statusMessage = nil
-                            } catch {
-                                statusMessage = error.localizedDescription
+                    TextField(
+                        "Search places",
+                        text: Binding(
+                            get: { placeSearch.query },
+                            set: { placeSearch.updateQuery($0) }
+                        )
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .help("Search for a city or place. Selecting a result fills name, coordinates, and time zone when available.")
+
+                    if !placeSearch.results.isEmpty {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(placeSearch.results.enumerated()), id: \.offset) { _, completion in
+                                    Button {
+                                        Task { await selectPlace(completion) }
+                                    } label: {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(completion.title)
+                                                .foregroundStyle(.primary)
+                                            if !completion.subtitle.isEmpty {
+                                                Text(completion.subtitle)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                        .padding(.vertical, 4)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(placeSearch.isResolving || isLocating)
+                                }
                             }
                         }
+                        .frame(maxHeight: 160)
                     }
-                    .disabled(isLocating)
-                    if isLocating {
+
+                    if hasSelectedCoordinates {
+                        selectedPlaceSummary
+                    }
+
+                    Button {
+                        Task { await useCurrentLocation() }
+                    } label: {
+                        Label("Use Current Location", systemImage: "location.fill")
+                    }
+                    .disabled(isLocating || placeSearch.isResolving)
+
+                    if isLocating || placeSearch.isResolving {
                         ProgressView()
                             .controlSize(.small)
                     }
-                    if let statusMessage {
-                        Text(statusMessage)
+
+                    if let message = statusMessage ?? placeSearch.errorMessage {
+                        Text(message)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .accessibilityLabel(statusMessage)
+                            .accessibilityLabel(message)
                     }
                 }
 
+                DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
+                    TextField("Display Name", text: draft.name)
+                    TextField("Latitude", text: draft.latitude)
+                    TextField("Longitude", text: draft.longitude)
+
+                    Button {
+                        showTimeZonePicker = true
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Time Zone")
+                                    .foregroundStyle(.primary)
+                                Text(TimeZoneCatalog.friendlyCity(for: appModel.editorDraft.timeZoneIdentifier))
+                                    .font(.body.weight(.medium))
+                                Text(appModel.editorDraft.timeZoneIdentifier)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Choose an IANA time zone for this location.")
+                }
+
                 Section("Forecast Options") {
-                    Stepper(value: draft.forecastDays, in: 1...3) {
-                        Text("Forecast Days: \(appModel.editorDraft.forecastDays)")
+                    Picker("Forecast Days", selection: draft.forecastDays) {
+                        Text("1").tag(1)
+                        Text("2").tag(2)
+                        Text("3").tag(3)
                     }
                     Toggle("Include Sunrise", isOn: draft.includeSunrise)
                     Toggle("Include Sunset", isOn: draft.includeSunset)
@@ -76,9 +145,87 @@ struct LocationEditorView: View {
                     .keyboardShortcut(.defaultAction)
                 }
             }
+            .sheet(isPresented: $showTimeZonePicker) {
+                TimeZonePickerView(selection: draft.timeZoneIdentifier)
+            }
+            .onAppear {
+                showAdvanced = appModel.isEditingExisting
+                if !appModel.editorDraft.name.isEmpty {
+                    placeSearch.syncToSelectedName(appModel.editorDraft.name)
+                }
+            }
         }
         .padding()
         .accessibilityLabel(appModel.isEditingExisting ? "Edit location" : "Add location")
+    }
+
+    private var selectedPlaceSummary: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(appModel.editorDraft.name.isEmpty ? "Selected Place" : appModel.editorDraft.name)
+                .font(.body.weight(.semibold))
+            Text(coordinateSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(timeZoneSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var coordinateSummary: String {
+        let lat = appModel.editorDraft.latitude
+        let lon = appModel.editorDraft.longitude
+        return "\(lat), \(lon)"
+    }
+
+    private var timeZoneSummary: String {
+        let identifier = appModel.editorDraft.timeZoneIdentifier
+        return "\(TimeZoneCatalog.friendlyCity(for: identifier)) · \(identifier)"
+    }
+
+    private func selectPlace(_ completion: MKLocalSearchCompletion) async {
+        statusMessage = nil
+        do {
+            let place = try await placeSearch.resolve(completion)
+            var fields = LocationDraftPlaceFields(
+                name: appModel.editorDraft.name,
+                latitude: appModel.editorDraft.latitude,
+                longitude: appModel.editorDraft.longitude,
+                timeZoneIdentifier: appModel.editorDraft.timeZoneIdentifier
+            )
+            fields.apply(place)
+            appModel.editorDraft.name = fields.name
+            appModel.editorDraft.latitude = fields.latitude
+            appModel.editorDraft.longitude = fields.longitude
+            appModel.editorDraft.timeZoneIdentifier = fields.timeZoneIdentifier
+            placeSearch.syncToSelectedName(fields.name)
+            statusMessage = nil
+        } catch {
+            // All-or-nothing: draft fields are only mutated after successful resolve.
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    private func useCurrentLocation() async {
+        isLocating = true
+        defer { isLocating = false }
+        do {
+            let result = try await locationProvider.requestLocation()
+            appModel.editorDraft.latitude = String(format: "%.5f", result.latitude)
+            appModel.editorDraft.longitude = String(format: "%.5f", result.longitude)
+            if let timeZoneIdentifier = result.timeZoneIdentifier {
+                appModel.editorDraft.timeZoneIdentifier = timeZoneIdentifier
+            }
+            if appModel.editorDraft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                appModel.editorDraft.name = "Current Location"
+            }
+            statusMessage = nil
+        } catch {
+            statusMessage = error.localizedDescription
+        }
     }
 }
 
@@ -180,12 +327,12 @@ final class CoreCurrentLocationProvider: NSObject, ObservableObject, CurrentLoca
                 resumeOnce(throwing: LocationProviderError.unavailable)
                 return
             }
-            // System time zone of this Mac — not geographically inferred from coordinates.
+            let timeZoneIdentifier = await GeographicTimeZoneResolver.timeZoneIdentifier(for: location)
             resumeOnce(
                 returning: CurrentLocationResult(
                     latitude: location.coordinate.latitude,
                     longitude: location.coordinate.longitude,
-                    timeZoneIdentifier: TimeZone.current.identifier
+                    timeZoneIdentifier: timeZoneIdentifier
                 )
             )
         }

@@ -373,11 +373,12 @@ enum WidgetContentResolver {
         upcoming: [EventForecast],
         eventMode: WidgetEventMode
     ) -> String? {
-        let hasTomorrow = allowedTypes.contains { type in
-            bundle.forecast(dayOffset: 1, eventType: type, timeZone: timeZone, now: now) != nil
+        let missingTomorrowTypes = allowedTypes.filter { type in
+            bundle.forecast(dayOffset: 1, eventType: type, timeZone: timeZone, now: now) == nil
         }
-        guard !hasTomorrow else { return nil }
+        guard let missing = missingTomorrowTypes.first else { return nil }
 
+        // Prefer sunrise then sunset when naming the missing type in Both mode.
         let typeName: String
         switch eventMode {
         case .sunrise:
@@ -385,10 +386,14 @@ enum WidgetContentResolver {
         case .sunset:
             typeName = "sunset"
         case .both:
-            if let last = upcoming.last {
+            if missingTomorrowTypes.contains(.sunrise) {
+                typeName = "sunrise"
+            } else if missingTomorrowTypes.contains(.sunset) {
+                typeName = "sunset"
+            } else if let last = upcoming.last {
                 typeName = last.eventType == .sunrise ? "sunset" : "sunrise"
             } else {
-                typeName = "sunrise"
+                typeName = missing.displayName.lowercased()
             }
         }
         return "Set Forecast Days to 2 for tomorrow's \(typeName)"

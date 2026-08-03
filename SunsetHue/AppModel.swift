@@ -1,6 +1,6 @@
+import AppKit
 import Foundation
 import SwiftUI
-import WidgetKit
 import SunsetHueCore
 import os
 
@@ -22,11 +22,16 @@ final class AppModel: ObservableObject {
     @Published var accountStatusMessage: String?
     @Published var credentialState: CredentialState = .unknown
     @Published var diagnosticsExportMessage: String?
+    @Published var notificationPreferences = NotificationPreferences()
+    @Published var notificationAuthorization: ForecastNotificationCoordinator.AuthorizationState = .notDetermined
+    @Published var notificationStatusMessage: String?
 
     let settingsStore: any SharedSettingsStore
     let forecastCache: any ForecastCache
     let credentialStore: CredentialStore
     let refreshCoordinator: ForecastRefreshCoordinator
+    let notificationCoordinator: ForecastNotificationCoordinator
+    private let sideEffectBox = ForecastRefreshSideEffectBox()
     private let logger = Logger(subsystem: "com.andrewtryder.SunsetHue", category: "App")
     private var wakeObserver: NSObjectProtocol?
     private var unlockObserver: NSObjectProtocol?
@@ -40,13 +45,22 @@ final class AppModel: ObservableObject {
         self.settingsStore = settingsStore
         self.forecastCache = forecastCache
         self.credentialStore = credentialStore
+        self.notificationCoordinator = ForecastNotificationCoordinator()
         self.refreshCoordinator = ForecastRefreshCoordinator(
             settingsStore: settingsStore,
             forecastCache: forecastCache,
             credentialStore: credentialStore,
-            forecastService: forecastService
+            forecastService: forecastService,
+            sideEffectSink: sideEffectBox
         )
         self.state = SharedAppState()
+        sideEffectBox.impl = AppForecastRefreshSideEffects(
+            notificationCoordinator: notificationCoordinator,
+            settingsStore: settingsStore,
+            forecastCache: forecastCache
+        ) { [weak self] in
+            await self?.reloadSelectedSnapshot()
+        }
         Task { await bootstrap() }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
@@ -87,11 +101,13 @@ final class AppModel: ObservableObject {
             }
             selectedLocationID = loaded.value.selectedLocationID ?? loaded.value.locations.first?.id
             refreshCredentialState()
+            await reloadNotificationState()
             await reloadSelectedSnapshot()
             await persistState()
             await refreshCoordinator.refreshAllStaleLocations()
             await reloadSelectedSnapshot()
             await refreshCoordinator.scheduleNextRefresh()
+            await rescheduleNotifications()
         } catch {
             logger.error("Failed to bootstrap shared storage")
             bannerMessage = SunsetHueError.storageCorrupt.userMessage
@@ -190,21 +206,13 @@ final class AppModel: ObservableObject {
         for location: SavedLocation,
         bundle: LocationForecastBundle?
     ) -> EventForecast? {
-        guard let timeZone = location.timeZone,
-              let bundle else { return nil }
-        let types: [EventType] = [
-            location.includeSunrise ? .sunrise : nil,
-            location.includeSunset ? .sunset : nil
-        ].compactMap { $0 }
-        let events: [EventForecast] = types.compactMap { type in
-            bundle.forecast(dayOffset: 0, eventType: type, timeZone: timeZone)
-        }
-        guard !events.isEmpty else { return nil }
-        let now = Date()
-        let upcoming = events
-            .filter { ($0.eventTime ?? .distantPast) >= now }
-            .sorted { ($0.eventTime ?? .distantFuture) < ($1.eventTime ?? .distantFuture) }
-        return upcoming.first ?? events.last
+        guard let bundle else { return nil }
+        return UpcomingForecastSelector.forecasts(
+            from: bundle,
+            allowedTypes: Set(location.enabledEvents),
+            now: Date(),
+            limit: 1
+        ).first
     }
 
     var hasAPIKey: Bool {
@@ -309,10 +317,12 @@ final class AppModel: ObservableObject {
         }
         Task {
             try? await forecastCache.deleteLocation(location.id)
+            await notificationCoordinator.removeNotifications(for: location.id)
             await reloadSelectedSnapshot()
             await persistState()
-            WidgetCenter.shared.reloadTimelines(ofKind: SunsetHueConstants.widgetKind)
+            WidgetReload.timelines()
             await refreshCoordinator.scheduleNextRefresh()
+            await rescheduleNotifications()
         }
     }
 
@@ -347,7 +357,8 @@ final class AppModel: ObservableObject {
             await refreshCoordinator.refreshAuthenticationRequiredLocations()
             await refreshCoordinator.refreshAllStaleLocations()
             await reloadSelectedSnapshot()
-            WidgetCenter.shared.reloadTimelines(ofKind: SunsetHueConstants.widgetKind)
+            WidgetReload.timelines()
+            await rescheduleNotifications()
         } catch let error as SunsetHueError {
             refreshCredentialState()
             accountStatusMessage = error.userMessage
@@ -366,11 +377,112 @@ final class AppModel: ObservableObject {
             lastErrorMessage = SunsetHueError.missingCredentials.userMessage
             await refreshCoordinator.markAllSnapshotsAuthenticationRequired()
             await reloadSelectedSnapshot()
-            WidgetCenter.shared.reloadTimelines(ofKind: SunsetHueConstants.widgetKind)
+            WidgetReload.timelines()
         } catch {
             refreshCredentialState()
             accountStatusMessage = "Unable to remove API key."
         }
+    }
+
+    func reloadNotificationState() async {
+        notificationPreferences = await notificationCoordinator.loadPreferences()
+        await notificationCoordinator.refreshAuthorizationStatus()
+        notificationAuthorization = await notificationCoordinator.authorizationState
+    }
+
+    func updateNotificationPreferences(_ preferences: NotificationPreferences) async {
+        var next = preferences
+        let previous = notificationPreferences
+        let enablingNotifications =
+            (next.notificationsEnabled && !previous.notificationsEnabled)
+            || (next.dailySummary.enabled && !previous.dailySummary.enabled)
+            || (next.dailySummary.secondTimeEnabled && !previous.dailySummary.secondTimeEnabled)
+            || (next.qualityAlert.enabled && !previous.qualityAlert.enabled)
+
+        let wantsNotifications =
+            next.notificationsEnabled
+            || next.dailySummary.enabled
+            || next.qualityAlert.enabled
+            || next.dailySummary.secondTimeEnabled
+
+        if wantsNotifications {
+            let result = (try? await notificationCoordinator.ensureAuthorization()) ?? .unavailable
+            await notificationCoordinator.refreshAuthorizationStatus()
+            notificationAuthorization = await notificationCoordinator.authorizationState
+            if enablingNotifications, result == .denied {
+                openSystemNotificationSettings()
+                notificationStatusMessage =
+                    "Notifications are disabled in System Settings. Turn them on for SunsetHue to deliver alerts."
+            }
+        }
+
+        // Bump quality revision when threshold or event mode changes.
+        if next.qualityAlert.threshold != previous.qualityAlert.threshold
+            || next.qualityAlert.eventMode != previous.qualityAlert.eventMode {
+            next.qualityAlert.revision += 1
+        }
+
+        if next.locationID == nil {
+            next.locationID = selectedLocationID ?? state.locations.first?.id
+        }
+
+        await notificationCoordinator.savePreferences(next)
+        notificationPreferences = next
+        await notificationCoordinator.refreshAuthorizationStatus()
+        notificationAuthorization = await notificationCoordinator.authorizationState
+        await rescheduleNotifications()
+    }
+
+    func sendTestNotification() async {
+        notificationStatusMessage = nil
+        let locationName = notificationLocation?.name ?? "SunsetHue"
+        do {
+            try await notificationCoordinator.sendTestNotification(
+                locationName: locationName,
+                playSound: notificationPreferences.playSound
+            )
+            notificationStatusMessage = "Test notification scheduled — it should appear in about a second."
+        } catch ForecastNotificationCoordinator.TestNotificationError.notAuthorized {
+            openSystemNotificationSettings()
+            notificationStatusMessage =
+                "Notifications are not allowed. Enable SunsetHue in System Settings, then try again."
+        } catch ForecastNotificationCoordinator.TestNotificationError.alertsDisabled {
+            openSystemNotificationSettings()
+            notificationStatusMessage =
+                "Alerts are turned off for SunsetHue in System Settings. Enable banners or alerts, then try again."
+        } catch {
+            notificationStatusMessage = error.localizedDescription
+        }
+        await reloadNotificationState()
+    }
+
+    func openSystemNotificationSettings() {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.andrewtryder.SunsetHue"
+        let candidates = [
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(bundleID)",
+            "x-apple.systempreferences:com.apple.Notifications-Settings?id=\(bundleID)",
+            "x-apple.systempreferences:com.apple.preference.notifications?id=\(bundleID)",
+            "x-apple.systempreferences:com.apple.Notifications-Settings",
+        ]
+        for candidate in candidates {
+            if let url = URL(string: candidate), NSWorkspace.shared.open(url) {
+                return
+            }
+        }
+    }
+
+    var notificationLocation: SavedLocation? {
+        if let id = notificationPreferences.locationID {
+            return state.locations.first(where: { $0.id == id })
+        }
+        return selectedLocation ?? state.locations.first
+    }
+
+    func rescheduleNotifications() async {
+        await notificationCoordinator.rescheduleDailyNotifications(
+            state: state,
+            snapshots: snapshotsByLocationID
+        )
     }
 
     func testConnectionWithStoredOrDraftKey(_ draftKey: String?) async -> String {

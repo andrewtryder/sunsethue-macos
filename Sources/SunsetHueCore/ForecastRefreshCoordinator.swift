@@ -1,5 +1,4 @@
 import Foundation
-import WidgetKit
 
 /// Sole writer of forecast cache snapshots. Owns networking + Keychain reads for refresh.
 public actor ForecastRefreshCoordinator {
@@ -7,6 +6,7 @@ public actor ForecastRefreshCoordinator {
     private let forecastCache: any ForecastCache
     private let credentialStore: CredentialStore
     private let forecastService: ForecastService
+    private let sideEffectSink: any ForecastRefreshSideEffectSink
     private var scheduledTask: Task<Void, Never>?
     private var isRefreshingAll = false
 
@@ -14,12 +14,14 @@ public actor ForecastRefreshCoordinator {
         settingsStore: any SharedSettingsStore = SharedStorageFactory.makeSettingsStore(),
         forecastCache: any ForecastCache = SharedStorageFactory.makeForecastCache(),
         credentialStore: CredentialStore = KeychainCredentialStore(),
-        forecastService: ForecastService = ForecastService()
+        forecastService: ForecastService = ForecastService(),
+        sideEffectSink: any ForecastRefreshSideEffectSink = NoOpForecastRefreshSideEffectSink()
     ) {
         self.settingsStore = settingsStore
         self.forecastCache = forecastCache
         self.credentialStore = credentialStore
         self.forecastService = forecastService
+        self.sideEffectSink = sideEffectSink
     }
 
     public func refreshLocation(id: UUID, force: Bool) async -> CachedLocationSnapshot? {
@@ -71,8 +73,13 @@ public actor ForecastRefreshCoordinator {
                 consecutiveFailureCount: previous?.consecutiveFailureCount ?? 0
             )
             try? await forecastCache.saveSnapshot(snapshot)
+            await sideEffectSink.didPersistSnapshot(
+                location: location,
+                previous: previous,
+                current: snapshot,
+                wasSuccessfulNetworkRefresh: false
+            )
         }
-        reloadWidgets()
     }
 
     public func scheduleNextRefresh() async {
@@ -161,7 +168,12 @@ public actor ForecastRefreshCoordinator {
                     status: .authenticationRequired
                 )
                 try? await forecastCache.saveSnapshot(snapshot)
-                reloadWidgets()
+                await emitSideEffect(
+                    location: location,
+                    previous: previous,
+                    current: snapshot,
+                    wasSuccessfulNetworkRefresh: false
+                )
                 return snapshot
             }
             apiKey = loaded
@@ -173,7 +185,12 @@ public actor ForecastRefreshCoordinator {
                 status: .authenticationRequired
             )
             try? await forecastCache.saveSnapshot(snapshot)
-            reloadWidgets()
+            await emitSideEffect(
+                location: location,
+                previous: previous,
+                current: snapshot,
+                wasSuccessfulNetworkRefresh: false
+            )
             return snapshot
         }
 
@@ -184,8 +201,10 @@ public actor ForecastRefreshCoordinator {
         )
 
         let snapshot: CachedLocationSnapshot
+        var wasSuccessfulNetworkRefresh = false
         if let bundle = outcome.bundle, !outcome.usedCache {
             snapshot = CachedLocationSnapshot.fromSuccessful(bundle: bundle, attemptedAt: attemptedAt)
+            wasSuccessfulNetworkRefresh = snapshot.status == .current
         } else if let error = outcome.error {
             let status = status(from: error)
             let rateLimitRetry: Date?
@@ -223,8 +242,27 @@ public actor ForecastRefreshCoordinator {
         }
 
         try? await forecastCache.saveSnapshot(snapshot)
-        reloadWidgets()
+        await emitSideEffect(
+            location: location,
+            previous: previous,
+            current: snapshot,
+            wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
+        )
         return snapshot
+    }
+
+    private func emitSideEffect(
+        location: SavedLocation,
+        previous: CachedLocationSnapshot?,
+        current: CachedLocationSnapshot,
+        wasSuccessfulNetworkRefresh: Bool
+    ) async {
+        await sideEffectSink.didPersistSnapshot(
+            location: location,
+            previous: previous,
+            current: current,
+            wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
+        )
     }
 
     private func status(from error: SunsetHueError) -> RefreshStatus {
@@ -268,9 +306,5 @@ public actor ForecastRefreshCoordinator {
             nextAttemptAt: backoff.nextAttemptAt,
             consecutiveFailureCount: backoff.consecutiveFailureCount
         )
-    }
-
-    private nonisolated func reloadWidgets() {
-        WidgetCenter.shared.reloadTimelines(ofKind: SunsetHueConstants.widgetKind)
     }
 }

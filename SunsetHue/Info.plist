@@ -14,8 +14,8 @@
 		</dict>
 	</array>
 	<key>NSLocationUsageDescription</key>
-	<string>SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.</string>
+	<string>SunsetHue can use your current location to fill latitude, longitude, and time zone. Manual entry always remains available.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>SunsetHue can use your current location to fill latitude and longitude. Manual entry always remains available.</string>
+	<string>SunsetHue can use your current location to fill latitude, longitude, and time zone. Manual entry always remains available.</string>
 </dict>
 </plist>

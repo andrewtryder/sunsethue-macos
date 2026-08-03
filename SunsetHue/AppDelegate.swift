@@ -1,9 +1,11 @@
 import AppKit
 import Foundation
+import UserNotifications
+import SunsetHueCore
 
 /// Keeps widget deep links from spawning a second SunsetHue process when one
 /// is already running (common when both Xcode DerivedData and /Applications exist).
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     /// Local notification: `object` is a `URL`.
     static let localOpenURLNotification = Notification.Name("com.andrewtryder.SunsetHue.localOpenURL")
     private static let forwardedOpenURLNotification = Notification.Name("com.andrewtryder.SunsetHue.forwardedOpenURL")
@@ -11,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isSecondaryInstance = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(handleForwardedURL(_:)),
@@ -64,6 +68,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         for url in urls {
             NotificationCenter.default.post(name: Self.localOpenURLNotification, object: url)
+        }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        guard
+            let value = response.notification.request.content.userInfo["locationID"] as? String,
+            let id = UUID(uuidString: value)
+        else {
+            return
+        }
+
+        let url = DeepLink.locationURL(id: id)
+        await MainActor.run {
+            NotificationCenter.default.post(name: Self.localOpenURLNotification, object: url)
+            NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
 

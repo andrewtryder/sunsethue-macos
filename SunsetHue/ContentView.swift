@@ -18,7 +18,7 @@ struct ContentView: View {
         .sheet(isPresented: $appModel.isPresentingEditor) {
             LocationEditorView()
                 .environmentObject(appModel)
-                .frame(minWidth: 480, minHeight: 560)
+                .frame(minWidth: 480, minHeight: 640)
         }
         .overlay(alignment: .bottom) {
             if let message = appModel.bannerMessage {

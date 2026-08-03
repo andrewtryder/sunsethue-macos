@@ -33,6 +33,30 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
         public var configured: Bool
     }
 
+    public struct Notifications: Codable, Equatable, Sendable {
+        public var enabled: Bool
+        public var dailySummaryEnabled: Bool
+        public var secondDailySummaryEnabled: Bool
+        public var firstTimeMinutes: Int
+        public var secondTimeMinutes: Int
+        public var qualityAlertEnabled: Bool
+        public var qualityThreshold: Double
+        public var qualityEventMode: String
+        public var hasLocationConfigured: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case enabled
+            case dailySummaryEnabled = "daily_summary_enabled"
+            case secondDailySummaryEnabled = "second_daily_summary_enabled"
+            case firstTimeMinutes = "first_time_minutes"
+            case secondTimeMinutes = "second_time_minutes"
+            case qualityAlertEnabled = "quality_alert_enabled"
+            case qualityThreshold = "quality_threshold"
+            case qualityEventMode = "quality_event_mode"
+            case hasLocationConfigured = "has_location_configured"
+        }
+    }
+
     public struct LocationEntry: Codable, Equatable, Sendable {
         public var displayID: String
         public var coordinates: String
@@ -64,12 +88,13 @@ public struct DiagnosticsReport: Codable, Equatable, Sendable {
     public var application: Application
     public var sandbox: Sandbox
     public var credentials: Credentials
+    public var notifications: Notifications?
     public var locations: [LocationEntry]
     public var widgetCacheSchemaVersion: Int
     public var notes: [String]
 
     enum CodingKeys: String, CodingKey {
-        case application, sandbox, credentials, locations, notes
+        case application, sandbox, credentials, notifications, locations, notes
         case widgetCacheSchemaVersion = "widget_cache_schema_version"
     }
 }
@@ -85,7 +110,8 @@ public struct DiagnosticsExporter: Sendable {
         options: DiagnosticsExportOptions = DiagnosticsExportOptions(),
         appVersion: String = SunsetHueConstants.marketingVersion,
         build: String = "1",
-        now: Date = Date()
+        now: Date = Date(),
+        notificationPreferences: NotificationPreferences? = nil
     ) throws -> Data {
         let locationEntries: [DiagnosticsReport.LocationEntry] = state.locations.enumerated().map { index, location in
             let snapshot = snapshots[location.id]
@@ -117,6 +143,20 @@ public struct DiagnosticsExporter: Sendable {
             )
         }
 
+        let notificationsSummary = notificationPreferences.map { prefs in
+            DiagnosticsReport.Notifications(
+                enabled: prefs.notificationsEnabled,
+                dailySummaryEnabled: prefs.dailySummary.enabled,
+                secondDailySummaryEnabled: prefs.dailySummary.secondTimeEnabled,
+                firstTimeMinutes: prefs.dailySummary.firstTimeMinutes,
+                secondTimeMinutes: prefs.dailySummary.secondTimeMinutes,
+                qualityAlertEnabled: prefs.qualityAlert.enabled,
+                qualityThreshold: prefs.qualityAlert.threshold,
+                qualityEventMode: prefs.qualityAlert.eventMode.rawValue,
+                hasLocationConfigured: prefs.locationID != nil
+            )
+        }
+
         let report = DiagnosticsReport(
             application: .init(
                 version: appVersion,
@@ -130,6 +170,7 @@ public struct DiagnosticsExporter: Sendable {
                 ) != nil
             ),
             credentials: .init(configured: apiKeyConfigured),
+            notifications: notificationsSummary,
             locations: locationEntries,
             widgetCacheSchemaVersion: SunsetHueConstants.currentCacheSchemaVersion,
             notes: notes
