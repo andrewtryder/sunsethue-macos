@@ -52,10 +52,7 @@ struct SunsetHueApp: App {
         .handlesExternalEvents(matching: Set(arrayLiteral: "*"))
         .commands {
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") {
-                    SettingsPresenter.present(openSettings: openSettings)
-                }
-                .keyboardShortcut(",", modifiers: [.command])
+                SettingsLink()
             }
             CommandGroup(replacing: .newItem) {
                 Button("Add Location…") {
