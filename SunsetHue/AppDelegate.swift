@@ -5,6 +5,7 @@ import SunsetHueCore
 
 /// Keeps widget deep links from spawning a second SunsetHue process when one
 /// is already running (common when both Xcode DerivedData and /Applications exist).
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     /// Local notification: `object` is a `URL`.
     static let localOpenURLNotification = Notification.Name("com.andrewtryder.SunsetHue.localOpenURL")
@@ -31,9 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Keep a normal Dock/app-menu presence so Settings… / ⌘, work even when
-        // interaction starts from the MenuBarExtra.
-        NSApp.setActivationPolicy(.regular)
+        let menuBarOnly = UserDefaults.standard.bool(forKey: "menuBarOnlyMode")
+        AppPresentationModeController.apply(menuBarOnly: menuBarOnly)
 
         guard isSecondaryInstance else { return }
         activateExistingInstance()
@@ -42,7 +42,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
-            // Dock click with no visible windows — ask SwiftUI to present the single main Window.
             NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
         }
         return true
@@ -75,13 +74,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        let identifier = notification.request.identifier
+        NotificationCenter.default.post(
+            name: NotificationTestWorkflow.foregroundPresentedNotification,
+            object: nil,
+            userInfo: ["identifier": identifier]
+        )
+
+        var options: UNNotificationPresentationOptions = [.banner, .list]
+        if Self.playSoundPreferenceEnabled() {
+            options.insert(.sound)
+        }
+        return options
     }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
+        // Test notifications (and any request without a location) must not deep-link.
         guard
             let value = response.notification.request.content.userInfo["locationID"] as? String,
             let id = UUID(uuidString: value)
@@ -90,14 +101,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         let url = DeepLink.locationURL(id: id)
-        await MainActor.run {
-            NotificationCenter.default.post(name: Self.localOpenURLNotification, object: url)
-            NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
-            NSApp.activate(ignoringOtherApps: true)
-        }
+        NotificationCenter.default.post(name: Self.localOpenURLNotification, object: url)
+        NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
-    @objc private func handleForwardedURL(_ notification: Notification) {
+    @objc @MainActor private func handleForwardedURL(_ notification: Notification) {
         guard let string = notification.userInfo?["url"] as? String,
               let url = URL(string: string) else { return }
         NotificationCenter.default.post(name: Self.localOpenURLNotification, object: url)
@@ -111,5 +120,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             withBundleIdentifier: Bundle.main.bundleIdentifier ?? ""
         ).first(where: { $0 != current }) else { return }
         existing.activate(options: [.activateAllWindows])
+    }
+
+    private static func playSoundPreferenceEnabled() -> Bool {
+        let store = NotificationPreferencesStore()
+        return store.load().playSound
     }
 }

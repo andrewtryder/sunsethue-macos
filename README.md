@@ -61,10 +61,19 @@ To enable the widget on your own Mac (still free — no $99 program):
 
 If the widget shows **Open SunsetHue to add a location** while the app already has locations, or an old unsigned placeholder: on macOS 15+ the widget cannot read iOS-style `group.*` App Groups (silent deny). This project uses the Team-ID-prefixed group `$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue`. Also remove/re-add the widget after replacing a stale `/Applications/SunsetHue.app`, and do not open unsigned Release DMG builds while testing widgets.
 
+## Background forecast refresh & architecture
+
+- **App-owned networking:** Forecast networking and Keychain API key access are strictly owned by the SunsetHue app. The WidgetKit extension contains no network code, no API key access, and acts purely as a read-only consumer of cached forecasts from the shared App Group.
+- **Background refresh:** While SunsetHue is running (including windowless/menu-bar mode), macOS background activity (`NSBackgroundActivityScheduler`) periodically refreshes stale forecasts in the background.
+- **Launch at Login:** For the best widget experience across system restarts, enable **Launch at Login** in Settings → General. This keeps SunsetHue running quietly in the background so cached forecasts remain fresh.
+- **Quitting the app:** Explicitly quitting SunsetHue stops app-owned background networking.
+- **Widget reload:** WidgetKit controls exact timeline reload execution and budget; the app updates shared storage and requests timeline updates.
+
 ## Known widget limitations
 
-- WidgetKit controls real refresh timing; 6 / 12 / 24 hour intervals are preferences
-- Transient failures keep the last cached forecast in the app
+- Unsigned GitHub Release DMGs strip the WidgetKit extension due to macOS signing requirements (see Desktop Widgets section above for signed build instructions)
+- WidgetKit ultimately controls widget display reload timing; configured refresh intervals are target preferences
+- Transient failures preserve the last authoritative cached forecast in shared storage
 - Auth failures prompt you to update the API key in Settings → Account
 
 ## License

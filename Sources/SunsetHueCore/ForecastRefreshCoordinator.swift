@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Sole writer of forecast cache snapshots. Owns networking + Keychain reads for refresh.
 public actor ForecastRefreshCoordinator {
@@ -7,8 +8,10 @@ public actor ForecastRefreshCoordinator {
     private let credentialStore: CredentialStore
     private let forecastService: ForecastService
     private let sideEffectSink: any ForecastRefreshSideEffectSink
+    private let logger = Logger(subsystem: "com.andrewtryder.SunsetHue", category: "Coordinator")
     private var scheduledTask: Task<Void, Never>?
     private var isRefreshingAll = false
+    private var inFlightRefreshes: [UUID: Task<CachedLocationSnapshot?, Never>] = [:]
 
     public init(
         settingsStore: any SharedSettingsStore = SharedStorageFactory.makeSettingsStore(),
@@ -72,11 +75,10 @@ public actor ForecastRefreshCoordinator {
                 nextAttemptAt: nil,
                 consecutiveFailureCount: previous?.consecutiveFailureCount ?? 0
             )
-            try? await forecastCache.saveSnapshot(snapshot)
-            await sideEffectSink.didPersistSnapshot(
+            _ = await persistAndEmitSideEffects(
                 location: location,
                 previous: previous,
-                current: snapshot,
+                candidate: snapshot,
                 wasSuccessfulNetworkRefresh: false
             )
         }
@@ -143,6 +145,22 @@ public actor ForecastRefreshCoordinator {
     }
 
     private func refresh(location: SavedLocation, force: Bool) async -> CachedLocationSnapshot? {
+        let locationID = location.id
+
+        if let existingTask = inFlightRefreshes[locationID] {
+            return await existingTask.value
+        }
+
+        let task = Task<CachedLocationSnapshot?, Never> {
+            await self.performRefresh(location: location, force: force)
+        }
+        inFlightRefreshes[locationID] = task
+        let result = await task.value
+        inFlightRefreshes.removeValue(forKey: locationID)
+        return result
+    }
+
+    private func performRefresh(location: SavedLocation, force: Bool) async -> CachedLocationSnapshot? {
         let previous = try? await forecastCache.loadSnapshot(for: location.id)
         let now = Date()
 
@@ -167,14 +185,12 @@ public actor ForecastRefreshCoordinator {
                     attemptedAt: attemptedAt,
                     status: .authenticationRequired
                 )
-                try? await forecastCache.saveSnapshot(snapshot)
-                await emitSideEffect(
+                return await persistAndEmitSideEffects(
                     location: location,
                     previous: previous,
-                    current: snapshot,
+                    candidate: snapshot,
                     wasSuccessfulNetworkRefresh: false
                 )
-                return snapshot
             }
             apiKey = loaded
         } catch {
@@ -184,14 +200,12 @@ public actor ForecastRefreshCoordinator {
                 attemptedAt: attemptedAt,
                 status: .authenticationRequired
             )
-            try? await forecastCache.saveSnapshot(snapshot)
-            await emitSideEffect(
+            return await persistAndEmitSideEffects(
                 location: location,
                 previous: previous,
-                current: snapshot,
+                candidate: snapshot,
                 wasSuccessfulNetworkRefresh: false
             )
-            return snapshot
         }
 
         let outcome = await forecastService.refreshPreservingCache(
@@ -241,14 +255,40 @@ public actor ForecastRefreshCoordinator {
             )
         }
 
-        try? await forecastCache.saveSnapshot(snapshot)
-        await emitSideEffect(
+        return await persistAndEmitSideEffects(
             location: location,
             previous: previous,
-            current: snapshot,
+            candidate: snapshot,
             wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
         )
-        return snapshot
+    }
+
+    private func persistAndEmitSideEffects(
+        location: SavedLocation,
+        previous: CachedLocationSnapshot?,
+        candidate: CachedLocationSnapshot,
+        wasSuccessfulNetworkRefresh: Bool
+    ) async -> CachedLocationSnapshot? {
+        do {
+            let result = try await forecastCache.saveSnapshot(candidate)
+            let authoritative: CachedLocationSnapshot
+            switch result {
+            case .committed(let snapshot):
+                authoritative = snapshot
+            case .rejectedStale(let snapshot):
+                authoritative = snapshot
+            }
+            await emitSideEffect(
+                location: location,
+                previous: previous,
+                current: authoritative,
+                wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
+            )
+            return authoritative
+        } catch {
+            logger.error("Failed to persist forecast cache for location \(location.id): \(error.localizedDescription, privacy: .public)")
+            return previous
+        }
     }
 
     private func emitSideEffect(

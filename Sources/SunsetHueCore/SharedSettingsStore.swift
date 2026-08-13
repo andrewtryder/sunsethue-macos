@@ -5,10 +5,15 @@ public protocol SharedSettingsStore: Sendable {
     func save(_ state: SharedAppState) async throws
 }
 
+public enum CacheSaveResult: Sendable, Equatable {
+    case committed(CachedLocationSnapshot)
+    case rejectedStale(authoritative: CachedLocationSnapshot)
+}
+
 public protocol ForecastCache: Sendable {
     func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot?
     func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle?
-    func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws
+    @discardableResult func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult
     func deleteLocation(_ locationID: UUID) async throws
 }
 
@@ -141,7 +146,8 @@ public actor FileForecastCache: ForecastCache {
         try await loadSnapshot(for: locationID)?.bundle
     }
 
-    public func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws {
+    @discardableResult
+    public func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
         try migrateLegacyIfNeeded()
         let url = fileURL(for: snapshot.locationID)
 
@@ -154,6 +160,8 @@ public actor FileForecastCache: ForecastCache {
 
         var coordinatorError: NSError?
         var writeError: Error?
+        var saveResult: CacheSaveResult = .committed(normalized)
+
         let coordinator = NSFileCoordinator()
         let decoder = self.decoder
         coordinator.coordinate(
@@ -165,18 +173,15 @@ public actor FileForecastCache: ForecastCache {
                 if FileManager.default.fileExists(atPath: writeURL.path),
                    let existingData = try? Data(contentsOf: writeURL),
                    existingData.count <= SunsetHueConstants.maxCacheFileBytes,
-                   let existing = try? decoder.decode(CachedLocationSnapshot.self, from: existingData),
-                   normalized.fetchedAt < existing.fetchedAt,
-                   normalized.status == .current,
-                   existing.status == .current {
-                    // Reject older successful fetches; allow status/metadata updates with same or newer attempt.
-                    return
-                }
-                if FileManager.default.fileExists(atPath: writeURL.path),
-                   let existingData = try? Data(contentsOf: writeURL),
-                   let existing = try? decoder.decode(CachedLocationSnapshot.self, from: existingData),
-                   normalized.lastAttemptAt < existing.lastAttemptAt {
-                    return
+                   let existing = try? decoder.decode(CachedLocationSnapshot.self, from: existingData) {
+                    if normalized.fetchedAt < existing.fetchedAt, normalized.status == .current, existing.status == .current {
+                        saveResult = .rejectedStale(authoritative: existing)
+                        return
+                    }
+                    if normalized.lastAttemptAt < existing.lastAttemptAt {
+                        saveResult = .rejectedStale(authoritative: existing)
+                        return
+                    }
                 }
                 let directory = writeURL.deletingLastPathComponent()
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -187,12 +192,14 @@ public actor FileForecastCache: ForecastCache {
                 } else {
                     try FileManager.default.moveItem(at: tempURL, to: writeURL)
                 }
+                saveResult = .committed(normalized)
             } catch {
                 writeError = error
             }
         }
         if let coordinatorError { throw coordinatorError }
         if let writeError { throw writeError }
+        return saveResult
     }
 
     public func deleteLocation(_ locationID: UUID) async throws {
@@ -268,16 +275,20 @@ public actor InMemoryForecastCache: ForecastCache {
         snapshots[locationID]?.bundle
     }
 
-    public func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws {
+    @discardableResult
+    public func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
         if let existing = snapshots[snapshot.locationID] {
             if snapshot.fetchedAt < existing.fetchedAt, snapshot.status == .current, existing.status == .current {
-                return
+                return .rejectedStale(authoritative: existing)
             }
             if snapshot.lastAttemptAt < existing.lastAttemptAt {
-                return
+                return .rejectedStale(authoritative: existing)
             }
         }
-        snapshots[snapshot.locationID] = snapshot
+        var normalized = snapshot
+        normalized.schemaVersion = SunsetHueConstants.currentCacheSchemaVersion
+        snapshots[snapshot.locationID] = normalized
+        return .committed(normalized)
     }
 
     public func deleteLocation(_ locationID: UUID) async throws {

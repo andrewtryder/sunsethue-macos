@@ -4,8 +4,11 @@ import SunsetHueCore
 
 struct SunsetHueSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
+    @ObservedObject var menuBarPreferencesStore: MenuBarPreferencesStore
+    @ObservedObject var menuBarLabelController: MenuBarLabelController
     @StateObject private var launchAtLogin = LaunchAtLoginController()
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage("menuBarOnlyMode") private var menuBarOnlyMode = false
     @AppStorage("diagnosticsIncludeApproximateCoordinates") private var includeApproximateCoordinates = false
     @AppStorage("autoCheckUpdatesDaily") private var autoCheckUpdatesDaily = true
     @AppStorage("lastUpdateCheckDay") private var lastUpdateCheckDay = ""
@@ -49,7 +52,7 @@ struct SunsetHueSettingsView: View {
                 .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
                 .tag(SettingsTab.diagnostics)
         }
-        .frame(width: 520, height: 520)
+        .frame(width: 520, height: 580)
         .onAppear {
             launchAtLogin.refresh()
             Task {
@@ -72,10 +75,10 @@ struct SunsetHueSettingsView: View {
                         accessibilityValueText: notificationStatusLabel
                     )
                 }
+                Button("Open System Notification Settings…") {
+                    appModel.openSystemNotificationSettings()
+                }
                 if appModel.notificationAuthorization == .denied {
-                    Button("Open System Notification Settings…") {
-                        appModel.openSystemNotificationSettings()
-                    }
                     Text("Notifications are disabled in System Settings. Enable SunsetHue there to deliver alerts.")
                         .sunsetHueMuted()
                 } else if appModel.notificationAuthorization == .notDetermined {
@@ -138,14 +141,26 @@ struct SunsetHueSettingsView: View {
 
             Section {
                 Toggle("Play sound", isOn: playSoundBinding)
-                Button("Send Test Notification") {
+                Button(appModel.isNotificationTestRunning ? "Testing…" : "Send Test Notification") {
                     Task { await appModel.sendTestNotification() }
                 }
-                if let notificationStatusMessage = appModel.notificationStatusMessage {
+                .disabled(appModel.isNotificationTestRunning)
+                if let result = appModel.notificationTestResult {
+                    Text("Stage: \(notificationTestStageLabel(result.stage))")
+                        .font(.caption.weight(.semibold))
+                    Text(result.message)
+                        .sunsetHueMuted()
+                        .accessibilityLabel(result.message)
+                } else if let notificationStatusMessage = appModel.notificationStatusMessage {
                     Text(notificationStatusMessage)
                         .sunsetHueMuted()
                         .accessibilityLabel(notificationStatusMessage)
                 }
+                Button("Copy Notification Diagnostics") {
+                    Task { await appModel.copyNotificationDiagnosticsToPasteboard() }
+                }
+                Text("A test notification can be sent even when daily summaries and quality alerts are off. Delivery depends on macOS Focus and banner settings; unsigned builds may be suppressed.")
+                    .sunsetHueMuted()
             }
         }
         .formStyle(.grouped)
@@ -283,12 +298,71 @@ struct SunsetHueSettingsView: View {
         )
     }
 
+    private func notificationTestStageLabel(_ stage: NotificationTestResult.Stage) -> String {
+        switch stage {
+        case .checkingSettings: return "Checking settings"
+        case .requestingAuthorization: return "Requesting authorization"
+        case .scheduled: return "Scheduled"
+        case .confirmedPending: return "Confirmed pending"
+        case .foregroundDelegateReceived: return "Foreground delegate received"
+        case .confirmedDelivered: return "Delivered"
+        case .suppressed: return "Suppressed"
+        case .failed: return "Failed"
+        }
+    }
+
+    private var menuBarPreview: some View {
+        let preferences = menuBarPreferencesStore.preferences
+        let status: MenuBarStatus = {
+            if let location = appModel.selectedLocation ?? appModel.state.locations.first {
+                let item = MenuBarForecastResolver.resolve(
+                    location: location,
+                    snapshot: appModel.snapshotsByLocationID[location.id] ?? appModel.snapshot,
+                    selection: preferences.eventSelection,
+                    now: Date()
+                )
+                return MenuBarStatus.from(
+                    location: location,
+                    item: item,
+                    snapshot: appModel.snapshotsByLocationID[location.id] ?? appModel.snapshot,
+                    selection: preferences.eventSelection
+                )
+            }
+            // Fixture-style preview when no locations exist.
+            return MenuBarStatus(
+                locationName: "Sandown",
+                eventType: .sunset,
+                quality: 0.82,
+                eventTime: Date(),
+                timeZone: .current,
+                message: nil
+            )
+        }()
+        let title = MenuBarStatusFormatting.labelText(for: status, style: preferences.displayStyle)
+        return HStack(spacing: 8) {
+            Text("Preview:")
+                .foregroundStyle(.secondary)
+            Label(title.isEmpty ? " " : title, systemImage: status.symbolName)
+                .labelStyle(.titleAndIcon)
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Menu bar label preview")
+        .accessibilityValue(MenuBarStatusFormatting.accessibilityLabel(for: status, style: preferences.displayStyle))
+    }
+
     private var generalTab: some View {
         Form {
-            Section("App Behavior") {
+            Section("Menu Bar") {
                 Toggle("Show SunsetHue in menu bar", isOn: Binding(
                     get: { showMenuBarExtra },
                     set: { newValue in
+                        if !newValue, menuBarOnlyMode {
+                            launchAtLogin.errorMessage =
+                                "Turn off “Run as menu bar-only app” before hiding the menu bar icon."
+                            return
+                        }
                         if !newValue,
                            !AppPreferenceDefaults.shared.openMainWindowOnLaunch,
                            launchAtLogin.isEnabled {
@@ -299,6 +373,92 @@ struct SunsetHueSettingsView: View {
                         showMenuBarExtra = newValue
                     }
                 ))
+                .disabled(menuBarOnlyMode)
+
+                Picker(
+                    "Menu bar label",
+                    selection: Binding(
+                        get: { menuBarPreferencesStore.preferences.displayStyle },
+                        set: { style in
+                            menuBarPreferencesStore.update { $0.displayStyle = style }
+                            menuBarLabelController.refreshNow()
+                        }
+                    )
+                ) {
+                    ForEach(MenuBarDisplayStyle.allCases, id: \.self) { style in
+                        Text(style.settingsLabel).tag(style)
+                    }
+                }
+
+                Picker(
+                    "Event shown",
+                    selection: Binding(
+                        get: { menuBarPreferencesStore.preferences.eventSelection },
+                        set: { selection in
+                            menuBarPreferencesStore.update { $0.eventSelection = selection }
+                            menuBarLabelController.refreshNow()
+                        }
+                    )
+                ) {
+                    ForEach(MenuBarEventSelection.allCases, id: \.self) { selection in
+                        Text(selection.settingsLabel).tag(selection)
+                    }
+                }
+
+                Picker(
+                    "Location behavior",
+                    selection: Binding(
+                        get: { menuBarPreferencesStore.preferences.locationMode },
+                        set: { mode in
+                            menuBarPreferencesStore.update { $0.locationMode = mode }
+                            menuBarLabelController.refreshNow()
+                        }
+                    )
+                ) {
+                    ForEach(MenuBarLocationMode.allCases, id: \.self) { mode in
+                        Text(mode.settingsLabel).tag(mode)
+                    }
+                }
+
+                if appModel.state.locations.count > 1,
+                   menuBarPreferencesStore.preferences.locationMode == .rotateLocations {
+                    Picker(
+                        "Rotate every",
+                        selection: Binding(
+                            get: { menuBarPreferencesStore.preferences.rotationIntervalSeconds },
+                            set: { seconds in
+                                menuBarPreferencesStore.update { $0.rotationIntervalSeconds = seconds }
+                                menuBarLabelController.refreshNow()
+                            }
+                        )
+                    ) {
+                        ForEach(MenuBarPreferences.allowedRotationIntervals, id: \.self) { seconds in
+                            Text("\(seconds) seconds").tag(seconds)
+                        }
+                    }
+                }
+
+                menuBarPreview
+
+                Toggle("Run as menu bar-only app", isOn: Binding(
+                    get: { menuBarOnlyMode },
+                    set: { enabled in
+                        if enabled {
+                            showMenuBarExtra = true
+                            AppPreferenceDefaults.shared.openMainWindowOnLaunch = false
+                        }
+                        menuBarOnlyMode = enabled
+                        AppPresentationModeController.apply(menuBarOnly: enabled)
+                    }
+                ))
+                Text(
+                    "Hides SunsetHue from the Dock and macOS application menu. "
+                        + "The main window and Settings remain available from the menu-bar icon."
+                )
+                .sunsetHueMuted()
+            }
+
+            Section("App Behavior") {
                 Toggle("Launch at login", isOn: Binding(
                     get: { launchAtLogin.isEnabled },
                     set: { enabled in
@@ -325,6 +485,9 @@ struct SunsetHueSettingsView: View {
                 if launchAtLogin.status == .unavailable {
                     Text("Launch at Login is unavailable for this build.")
                         .sunsetHueMuted()
+                } else {
+                    Text("Recommended if you use widgets. Keeps forecasts updated in the background even when you haven't opened SunsetHue.")
+                        .sunsetHueMuted()
                 }
                 if let error = launchAtLogin.errorMessage {
                     Text(error)
@@ -334,6 +497,11 @@ struct SunsetHueSettingsView: View {
                 Toggle("Open main window when launched", isOn: Binding(
                     get: { AppPreferenceDefaults.shared.openMainWindowOnLaunch },
                     set: { newValue in
+                        if newValue, menuBarOnlyMode {
+                            launchAtLogin.errorMessage =
+                                "Turn off “Run as menu bar-only app” before opening the main window on launch."
+                            return
+                        }
                         if !newValue, !showMenuBarExtra, launchAtLogin.isEnabled {
                             launchAtLogin.errorMessage =
                                 "Keep the menu bar icon or turn off Launch at Login before disabling the main window on launch."
@@ -342,6 +510,7 @@ struct SunsetHueSettingsView: View {
                         AppPreferenceDefaults.shared.openMainWindowOnLaunch = newValue
                     }
                 ))
+                .disabled(menuBarOnlyMode)
             }
             Section("Defaults for new locations") {
                 Picker(

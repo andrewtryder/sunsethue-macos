@@ -232,4 +232,110 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         payload["data"] = body
         return try JSONSerialization.data(withJSONObject: payload)
     }
+
+    func testPersistenceFailurePreventsSideEffect() async throws {
+        let failingCache = FailingForecastCache()
+        let spySink = SpySideEffectSink()
+        let location = PreviewFixtures.sampleLocation
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [location]))
+        let credentials = InMemoryCredentialStore(apiKey: "test-key")
+        let coordinator = ForecastRefreshCoordinator(
+            settingsStore: settings,
+            forecastCache: failingCache,
+            credentialStore: credentials,
+            forecastService: ForecastService(transport: MockHTTPTransport()),
+            sideEffectSink: spySink
+        )
+        _ = await coordinator.refreshLocation(id: location.id, force: true)
+        let count = await spySink.callsCount()
+        XCTAssertEqual(count, 0)
+    }
+
+    func testStaleWriteReturnsRejectedStaleAndUsesAuthoritativeSnapshot() async throws {
+        let cache = InMemoryForecastCache()
+        let id = PreviewFixtures.sampleLocationID
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let newer = CachedLocationSnapshot(
+            locationID: id,
+            fetchedAt: base.addingTimeInterval(3600),
+            lastAttemptAt: base.addingTimeInterval(3600),
+            forecasts: [PreviewFixtures.excellentSunset()],
+            status: .current
+        )
+        let older = CachedLocationSnapshot(
+            locationID: id,
+            fetchedAt: base,
+            lastAttemptAt: base,
+            forecasts: [],
+            status: .current
+        )
+        let res1 = try await cache.saveSnapshot(newer)
+        XCTAssertEqual(res1, .committed(newer))
+
+        let res2 = try await cache.saveSnapshot(older)
+        XCTAssertEqual(res2, .rejectedStale(authoritative: newer))
+    }
+
+    func testConcurrentSameLocationRefreshesAreSingleFlight() async throws {
+        let body = try loadFixture("event_full")
+        let location = SavedLocation(
+            id: PreviewFixtures.sampleLocationID,
+            name: "Sample Harbor",
+            latitude: 40.7128,
+            longitude: -74.006,
+            timeZoneIdentifier: "America/New_York",
+            forecastDays: 1,
+            includeSunrise: false,
+            includeSunset: true,
+            refreshIntervalHours: 6
+        )
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [location]))
+        let credentials = InMemoryCredentialStore(apiKey: "test-key")
+        let stubs = Array(repeating: MockHTTPTransport.Stub(statusCode: 200, body: body), count: 20)
+        let transport = MockHTTPTransport(stubs: stubs)
+        let service = ForecastService(transport: transport)
+        let coordinator = ForecastRefreshCoordinator(
+            settingsStore: settings,
+            forecastCache: InMemoryForecastCache(),
+            credentialStore: credentials,
+            forecastService: service
+        )
+
+        await withTaskGroup(of: CachedLocationSnapshot?.self) { group in
+            for _ in 0..<10 {
+                group.addTask {
+                    await coordinator.refreshLocation(id: location.id, force: true)
+                }
+            }
+        }
+
+        // Single location with 1 event forecast; concurrent calls coalesce to 1 request.
+        XCTAssertEqual(transport.requests.count, 1)
+    }
+}
+
+private actor FailingForecastCache: ForecastCache {
+    func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? { nil }
+    func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? { nil }
+    func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
+        throw SunsetHueError.storageCorrupt
+    }
+    func deleteLocation(_ locationID: UUID) async throws {}
+}
+
+private actor SpySideEffectSink: ForecastRefreshSideEffectSink {
+    private var calls: [(location: SavedLocation, current: CachedLocationSnapshot)] = []
+
+    func didPersistSnapshot(
+        location: SavedLocation,
+        previous: CachedLocationSnapshot?,
+        current: CachedLocationSnapshot,
+        wasSuccessfulNetworkRefresh: Bool
+    ) async {
+        calls.append((location, current))
+    }
+
+    func callsCount() -> Int {
+        calls.count
+    }
 }

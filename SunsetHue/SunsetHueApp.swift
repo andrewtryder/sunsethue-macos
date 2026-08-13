@@ -6,7 +6,10 @@ import SunsetHueCore
 struct SunsetHueApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appModel = AppModel()
+    @StateObject private var menuBarPreferencesStore = MenuBarPreferencesStore()
+    @StateObject private var menuBarLabelController = MenuBarLabelController()
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage("menuBarOnlyMode") private var menuBarOnlyMode = false
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
@@ -31,6 +34,7 @@ struct SunsetHueApp: App {
                     appModel.applicationDidBecomeActive()
                 }
                 .onAppear {
+                    menuBarLabelController.attach(appModel: appModel, preferencesStore: menuBarPreferencesStore)
                     if !AppPreferenceDefaults.shared.openMainWindowOnLaunch {
                         DispatchQueue.main.async {
                             if let window = NSApp.windows.first(where: {
@@ -93,26 +97,43 @@ struct SunsetHueApp: App {
             }
         }
 
+        // Compact monochrome status-item label is separate from the richer `.window` popup.
         MenuBarExtra(isInserted: $showMenuBarExtra) {
-            SunsetHueMenuBarView()
-                .environmentObject(appModel)
+            SunsetHueMenuBarPopoverView(
+                preferencesStore: menuBarPreferencesStore,
+                labelController: menuBarLabelController
+            )
+            .environmentObject(appModel)
         } label: {
-            Label(appModel.menuBarStatusText, systemImage: "sun.horizon")
+            SunsetHueMenuBarLabel(labelController: menuBarLabelController)
+                .onAppear {
+                    menuBarLabelController.attach(appModel: appModel, preferencesStore: menuBarPreferencesStore)
+                }
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
+        .onChange(of: showMenuBarExtra) { _, isInserted in
+            guard !isInserted, menuBarOnlyMode else { return }
+            menuBarOnlyMode = false
+            AppPreferenceDefaults.shared.openMainWindowOnLaunch = true
+            AppPresentationModeController.apply(menuBarOnly: false)
+            MainWindowPresenter.present(openWindow: openWindow)
+        }
 
         Settings {
-            SunsetHueSettingsView()
-                .environmentObject(appModel)
+            SunsetHueSettingsView(
+                menuBarPreferencesStore: menuBarPreferencesStore,
+                menuBarLabelController: menuBarLabelController
+            )
+            .environmentObject(appModel)
         }
     }
 }
 
+@MainActor
 enum MainWindowPresenter {
     static func present(openWindow: OpenWindowAction) {
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
-        // Ensure an already-open main window is ordered front (not buried under Settings).
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" || $0.title == "SunsetHue" }) {
             window.makeKeyAndOrderFront(nil)
         }

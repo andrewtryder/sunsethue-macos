@@ -25,12 +25,17 @@ final class AppModel: ObservableObject {
     @Published var notificationPreferences = NotificationPreferences()
     @Published var notificationAuthorization: ForecastNotificationCoordinator.AuthorizationState = .notDetermined
     @Published var notificationStatusMessage: String?
+    @Published var notificationTestResult: NotificationTestResult?
+    @Published var isNotificationTestRunning = false
+    @Published private(set) var refreshingLocationIDs: Set<UUID> = []
+    @Published var lastNotificationDiagnostics: NotificationDiagnosticsSnapshot?
 
     let settingsStore: any SharedSettingsStore
     let forecastCache: any ForecastCache
     let credentialStore: CredentialStore
     let refreshCoordinator: ForecastRefreshCoordinator
     let notificationCoordinator: ForecastNotificationCoordinator
+    private let backgroundRefreshController: BackgroundRefreshController
     private let sideEffectBox = ForecastRefreshSideEffectBox()
     private let logger = Logger(subsystem: "com.andrewtryder.SunsetHue", category: "App")
     private var wakeObserver: NSObjectProtocol?
@@ -46,13 +51,15 @@ final class AppModel: ObservableObject {
         self.forecastCache = forecastCache
         self.credentialStore = credentialStore
         self.notificationCoordinator = ForecastNotificationCoordinator()
-        self.refreshCoordinator = ForecastRefreshCoordinator(
+        let coordinator = ForecastRefreshCoordinator(
             settingsStore: settingsStore,
             forecastCache: forecastCache,
             credentialStore: credentialStore,
             forecastService: forecastService,
             sideEffectSink: sideEffectBox
         )
+        self.refreshCoordinator = coordinator
+        self.backgroundRefreshController = BackgroundRefreshController(refreshCoordinator: coordinator)
         self.state = SharedAppState()
         sideEffectBox.impl = AppForecastRefreshSideEffects(
             notificationCoordinator: notificationCoordinator,
@@ -108,6 +115,7 @@ final class AppModel: ObservableObject {
             await reloadSelectedSnapshot()
             await refreshCoordinator.scheduleNextRefresh()
             await rescheduleNotifications()
+            backgroundRefreshController.start()
         } catch {
             logger.error("Failed to bootstrap shared storage")
             bannerMessage = SunsetHueError.storageCorrupt.userMessage
@@ -120,99 +128,146 @@ final class AppModel: ObservableObject {
         return state.locations.first(where: { $0.id == selectedLocationID })
     }
 
-    /// Compact status for the menu bar extra label (e.g. "Sunset 82.0%").
-    var menuBarStatusText: String {
-        guard let location = selectedLocation else { return "SunsetHue" }
-        switch snapshot?.status {
-        case .authenticationRequired:
-            return "API key needed"
-        case .rateLimited:
-            return "Rate limited"
-        case .temporarilyUnavailable, .invalidRequest, .invalidResponse:
-            return location.name
-        case .stale, .current, .none:
-            break
-        }
-        guard let event = primaryMenuBarForecast(for: location, bundle: snapshot?.bundle),
-              let percent = PresentationFormatting.percentage(fromNormalized: event.quality) else {
-            return location.name
-        }
-        return "\(event.eventType.displayName) \(percent)"
-    }
-
-    struct MenuBarLocationRow: Identifiable, Equatable {
+    struct MenuBarPopoverRow: Identifiable, Equatable {
         let id: UUID
         let name: String
-        let detail: String
+        let item: MenuBarForecastItem?
+        let dayLabel: String
+        let timeLabel: String
+        let magicHoursLabel: String?
+        let updatedLabel: String
+        let statusMessage: String
+        let statusBadgeTitle: String?
+        let statusTone: StatusTone?
+        let isSelected: Bool
+        let accessibilityValue: String
     }
 
-    /// One row per configured location for the menu bar dropdown.
-    var menuBarLocationRows: [MenuBarLocationRow] {
-        state.locations.map { location in
-            MenuBarLocationRow(
-                id: location.id,
-                name: location.name,
-                detail: menuBarDetail(for: location)
+    /// One rich row per configured location for the menu-bar window popup.
+    func menuBarPopoverRows(
+        preferences: MenuBarPreferences,
+        now: Date = Date()
+    ) -> [MenuBarPopoverRow] {
+        let selectedID = selectedLocationID ?? state.locations.first?.id
+        return state.locations.map { location in
+            menuBarPopoverRow(
+                for: location,
+                preferences: preferences,
+                selectedID: selectedID,
+                now: now
             )
         }
     }
 
-    var menuBarRefreshStatusLine: String? {
-        guard let snapshot else { return nil }
-        switch snapshot.status {
-        case .current:
-            return "Updated \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))"
-        case .stale:
-            return "Stale — open app to refresh"
-        case .authenticationRequired:
-            return "API key needed"
-        case .rateLimited(let retryAfter):
-            if let retryAfter {
-                return "Rate limited until \(retryAfter.formatted(date: .omitted, time: .shortened))"
-            }
-            return "Rate limited"
-        case .temporarilyUnavailable:
-            return "Temporarily unavailable"
-        case .invalidRequest:
-            return "Coordinates were rejected"
-        case .invalidResponse:
-            return "Incompatible response"
+    private func menuBarPopoverRow(
+        for location: SavedLocation,
+        preferences: MenuBarPreferences,
+        selectedID: UUID?,
+        now: Date
+    ) -> MenuBarPopoverRow {
+        let snapshot = snapshotsByLocationID[location.id]
+        let timeZone = location.timeZone ?? .current
+        let item = MenuBarForecastResolver.resolve(
+            location: location,
+            snapshot: snapshot,
+            selection: preferences.eventSelection,
+            now: now
+        )
+
+        if let item {
+            let day = MenuBarStatusFormatting.relativeEventDayLabel(
+                eventTime: item.eventTime,
+                timeZone: timeZone,
+                now: now
+            )
+            let time = PresentationFormatting.timeString(item.eventTime, timeZone: timeZone) ?? "—"
+            let gold = MenuBarStatusFormatting.compactWindowLabel(
+                prefix: "Gold",
+                window: item.goldenHour,
+                timeZone: timeZone
+            )
+            let blue = MenuBarStatusFormatting.compactWindowLabel(
+                prefix: "Blue",
+                window: item.blueHour,
+                timeZone: timeZone
+            )
+            let magic = [gold, blue].compactMap { $0 }.joined(separator: " · ")
+            let percent = PresentationFormatting.percentage(fromNormalized: item.quality) ?? "—"
+            return MenuBarPopoverRow(
+                id: location.id,
+                name: location.name,
+                item: item,
+                dayLabel: day,
+                timeLabel: time,
+                magicHoursLabel: magic.isEmpty ? nil : magic,
+                updatedLabel: "Updated \(item.fetchedAt.formatted(date: .omitted, time: .shortened))",
+                statusMessage: "",
+                statusBadgeTitle: nil,
+                statusTone: nil,
+                isSelected: location.id == selectedID,
+                accessibilityValue: "\(item.eventType.displayName), \(percent), \(item.qualityText), \(day) at \(time)"
+            )
         }
+
+        let (message, badge, tone) = popoverUnavailableState(
+            location: location,
+            snapshot: snapshot,
+            selection: preferences.eventSelection
+        )
+        return MenuBarPopoverRow(
+            id: location.id,
+            name: location.name,
+            item: nil,
+            dayLabel: "",
+            timeLabel: "",
+            magicHoursLabel: nil,
+            updatedLabel: snapshot.map {
+                "Updated \($0.fetchedAt.formatted(date: .omitted, time: .shortened))"
+            } ?? "No forecast yet",
+            statusMessage: message,
+            statusBadgeTitle: badge,
+            statusTone: tone,
+            isSelected: location.id == selectedID,
+            accessibilityValue: message
+        )
     }
 
-    private func menuBarDetail(for location: SavedLocation) -> String {
-        let snapshot = snapshotsByLocationID[location.id]
-        if let event = primaryMenuBarForecast(for: location, bundle: snapshot?.bundle),
-           let timeZone = location.timeZone {
-            let percent = PresentationFormatting.percentage(fromNormalized: event.quality) ?? "—"
-            let time = PresentationFormatting.timeString(event.eventTime, timeZone: timeZone) ?? ""
-            if time.isEmpty {
-                return "\(event.eventType.displayName)  \(percent)"
-            }
-            return "\(event.eventType.displayName)  \(percent)  \(time)"
+    private func popoverUnavailableState(
+        location: SavedLocation,
+        snapshot: CachedLocationSnapshot?,
+        selection: MenuBarEventSelection
+    ) -> (String, String?, StatusTone?) {
+        if !MenuBarForecastResolver.isSelectionEnabled(location: location, selection: selection),
+           let warning = MenuBarForecastResolver.disabledEventMessage(selection: selection) {
+            return (warning, "Disabled", .warning)
         }
         switch snapshot?.status {
-        case .authenticationRequired: return "API key needed"
-        case .rateLimited: return "Rate limited"
-        case .temporarilyUnavailable: return "Unavailable"
-        case .invalidRequest: return "Invalid location"
-        case .invalidResponse: return "Bad response"
-        case .none: return "No forecast yet"
-        default: return "No forecast yet"
+        case .authenticationRequired:
+            return ("API key needed", "Auth", .negative)
+        case .rateLimited:
+            return ("Rate limited", "Limited", .warning)
+        case .temporarilyUnavailable:
+            return ("Temporarily unavailable", "Unavailable", .warning)
+        case .invalidRequest:
+            return ("Coordinates were rejected", "Invalid", .negative)
+        case .invalidResponse:
+            return ("Incompatible response", "Error", .negative)
+        case .stale:
+            return ("Forecast is stale — retry scheduled.", "Stale", .warning)
+        case .current:
+            return ("No matching future event in cache.", "Unavailable", .neutral)
+        case .none:
+            return ("No forecast yet", "Empty", .neutral)
         }
     }
 
-    private func primaryMenuBarForecast(
-        for location: SavedLocation,
-        bundle: LocationForecastBundle?
-    ) -> EventForecast? {
-        guard let bundle else { return nil }
-        return UpcomingForecastSelector.forecasts(
-            from: bundle,
-            allowedTypes: Set(location.enabledEvents),
-            now: Date(),
-            limit: 1
-        ).first
+    func refreshLocationFromMenuBar(id: UUID) {
+        Task {
+            refreshingLocationIDs.insert(id)
+            defer { refreshingLocationIDs.remove(id) }
+            _ = await refreshCoordinator.refreshLocation(id: id, force: true)
+            await reloadSelectedSnapshot()
+        }
     }
 
     var hasAPIKey: Bool {
@@ -410,9 +465,8 @@ final class AppModel: ObservableObject {
             await notificationCoordinator.refreshAuthorizationStatus()
             notificationAuthorization = await notificationCoordinator.authorizationState
             if enablingNotifications, result == .denied {
-                openSystemNotificationSettings()
                 notificationStatusMessage =
-                    "Notifications are disabled in System Settings. Turn them on for SunsetHue to deliver alerts."
+                    "Notifications are disabled in System Settings. Use “Open System Notification Settings…” to enable them."
             }
         }
 
@@ -434,26 +488,86 @@ final class AppModel: ObservableObject {
     }
 
     func sendTestNotification() async {
+        guard !isNotificationTestRunning else { return }
+        isNotificationTestRunning = true
         notificationStatusMessage = nil
+        notificationTestResult = NotificationTestResult(
+            stage: .checkingSettings,
+            message: "Checking notification settings…"
+        )
+        defer { isNotificationTestRunning = false }
+
         let locationName = notificationLocation?.name ?? "SunsetHue"
-        do {
-            try await notificationCoordinator.sendTestNotification(
-                locationName: locationName,
-                playSound: notificationPreferences.playSound
-            )
-            notificationStatusMessage = "Test notification scheduled — it should appear in about a second."
-        } catch ForecastNotificationCoordinator.TestNotificationError.notAuthorized {
-            openSystemNotificationSettings()
-            notificationStatusMessage =
-                "Notifications are not allowed. Enable SunsetHue in System Settings, then try again."
-        } catch ForecastNotificationCoordinator.TestNotificationError.alertsDisabled {
-            openSystemNotificationSettings()
-            notificationStatusMessage =
-                "Alerts are turned off for SunsetHue in System Settings. Enable banners or alerts, then try again."
-        } catch {
-            notificationStatusMessage = error.localizedDescription
+        let playSound = notificationPreferences.playSound
+
+        let result = await notificationCoordinator.runTestNotification(
+            locationName: locationName,
+            playSound: playSound
+        ) { [weak self] progress in
+            Task { @MainActor in
+                self?.notificationTestResult = progress
+                self?.notificationStatusMessage = progress.message
+            }
         }
+
+        notificationTestResult = result
+        notificationStatusMessage = result.message
+        lastNotificationDiagnostics = await buildNotificationDiagnostics(for: result)
         await reloadNotificationState()
+    }
+
+    func copyNotificationDiagnosticsToPasteboard() async {
+        let snapshot: NotificationDiagnosticsSnapshot
+        if let existing = lastNotificationDiagnostics {
+            snapshot = existing
+        } else {
+            snapshot = await buildNotificationDiagnostics(for: notificationTestResult)
+        }
+        lastNotificationDiagnostics = snapshot
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(snapshot.copyText(), forType: .string)
+        notificationStatusMessage = "Notification diagnostics copied."
+    }
+
+    private func buildNotificationDiagnostics(
+        for result: NotificationTestResult?
+    ) async -> NotificationDiagnosticsSnapshot {
+        let settings = await SystemNotificationCenterClient().notificationSettings()
+        let executable = Bundle.main.executableURL?.path
+        let runningFromApps = (executable?.hasPrefix("/Applications/") == true)
+            || (Bundle.main.bundlePath.hasPrefix("/Applications/"))
+        let team = SunsetHueConstants.teamIdentifier
+        let pending: Bool?
+        let delivered: Bool?
+        if let id = result?.requestIdentifier {
+            let client = SystemNotificationCenterClient()
+            let pendingIDs = await client.pendingIdentifiers()
+            let deliveredIDs = await client.deliveredIdentifiers()
+            pending = pendingIDs.contains(id)
+            delivered = deliveredIDs.contains(id)
+        } else {
+            pending = nil
+            delivered = nil
+        }
+
+        return NotificationDiagnosticsSnapshot(
+            bundleIdentifier: Bundle.main.bundleIdentifier,
+            executablePath: executable,
+            runningFromApplications: runningFromApps,
+            teamIdentifierPresent: !(team?.isEmpty ?? true),
+            teamIdentifier: team?.isEmpty == false ? team : nil,
+            authorizationStatus: settings.authorizationStatus.rawValue,
+            alertSetting: settings.alertSetting.rawValue,
+            notificationCenterSetting: settings.notificationCenterSetting.rawValue,
+            soundSetting: settings.soundSetting.rawValue,
+            lockScreenSetting: settings.lockScreenSetting.rawValue,
+            testRequestPending: pending,
+            foregroundDelegateReceived: result?.stage == .foregroundDelegateReceived
+                || result?.stage == .confirmedDelivered,
+            testRequestDelivered: delivered,
+            lastTestStage: result.map { String(describing: $0.stage) },
+            lastTestMessage: result?.message
+        )
     }
 
     func openSystemNotificationSettings() {
@@ -585,6 +699,7 @@ final class AppModel: ObservableObject {
     }
 }
 
+@MainActor
 struct AppPreferenceDefaults {
     static let shared = AppPreferenceDefaults()
 
@@ -642,10 +757,12 @@ struct LocationEditorDraft: Equatable {
     var includeSunset: Bool
     var refreshIntervalHours: Int
 
+    @MainActor
     static var empty: LocationEditorDraft {
         empty(using: .shared)
     }
 
+    @MainActor
     static func empty(using defaults: AppPreferenceDefaults) -> LocationEditorDraft {
         LocationEditorDraft(
             id: UUID(),

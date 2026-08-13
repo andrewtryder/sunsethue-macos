@@ -7,8 +7,8 @@ enum WidgetEventMode: String, AppEnum {
     case sunset
     case both
 
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Event")
-    static var caseDisplayRepresentations: [WidgetEventMode: DisplayRepresentation] = [
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Event")
+    static let caseDisplayRepresentations: [WidgetEventMode: DisplayRepresentation] = [
         .sunrise: "Sunrise",
         .sunset: "Sunset",
         .both: "Both",
@@ -20,8 +20,8 @@ enum WidgetPreferredDay: String, AppEnum {
     case tomorrow
     case upcoming
 
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Display")
-    static var caseDisplayRepresentations: [WidgetPreferredDay: DisplayRepresentation] = [
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Display")
+    static let caseDisplayRepresentations: [WidgetPreferredDay: DisplayRepresentation] = [
         .today: "Today",
         .tomorrow: "Tomorrow",
         .upcoming: "Next Events",
@@ -32,16 +32,16 @@ enum WidgetDetailLevel: String, AppEnum {
     case compact
     case detailed
 
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Detail")
-    static var caseDisplayRepresentations: [WidgetDetailLevel: DisplayRepresentation] = [
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Detail")
+    static let caseDisplayRepresentations: [WidgetDetailLevel: DisplayRepresentation] = [
         .compact: "Compact",
         .detailed: "Detailed",
     ]
 }
 
 struct LocationEntity: AppEntity {
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Location")
-    static var defaultQuery = LocationEntityQuery()
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Location")
+    static let defaultQuery = LocationEntityQuery()
 
     var id: UUID
     var name: String
@@ -80,8 +80,8 @@ struct LocationEntityQuery: EntityQuery {
 }
 
 struct SunsetHueWidgetConfigurationIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "SunsetHue"
-    static var description = IntentDescription("Show sunrise and sunset forecast quality for a saved location.")
+    static let title: LocalizedStringResource = "SunsetHue"
+    static let description = IntentDescription("Show sunrise and sunset forecast quality for a saved location.")
 
     @Parameter(title: "Location")
     var location: LocationEntity?

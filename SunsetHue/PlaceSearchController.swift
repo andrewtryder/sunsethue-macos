@@ -1,5 +1,5 @@
 import Foundation
-import MapKit
+@preconcurrency import MapKit
 import CoreLocation
 import SunsetHueCore
 
@@ -66,12 +66,7 @@ final class PlaceSearchController: NSObject, ObservableObject, MKLocalSearchComp
             throw PlaceSearchError.noResult
         }
 
-        let coordinate: CLLocationCoordinate2D
-        if #available(macOS 26, *) {
-            coordinate = item.location.coordinate
-        } else {
-            coordinate = item.placemark.coordinate
-        }
+        let coordinate = item.placemark.coordinate
 
         return ResolvedPlace(
             name: preferredDisplayName(item: item, completion: completion),
