@@ -233,6 +233,132 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         return try JSONSerialization.data(withJSONObject: payload)
     }
 
+    func testStaleRejectedCoordinatorWriteEmitsZeroSideEffects() async throws {
+        let location = SavedLocation(
+            id: PreviewFixtures.sampleLocationID,
+            name: "Sample Harbor",
+            latitude: 40.7128,
+            longitude: -74.006,
+            timeZoneIdentifier: "America/New_York",
+            forecastDays: 1,
+            includeSunrise: false,
+            includeSunset: true,
+            refreshIntervalHours: 6
+        )
+        let futureDate = Date().addingTimeInterval(3600)
+        let newerAuthoritative = CachedLocationSnapshot(
+            locationID: location.id,
+            fetchedAt: futureDate,
+            lastAttemptAt: futureDate,
+            forecasts: [PreviewFixtures.excellentSunset(on: futureDate)],
+            status: .current
+        )
+
+        let cache = InMemoryForecastCache()
+        _ = try await cache.saveSnapshot(newerAuthoritative)
+
+        let spySink = SpySideEffectSink()
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [location]))
+        let credentials = InMemoryCredentialStore(apiKey: "test-key")
+        let body = try loadFixture("event_full")
+        let transport = MockHTTPTransport(stubs: [.init(statusCode: 200, body: body)])
+        let service = ForecastService(transport: transport)
+
+        let coordinator = ForecastRefreshCoordinator(
+            settingsStore: settings,
+            forecastCache: cache,
+            credentialStore: credentials,
+            forecastService: service,
+            sideEffectSink: spySink
+        )
+
+        // Attempt forced refresh. The network fetch will produce a snapshot with fetchedAt = Date() (older than futureDate).
+        let result = await coordinator.refreshLocation(id: location.id, force: true)
+
+        // Coordinator returns the newer authoritative snapshot
+        XCTAssertEqual(result?.fetchedAt, futureDate)
+
+        // Cache still holds the newer authoritative snapshot
+        let cached = try await cache.loadSnapshot(for: location.id)
+        XCTAssertEqual(cached?.fetchedAt, futureDate)
+
+        // Side-effect sink call count is ZERO
+        let count = await spySink.callsCount()
+        XCTAssertEqual(count, 0)
+    }
+
+    func testForcedRefreshArrivingDuringNonForcedInFlightNoOpIsNotSwallowed() async throws {
+        let body = try loadFixture("event_full")
+        let location = SavedLocation(
+            id: UUID(),
+            name: "Sample Harbor",
+            latitude: 40.7128,
+            longitude: -74.006,
+            timeZoneIdentifier: "America/New_York",
+            forecastDays: 1,
+            includeSunrise: false,
+            includeSunset: true,
+            refreshIntervalHours: 6
+        )
+        let seededDate = Date().addingTimeInterval(-100)
+        let seededSnapshot = CachedLocationSnapshot(
+            locationID: location.id,
+            fetchedAt: seededDate,
+            lastAttemptAt: seededDate,
+            forecasts: [PreviewFixtures.excellentSunset(on: seededDate)],
+            status: .current
+        )
+        let innerCache = InMemoryForecastCache()
+        _ = try await innerCache.saveSnapshot(seededSnapshot)
+        let gatedCache = GatedForecastCache(underlying: innerCache)
+
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [location]))
+        let credentials = InMemoryCredentialStore(apiKey: "test-key")
+        let transport = TrackingHTTPTransport(stub: .init(statusCode: 200, body: body))
+        let service = ForecastService(transport: transport)
+        let coordinator = ForecastRefreshCoordinator(
+            settingsStore: settings,
+            forecastCache: gatedCache,
+            credentialStore: credentials,
+            forecastService: service
+        )
+
+        // 1. Begin non-force refresh (will hit gated loadSnapshot and pause)
+        let task1 = Task {
+            await coordinator.refreshLocation(id: location.id, force: false)
+        }
+
+        // 2. Wait until task1 has entered loadSnapshot and registered in inFlightRefreshes
+        await gatedCache.waitForArrival()
+
+        // 3. Invoke force: true for the same location while task1 is in-flight holding non-forced no-op
+        let task2 = Task {
+            await coordinator.refreshLocation(id: location.id, force: true)
+        }
+
+        // 4. Release task1
+        await gatedCache.openGate()
+
+        let result1 = await task1.value
+        let result2 = await task2.value
+
+        let stats = await transport.stats()
+
+        // 5. Assertions:
+        // non-force operation returns the seeded fresh cache
+        XCTAssertEqual(result1?.fetchedAt, seededDate)
+
+        // forced operation returns the new network snapshot
+        XCTAssertNotNil(result2)
+        XCTAssertGreaterThan(result2?.fetchedAt ?? Date.distantPast, seededDate)
+
+        // total network refresh count is exactly 1 (from forced refresh)
+        XCTAssertEqual(stats.total, 1)
+
+        // simultaneous network requests never exceeded 1
+        XCTAssertLessThanOrEqual(stats.maxActive, 1)
+    }
+
     func testPersistenceFailurePreventsSideEffect() async throws {
         let failingCache = FailingForecastCache()
         let spySink = SpySideEffectSink()
@@ -321,6 +447,86 @@ private actor FailingForecastCache: ForecastCache {
         throw SunsetHueError.storageCorrupt
     }
     func deleteLocation(_ locationID: UUID) async throws {}
+}
+
+private actor GatedForecastCache: ForecastCache {
+    private let underlying: any ForecastCache
+    private var isArrived = false
+    private var arrivalContinuations: [CheckedContinuation<Void, Never>] = []
+    private var gateContinuation: CheckedContinuation<Void, Never>?
+    private var shouldGateNextCall = true
+
+    init(underlying: any ForecastCache) {
+        self.underlying = underlying
+    }
+
+    func waitForArrival() async {
+        if isArrived { return }
+        await withCheckedContinuation { continuation in
+            arrivalContinuations.append(continuation)
+        }
+    }
+
+    func openGate() {
+        gateContinuation?.resume()
+        gateContinuation = nil
+    }
+
+    func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? {
+        let snapshot = try await underlying.loadSnapshot(for: locationID)
+        if shouldGateNextCall {
+            shouldGateNextCall = false
+            isArrived = true
+            for continuation in arrivalContinuations {
+                continuation.resume()
+            }
+            arrivalContinuations.removeAll()
+            await withCheckedContinuation { continuation in
+                gateContinuation = continuation
+            }
+        }
+        return snapshot
+    }
+
+    func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? {
+        try await underlying.loadBundle(for: locationID)
+    }
+
+    func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
+        try await underlying.saveSnapshot(snapshot)
+    }
+
+    func deleteLocation(_ locationID: UUID) async throws {
+        try await underlying.deleteLocation(locationID)
+    }
+}
+
+private actor TrackingHTTPTransport: HTTPTransport {
+    private(set) var activeRequests = 0
+    private(set) var maxActiveRequests = 0
+    private(set) var totalRequests = 0
+    private let stub: MockHTTPTransport.Stub
+
+    init(stub: MockHTTPTransport.Stub) {
+        self.stub = stub
+    }
+
+    func perform(_ request: URLRequest) async throws -> HTTPResponse {
+        activeRequests += 1
+        totalRequests += 1
+        if activeRequests > maxActiveRequests {
+            maxActiveRequests = activeRequests
+        }
+        defer {
+            activeRequests -= 1
+        }
+        if let error = stub.error { throw error }
+        return HTTPResponse(statusCode: stub.statusCode, headers: stub.headers, body: stub.body)
+    }
+
+    func stats() -> (total: Int, maxActive: Int) {
+        (totalRequests, maxActiveRequests)
+    }
 }
 
 private actor SpySideEffectSink: ForecastRefreshSideEffectSink {

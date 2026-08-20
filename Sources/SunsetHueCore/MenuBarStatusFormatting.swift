@@ -231,24 +231,72 @@ public enum MenuBarStatusFormatting: Sendable {
         return "\(prefix) \(start)–\(end)"
     }
 
-    public static func relativeEventDayLabel(
+    public static func compactPercentage(fromNormalized value: Double?) -> String {
+        guard let value else { return "—" }
+        let clamped = max(0.0, min(1.0, value))
+        let percent = Int((clamped * 100).rounded())
+        return "\(percent)%"
+    }
+
+    public static func compactDayTimeLabel(
         eventTime: Date,
         timeZone: TimeZone,
         now: Date = Date()
     ) -> String {
+        guard let timeString = PresentationFormatting.timeString(eventTime, timeZone: timeZone) else {
+            return "—"
+        }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         let eventDay = calendar.startOfDay(for: eventTime)
         let today = calendar.startOfDay(for: now)
         if eventDay == today {
-            return "Today"
+            return timeString
         }
         if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today), eventDay == tomorrow {
-            return "Tomorrow"
+            return "Tomorrow \(timeString)"
         }
         let formatter = DateFormatter()
         formatter.timeZone = timeZone
-        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
-        return formatter.string(from: eventTime)
+        formatter.setLocalizedDateFormatFromTemplate("EEE")
+        let dayString = formatter.string(from: eventTime)
+        return "\(dayString) \(timeString)"
+    }
+
+    public static func unavailableStatus(
+        location: SavedLocation,
+        snapshot: CachedLocationSnapshot?,
+        selection: MenuBarEventSelection
+    ) -> (message: String, symbolName: String) {
+        if !MenuBarForecastResolver.isSelectionEnabled(location: location, selection: selection) {
+            switch selection {
+            case .nextSunrise:
+                return ("Sunrise disabled", "slash.circle")
+            case .nextSunset:
+                return ("Sunset disabled", "slash.circle")
+            case .nextEvent:
+                return ("No events enabled", "slash.circle")
+            }
+        }
+        guard let snapshot else {
+            return ("No forecast available", "minus.circle")
+        }
+        switch snapshot.status {
+        case .authenticationRequired:
+            return ("API key needed", "key.slash")
+        case .rateLimited:
+            return ("Rate limited", "clock.badge.exclamationmark")
+        case .temporarilyUnavailable:
+            return ("Temporarily unavailable", "exclamationmark.triangle")
+        case .invalidRequest:
+            return ("Invalid location", "exclamationmark.triangle")
+        case .invalidResponse:
+            return ("Incompatible response", "exclamationmark.triangle")
+        case .stale:
+            return ("Forecast stale", "arrow.clockwise")
+        case .current:
+            return ("No forecast available", "minus.circle")
+        }
     }
 }
+

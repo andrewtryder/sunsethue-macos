@@ -17,31 +17,32 @@ struct SunsetHueMenuBarPopoverView: View {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 2) {
                         ForEach(popoverRows) { row in
-                            locationCard(row)
+                            locationRow(row)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 4)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                 }
-                .frame(maxHeight: min(CGFloat(max(1, popoverRows.count)) * 118, 420))
+                .frame(maxHeight: min(CGFloat(max(1, popoverRows.count)) * 38.0 + 8.0, 320.0))
             }
 
             Divider()
-                .padding(.top, 10)
+                .padding(.top, 4)
+                .padding(.bottom, 6)
 
             controls
         }
-        .padding(.vertical, 10)
-        .frame(width: 372)
+        .padding(.vertical, 8)
+        .frame(width: 360)
         .onAppear { labelController.isPopupPresented = true }
         .onDisappear { labelController.isPopupPresented = false }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("SunsetHue menu")
     }
 
-    private var popoverRows: [AppModel.MenuBarPopoverRow] {
+    private var popoverRows: [MenuBarPopoverRow] {
         appModel.menuBarPopoverRows(
             preferences: preferencesStore.preferences,
             now: Date()
@@ -63,112 +64,89 @@ struct SunsetHueMenuBarPopoverView: View {
             .controlSize(.small)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 
-    private func locationCard(_ row: AppModel.MenuBarPopoverRow) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                appModel.selectLocation(id: row.id)
-                dismissPopupThen {
-                    MainWindowPresenter.present(openWindow: openWindow)
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(row.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        if row.isSelected {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                                .accessibilityLabel("Selected location")
-                        }
-                    }
-
-                    if let item = row.item {
-                        let style = QualityStyle.resolve(quality: item.quality, qualityText: item.qualityText)
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Label {
-                                Text(item.eventType.displayName)
-                            } icon: {
-                                Image(systemName: item.eventType.symbolName)
-                                    .foregroundStyle(item.eventType.iconColor)
-                            }
-                            .font(.subheadline)
-
-                            Spacer(minLength: 4)
-
-                            Text(style.percentage)
-                                .font(.title3.weight(.semibold).monospacedDigit())
-                                .foregroundStyle(style.tint)
-                                .accessibilityLabel("Forecast quality")
-                                .accessibilityValue("\(style.percentage), \(style.status)")
-
-                            StatusBadge(quality: style)
-                        }
-
-                        Text("\(row.dayLabel) at \(row.timeLabel)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        if let magic = row.magicHoursLabel {
-                            Text(magic)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        HStack(spacing: 6) {
-                            Text(row.updatedLabel)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            if item.isStale {
-                                StatusBadge(title: "Stale", tone: .warning, accessibilityLabelText: "Cache status")
-                            }
-                        }
-                    } else {
-                        Text(row.statusMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let tone = row.statusTone {
-                            StatusBadge(title: row.statusBadgeTitle ?? "Status", tone: tone)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+    private func locationRow(_ row: MenuBarPopoverRow) -> some View {
+        Button {
+            appModel.selectLocation(id: row.id)
+            dismissPopupThen {
+                MainWindowPresenter.present(openWindow: openWindow)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(row.name)
-            .accessibilityValue(row.accessibilityValue)
-            .accessibilityHint("Opens this location in SunsetHue")
+        } label: {
+            HStack(spacing: 8) {
+                // Subtle checkmark indicator for selected location
+                Image(systemName: "checkmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .opacity(row.isSelected ? 1 : 0)
+                    .frame(width: 12)
 
-            HStack {
-                Spacer()
-                Button("Refresh") {
-                    appModel.refreshLocationFromMenuBar(id: row.id)
+                // Location name (strongest emphasis, truncates gracefully)
+                Text(row.name)
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 8)
+
+                if let eventType = row.eventType,
+                   let eventLabel = row.eventLabel,
+                   let dayTimeLabel = row.dayTimeLabel,
+                   let qualityLabel = row.qualityLabel {
+                    // Normal forecast row: EVENT | TIME | QUALITY
+                    HStack(spacing: 4) {
+                        Image(systemName: eventType.symbolName)
+                            .foregroundStyle(eventType.iconColor)
+                        Text(eventLabel)
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.subheadline)
+                    .lineLimit(1)
+
+                    Text(dayTimeLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+
+                    Text(qualityLabel)
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.primary)
+                        .frame(minWidth: 38, alignment: .trailing)
+                } else if let statusMessage = row.statusMessage {
+                    // Unavailable / Error row
+                    HStack(spacing: 4) {
+                        if let symbolName = row.statusSymbolName {
+                            Image(systemName: symbolName)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(statusMessage)
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.subheadline)
+                    .lineLimit(1)
                 }
-                .controlSize(.mini)
-                .disabled(appModel.isRefreshing || appModel.refreshingLocationIDs.contains(row.id))
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+            .background {
+                if row.isSelected {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.12))
+                }
+            }
+            .contentShape(Rectangle())
         }
-        .padding(12)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(row.isSelected ? Color.accentColor.opacity(0.10) : Color(nsColor: .controlBackgroundColor).opacity(0.65))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(row.isSelected ? Color.accentColor.opacity(0.35) : Color.primary.opacity(0.06), lineWidth: 1)
-        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(row.name)
+        .accessibilityValue(row.accessibilityValue)
+        .accessibilityHint("Opens this location in SunsetHue")
     }
 
     private var controls: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             Button("Refresh All") {
                 appModel.refreshAllFromCommand()
             }
@@ -199,10 +177,11 @@ struct SunsetHueMenuBarPopoverView: View {
                     NSApp.terminate(nil)
                 }
                 .controlSize(.small)
+                .keyboardShortcut("q", modifiers: [.command])
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
+        .padding(.horizontal, 12)
+        .padding(.top, 4)
         .padding(.bottom, 2)
     }
 

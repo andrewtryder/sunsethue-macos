@@ -95,4 +95,12 @@ public enum EventType: String, Codable, Sendable, CaseIterable, Hashable {
         case .sunset: return "Sunset"
         }
     }
+
+    public var symbolName: String {
+        switch self {
+        case .sunrise: return "sunrise.fill"
+        case .sunset: return "sunset.fill"
+        }
+    }
 }
+

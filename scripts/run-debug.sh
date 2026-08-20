@@ -30,6 +30,7 @@ xcodebuild \
   -configuration Debug \
   -destination 'platform=macOS' \
   -derivedDataPath "${DERIVED}" \
+  -allowProvisioningUpdates \
   build
 
 if [[ ! -d "${APP}" ]]; then

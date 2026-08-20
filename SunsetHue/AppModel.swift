@@ -128,138 +128,22 @@ final class AppModel: ObservableObject {
         return state.locations.first(where: { $0.id == selectedLocationID })
     }
 
-    struct MenuBarPopoverRow: Identifiable, Equatable {
-        let id: UUID
-        let name: String
-        let item: MenuBarForecastItem?
-        let dayLabel: String
-        let timeLabel: String
-        let magicHoursLabel: String?
-        let updatedLabel: String
-        let statusMessage: String
-        let statusBadgeTitle: String?
-        let statusTone: StatusTone?
-        let isSelected: Bool
-        let accessibilityValue: String
-    }
+    public typealias MenuBarPopoverRow = SunsetHueCore.MenuBarPopoverRow
 
-    /// One rich row per configured location for the menu-bar window popup.
+    /// Compact rows per configured location for the menu-bar window popup.
     func menuBarPopoverRows(
         preferences: MenuBarPreferences,
         now: Date = Date()
     ) -> [MenuBarPopoverRow] {
-        let selectedID = selectedLocationID ?? state.locations.first?.id
-        return state.locations.map { location in
-            menuBarPopoverRow(
-                for: location,
-                preferences: preferences,
-                selectedID: selectedID,
-                now: now
-            )
-        }
-    }
-
-    private func menuBarPopoverRow(
-        for location: SavedLocation,
-        preferences: MenuBarPreferences,
-        selectedID: UUID?,
-        now: Date
-    ) -> MenuBarPopoverRow {
-        let snapshot = snapshotsByLocationID[location.id]
-        let timeZone = location.timeZone ?? .current
-        let item = MenuBarForecastResolver.resolve(
-            location: location,
-            snapshot: snapshot,
-            selection: preferences.eventSelection,
+        MenuBarPopoverPresenter.buildRows(
+            locations: state.locations,
+            snapshots: snapshotsByLocationID,
+            preferences: preferences,
+            selectedLocationID: selectedLocationID,
             now: now
         )
-
-        if let item {
-            let day = MenuBarStatusFormatting.relativeEventDayLabel(
-                eventTime: item.eventTime,
-                timeZone: timeZone,
-                now: now
-            )
-            let time = PresentationFormatting.timeString(item.eventTime, timeZone: timeZone) ?? "—"
-            let gold = MenuBarStatusFormatting.compactWindowLabel(
-                prefix: "Gold",
-                window: item.goldenHour,
-                timeZone: timeZone
-            )
-            let blue = MenuBarStatusFormatting.compactWindowLabel(
-                prefix: "Blue",
-                window: item.blueHour,
-                timeZone: timeZone
-            )
-            let magic = [gold, blue].compactMap { $0 }.joined(separator: " · ")
-            let percent = PresentationFormatting.percentage(fromNormalized: item.quality) ?? "—"
-            return MenuBarPopoverRow(
-                id: location.id,
-                name: location.name,
-                item: item,
-                dayLabel: day,
-                timeLabel: time,
-                magicHoursLabel: magic.isEmpty ? nil : magic,
-                updatedLabel: "Updated \(item.fetchedAt.formatted(date: .omitted, time: .shortened))",
-                statusMessage: "",
-                statusBadgeTitle: nil,
-                statusTone: nil,
-                isSelected: location.id == selectedID,
-                accessibilityValue: "\(item.eventType.displayName), \(percent), \(item.qualityText), \(day) at \(time)"
-            )
-        }
-
-        let (message, badge, tone) = popoverUnavailableState(
-            location: location,
-            snapshot: snapshot,
-            selection: preferences.eventSelection
-        )
-        return MenuBarPopoverRow(
-            id: location.id,
-            name: location.name,
-            item: nil,
-            dayLabel: "",
-            timeLabel: "",
-            magicHoursLabel: nil,
-            updatedLabel: snapshot.map {
-                "Updated \($0.fetchedAt.formatted(date: .omitted, time: .shortened))"
-            } ?? "No forecast yet",
-            statusMessage: message,
-            statusBadgeTitle: badge,
-            statusTone: tone,
-            isSelected: location.id == selectedID,
-            accessibilityValue: message
-        )
     }
 
-    private func popoverUnavailableState(
-        location: SavedLocation,
-        snapshot: CachedLocationSnapshot?,
-        selection: MenuBarEventSelection
-    ) -> (String, String?, StatusTone?) {
-        if !MenuBarForecastResolver.isSelectionEnabled(location: location, selection: selection),
-           let warning = MenuBarForecastResolver.disabledEventMessage(selection: selection) {
-            return (warning, "Disabled", .warning)
-        }
-        switch snapshot?.status {
-        case .authenticationRequired:
-            return ("API key needed", "Auth", .negative)
-        case .rateLimited:
-            return ("Rate limited", "Limited", .warning)
-        case .temporarilyUnavailable:
-            return ("Temporarily unavailable", "Unavailable", .warning)
-        case .invalidRequest:
-            return ("Coordinates were rejected", "Invalid", .negative)
-        case .invalidResponse:
-            return ("Incompatible response", "Error", .negative)
-        case .stale:
-            return ("Forecast is stale — retry scheduled.", "Stale", .warning)
-        case .current:
-            return ("No matching future event in cache.", "Unavailable", .neutral)
-        case .none:
-            return ("No forecast yet", "Empty", .neutral)
-        }
-    }
 
     func refreshLocationFromMenuBar(id: UUID) {
         Task {

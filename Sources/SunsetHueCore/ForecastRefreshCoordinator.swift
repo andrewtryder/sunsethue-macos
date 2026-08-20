@@ -1,6 +1,11 @@
 import Foundation
 import os
 
+private struct RefreshExecutionResult: Sendable {
+    let snapshot: CachedLocationSnapshot?
+    let performedNetworkRefresh: Bool
+}
+
 /// Sole writer of forecast cache snapshots. Owns networking + Keychain reads for refresh.
 public actor ForecastRefreshCoordinator {
     private let settingsStore: any SharedSettingsStore
@@ -11,7 +16,7 @@ public actor ForecastRefreshCoordinator {
     private let logger = Logger(subsystem: "com.andrewtryder.SunsetHue", category: "Coordinator")
     private var scheduledTask: Task<Void, Never>?
     private var isRefreshingAll = false
-    private var inFlightRefreshes: [UUID: Task<CachedLocationSnapshot?, Never>] = [:]
+    private var inFlightRefreshes: [UUID: Task<RefreshExecutionResult, Never>] = [:]
 
     public init(
         settingsStore: any SharedSettingsStore = SharedStorageFactory.makeSettingsStore(),
@@ -148,31 +153,42 @@ public actor ForecastRefreshCoordinator {
         let locationID = location.id
 
         if let existingTask = inFlightRefreshes[locationID] {
-            return await existingTask.value
+            let joinedResult = await existingTask.value
+            if joinedResult.performedNetworkRefresh || !force {
+                return joinedResult.snapshot
+            }
+            if let nextTask = inFlightRefreshes[locationID], nextTask != existingTask {
+                let nextResult = await nextTask.value
+                return nextResult.snapshot
+            }
         }
 
-        let task = Task<CachedLocationSnapshot?, Never> {
+        let task = Task<RefreshExecutionResult, Never> {
             await self.performRefresh(location: location, force: force)
         }
         inFlightRefreshes[locationID] = task
+        defer {
+            if inFlightRefreshes[locationID] == task {
+                inFlightRefreshes.removeValue(forKey: locationID)
+            }
+        }
         let result = await task.value
-        inFlightRefreshes.removeValue(forKey: locationID)
-        return result
+        return result.snapshot
     }
 
-    private func performRefresh(location: SavedLocation, force: Bool) async -> CachedLocationSnapshot? {
+    private func performRefresh(location: SavedLocation, force: Bool) async -> RefreshExecutionResult {
         let previous = try? await forecastCache.loadSnapshot(for: location.id)
         let now = Date()
 
         if !force {
             if let previous, !forceNeeded(existing: previous, location: location, force: false) {
-                return previous
+                return RefreshExecutionResult(snapshot: previous, performedNetworkRefresh: false)
             }
         } else if let previous,
                   case .rateLimited(let retryAfter) = previous.status,
                   let retryAfter, retryAfter > now {
             // Manual refresh still respects an active rate-limit deadline.
-            return previous
+            return RefreshExecutionResult(snapshot: previous, performedNetworkRefresh: false)
         }
 
         let attemptedAt = Date()
@@ -185,12 +201,13 @@ public actor ForecastRefreshCoordinator {
                     attemptedAt: attemptedAt,
                     status: .authenticationRequired
                 )
-                return await persistAndEmitSideEffects(
+                let saved = await persistAndEmitSideEffects(
                     location: location,
                     previous: previous,
                     candidate: snapshot,
                     wasSuccessfulNetworkRefresh: false
                 )
+                return RefreshExecutionResult(snapshot: saved, performedNetworkRefresh: false)
             }
             apiKey = loaded
         } catch {
@@ -200,12 +217,13 @@ public actor ForecastRefreshCoordinator {
                 attemptedAt: attemptedAt,
                 status: .authenticationRequired
             )
-            return await persistAndEmitSideEffects(
+            let saved = await persistAndEmitSideEffects(
                 location: location,
                 previous: previous,
                 candidate: snapshot,
                 wasSuccessfulNetworkRefresh: false
             )
+            return RefreshExecutionResult(snapshot: saved, performedNetworkRefresh: false)
         }
 
         let outcome = await forecastService.refreshPreservingCache(
@@ -255,12 +273,13 @@ public actor ForecastRefreshCoordinator {
             )
         }
 
-        return await persistAndEmitSideEffects(
+        let saved = await persistAndEmitSideEffects(
             location: location,
             previous: previous,
             candidate: snapshot,
             wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
         )
+        return RefreshExecutionResult(snapshot: saved, performedNetworkRefresh: true)
     }
 
     private func persistAndEmitSideEffects(
@@ -271,20 +290,18 @@ public actor ForecastRefreshCoordinator {
     ) async -> CachedLocationSnapshot? {
         do {
             let result = try await forecastCache.saveSnapshot(candidate)
-            let authoritative: CachedLocationSnapshot
             switch result {
             case .committed(let snapshot):
-                authoritative = snapshot
-            case .rejectedStale(let snapshot):
-                authoritative = snapshot
+                await emitSideEffect(
+                    location: location,
+                    previous: previous,
+                    current: snapshot,
+                    wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
+                )
+                return snapshot
+            case .rejectedStale(let authoritative):
+                return authoritative
             }
-            await emitSideEffect(
-                location: location,
-                previous: previous,
-                current: authoritative,
-                wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
-            )
-            return authoritative
         } catch {
             logger.error("Failed to persist forecast cache for location \(location.id): \(error.localizedDescription, privacy: .public)")
             return previous

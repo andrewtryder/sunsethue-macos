@@ -74,13 +74,6 @@ enum StatusTone: Equatable {
 }
 
 extension EventType {
-    var symbolName: String {
-        switch self {
-        case .sunrise: return "sunrise.fill"
-        case .sunset: return "sunset.fill"
-        }
-    }
-
     var iconColor: Color {
         switch self {
         case .sunrise: return .orange
@@ -88,3 +81,4 @@ extension EventType {
         }
     }
 }
+

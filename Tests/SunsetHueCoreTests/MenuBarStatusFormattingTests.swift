@@ -131,4 +131,38 @@ final class MenuBarStatusFormattingTests: XCTestCase {
             "exclamationmark.triangle"
         )
     }
+
+    func testCompactPercentageFormatting() {
+        XCTAssertEqual(MenuBarStatusFormatting.compactPercentage(fromNormalized: 0.824), "82%")
+        XCTAssertEqual(MenuBarStatusFormatting.compactPercentage(fromNormalized: 0.826), "83%")
+        XCTAssertEqual(MenuBarStatusFormatting.compactPercentage(fromNormalized: 0.0), "0%")
+        XCTAssertEqual(MenuBarStatusFormatting.compactPercentage(fromNormalized: 1.0), "100%")
+        XCTAssertEqual(MenuBarStatusFormatting.compactPercentage(fromNormalized: nil), "—")
+    }
+
+    func testCompactDayTimeLabelFormatting() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let today = cal.startOfDay(for: Date())
+        let todayEvent = today.addingTimeInterval(3600 * 19 + 58 * 60) // 7:58 PM
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+        let tomorrowEvent = tomorrow.addingTimeInterval(3600 * 5 + 42 * 60) // 5:42 AM
+        let futureDay = cal.date(byAdding: .day, value: 3, to: today)!
+        let futureEvent = futureDay.addingTimeInterval(3600 * 6 + 15 * 60)
+
+        let todayText = MenuBarStatusFormatting.compactDayTimeLabel(eventTime: todayEvent, timeZone: timeZone, now: today.addingTimeInterval(3600 * 12))
+        XCTAssertFalse(todayText.contains("Today"))
+        XCTAssertTrue(todayText.contains("7:58") || todayText.contains("19:58"))
+
+        let tomorrowText = MenuBarStatusFormatting.compactDayTimeLabel(eventTime: tomorrowEvent, timeZone: timeZone, now: today.addingTimeInterval(3600 * 12))
+        XCTAssertTrue(tomorrowText.hasPrefix("Tomorrow "))
+
+        let futureText = MenuBarStatusFormatting.compactDayTimeLabel(eventTime: futureEvent, timeZone: timeZone, now: today.addingTimeInterval(3600 * 12))
+        let dayFormatter = DateFormatter()
+        dayFormatter.timeZone = timeZone
+        dayFormatter.setLocalizedDateFormatFromTemplate("EEE")
+        let dayName = dayFormatter.string(from: futureEvent)
+        XCTAssertTrue(futureText.hasPrefix("\(dayName) "))
+    }
 }
+
