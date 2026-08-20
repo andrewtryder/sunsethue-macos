@@ -11,21 +11,16 @@ struct SunsetHueMenuBarPopoverView: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.dismiss) private var dismiss
 
+    private static let maxVisibleRows = 7
+    private static let rowHeight: CGFloat = 36.0
+
     var body: some View {
+        let rows = popoverRows
         VStack(alignment: .leading, spacing: 0) {
-            if appModel.state.locations.isEmpty {
+            if rows.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(popoverRows) { row in
-                            locationRow(row)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                }
-                .frame(maxHeight: min(CGFloat(max(1, popoverRows.count)) * 38.0 + 8.0, 320.0))
+                locationList(rows: rows)
             }
 
             Divider()
@@ -47,6 +42,30 @@ struct SunsetHueMenuBarPopoverView: View {
             preferences: preferencesStore.preferences,
             now: Date()
         )
+    }
+
+    @ViewBuilder
+    private func locationList(rows: [MenuBarPopoverRow]) -> some View {
+        if rows.count <= Self.maxVisibleRows {
+            VStack(spacing: 2) {
+                ForEach(rows) { row in
+                    locationRow(row)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+        } else {
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(rows) { row in
+                        locationRow(row)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+            }
+            .frame(height: CGFloat(Self.maxVisibleRows) * Self.rowHeight + 8.0)
+        }
     }
 
     private var emptyState: some View {
@@ -87,46 +106,11 @@ struct SunsetHueMenuBarPopoverView: View {
                     .font(.body.weight(.medium))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer(minLength: 8)
-
-                if let eventType = row.eventType,
-                   let eventLabel = row.eventLabel,
-                   let dayTimeLabel = row.dayTimeLabel,
-                   let qualityLabel = row.qualityLabel {
-                    // Normal forecast row: EVENT | TIME | QUALITY
-                    HStack(spacing: 4) {
-                        Image(systemName: eventType.symbolName)
-                            .foregroundStyle(eventType.iconColor)
-                        Text(eventLabel)
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.subheadline)
-                    .lineLimit(1)
-
-                    Text(dayTimeLabel)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .lineLimit(1)
-
-                    Text(qualityLabel)
-                        .font(.subheadline.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.primary)
-                        .frame(minWidth: 38, alignment: .trailing)
-                } else if let statusMessage = row.statusMessage {
-                    // Unavailable / Error row
-                    HStack(spacing: 4) {
-                        if let symbolName = row.statusSymbolName {
-                            Image(systemName: symbolName)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(statusMessage)
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.subheadline)
-                    .lineLimit(1)
-                }
+                trailingContent(for: row)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -143,6 +127,49 @@ struct SunsetHueMenuBarPopoverView: View {
         .accessibilityLabel(row.name)
         .accessibilityValue(row.accessibilityValue)
         .accessibilityHint("Opens this location in SunsetHue")
+    }
+
+    @ViewBuilder
+    private func trailingContent(for row: MenuBarPopoverRow) -> some View {
+        if let eventType = row.eventType,
+           let eventLabel = row.eventLabel,
+           let dayTimeLabel = row.dayTimeLabel,
+           let qualityLabel = row.qualityLabel {
+            // Normal forecast row: EVENT | TIME | QUALITY
+            HStack(spacing: 6) {
+                HStack(spacing: 3) {
+                    Image(systemName: eventType.symbolName)
+                        .foregroundStyle(eventType.iconColor)
+                    Text(eventLabel)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
+                .lineLimit(1)
+
+                Text(dayTimeLabel)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+
+                Text(qualityLabel)
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .frame(minWidth: 38, alignment: .trailing)
+            }
+        } else if let statusMessage = row.statusMessage {
+            // Unavailable / Error row
+            HStack(spacing: 4) {
+                if let symbolName = row.statusSymbolName {
+                    Image(systemName: symbolName)
+                        .foregroundStyle(.secondary)
+                }
+                Text(statusMessage)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+            .lineLimit(1)
+        }
     }
 
     private var controls: some View {

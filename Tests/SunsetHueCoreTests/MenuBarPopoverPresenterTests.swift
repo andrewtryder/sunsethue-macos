@@ -293,4 +293,92 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         )
         XCTAssertEqual(selected?.id, loc2.id)
     }
+
+    // 10. Single location produces exactly one row.
+    func testSingleConfiguredLocationProducesExactlyOneRow() {
+        let loc = makeLocation(name: "Single Location")
+        let prefs = MenuBarPreferences()
+
+        let rows = MenuBarPopoverPresenter.buildRows(
+            locations: [loc],
+            snapshots: [:],
+            preferences: prefs,
+            selectedLocationID: loc.id,
+            now: Date()
+        )
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.name, "Single Location")
+        XCTAssertTrue(rows.first?.isSelected == true)
+    }
+
+    // 11. Five configured locations produce exactly five rows.
+    func testFiveConfiguredLocationsProduceFiveRows() {
+        let names = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]
+        let locations = names.map { makeLocation(name: $0) }
+        let prefs = MenuBarPreferences()
+
+        let rows = MenuBarPopoverPresenter.buildRows(
+            locations: locations,
+            snapshots: [:],
+            preferences: prefs,
+            selectedLocationID: locations[2].id,
+            now: Date()
+        )
+
+        XCTAssertEqual(rows.count, 5)
+        XCTAssertEqual(rows.map(\.name), names)
+        XCTAssertEqual(rows.filter(\.isSelected).count, 1)
+        XCTAssertEqual(rows.first(where: \.isSelected)?.name, "Chicago")
+    }
+
+    // 12. Extremely long location names remain intact in the presentation model.
+    func testLongLocationNamePreservedInModel() {
+        let longName = "Washington, District of Columbia, United States of America"
+        let loc = makeLocation(name: longName)
+        let prefs = MenuBarPreferences()
+
+        let rows = MenuBarPopoverPresenter.buildRows(
+            locations: [loc],
+            snapshots: [:],
+            preferences: prefs,
+            selectedLocationID: loc.id,
+            now: Date()
+        )
+
+        XCTAssertEqual(rows.first?.name, longName)
+    }
+
+    // 13. Every presenter row is defensive and never logically blank.
+    func testPresenterNeverGeneratesLogicallyBlankRow() {
+        let today = calendar.startOfDay(for: Date())
+        let sunset = PreviewFixtures.excellentSunset(on: today)
+        guard let sunsetTime = sunset.eventTime else { return XCTFail("missing sunset time") }
+
+        let loc1 = makeLocation(name: "With Forecast")
+        let snap1 = makeSnapshot(locationID: loc1.id, forecasts: [sunset])
+
+        let loc2 = makeLocation(name: "Without Snapshot")
+
+        let loc3 = makeLocation(name: "With Error Status")
+        let snap3 = makeSnapshot(locationID: loc3.id, forecasts: [], status: .temporarilyUnavailable)
+
+        let prefs = MenuBarPreferences()
+        let rows = MenuBarPopoverPresenter.buildRows(
+            locations: [loc1, loc2, loc3],
+            snapshots: [loc1.id: snap1, loc3.id: snap3],
+            preferences: prefs,
+            selectedLocationID: loc1.id,
+            now: sunsetTime.addingTimeInterval(-1800)
+        )
+
+        for row in rows {
+            let hasForecastFields = (row.eventType != nil && row.eventLabel != nil && row.dayTimeLabel != nil && row.qualityLabel != nil)
+            let hasStatusMessage = (row.statusMessage != nil && row.statusMessage?.isEmpty == false)
+            XCTAssertTrue(
+                hasForecastFields || hasStatusMessage,
+                "Row '\(row.name)' must either have complete forecast fields or a non-empty status message"
+            )
+        }
+    }
 }

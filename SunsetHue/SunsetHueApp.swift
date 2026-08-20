@@ -51,9 +51,6 @@ struct SunsetHueApp: App {
         )
         .handlesExternalEvents(matching: Set(arrayLiteral: "*"))
         .commands {
-            CommandGroup(replacing: .appSettings) {
-                SettingsLink()
-            }
             CommandGroup(replacing: .newItem) {
                 Button("Add Location…") {
                     appModel.beginAddLocation()
