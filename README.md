@@ -40,9 +40,10 @@ After upgrading to the current architecture, re-enter your API key once in Setti
 
 ## Privacy and data on your Mac
 
-- API key: login Keychain only (`api-key-v2`)
-- Settings and forecast cache: `~/Library/Application Support/SunsetHue/`
-- See [PRIVACY.md](PRIVACY.md) for the full statement
+- API key: login Keychain only (`api-key-v2`), never written to disk files or logs.
+- Unsigned GitHub build storage: `~/Library/Application Support/SunsetHue/` (widget stripped).
+- Personal Team signed build storage: `<TEAMID>.group.com.andrewtryder.SunsetHue` (app + widget share cache without accessing external or legacy containers).
+- See [PRIVACY.md](PRIVACY.md) for the full statement.
 
 ## Desktop widgets
 
@@ -59,7 +60,15 @@ To enable the widget on your own Mac (still free — no $99 program):
    Or from a terminal: `./scripts/run-debug.sh`
 7. Right-click the desktop → **Edit Widgets** → search **SunsetHue**.
 
-If the widget shows **Open SunsetHue to add a location** while the app already has locations, or an old unsigned placeholder: on macOS 15+ the widget cannot read iOS-style `group.*` App Groups (silent deny). This project uses the Team-ID-prefixed group `$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue`. Also remove/re-add the widget after replacing a stale `/Applications/SunsetHue.app`, and do not open unsigned Release DMG builds while testing widgets.
+### Storage & App Group Notes
+- **Personal Team signed build:** Main app and widget share `<TEAMID>.group.com.andrewtryder.SunsetHue`. A correctly signed build avoids recurring macOS 15+ privacy prompts ("SunsetHue would like to access data from other apps") by never querying raw non-prefixed App Groups.
+- **Unsigned GitHub build:** Uses local `~/Library/Application Support/SunsetHue/` exclusively without probing any App Groups.
+- **Personal Team profile expiration:** Free Personal Team provisioning profiles expire periodically (typically 7 days), requiring rebuilding from Xcode. This expiration is normal Apple behavior and distinct from App Group privacy prompts.
+- **Verifying entitlements locally:**
+  ```bash
+  codesign -d --entitlements :- /Applications/SunsetHue.app
+  codesign -d --entitlements :- /Applications/SunsetHue.app/Contents/PlugIns/SunsetHueWidget.appex
+  ```
 
 ## Background forecast refresh & architecture
 

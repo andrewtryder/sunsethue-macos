@@ -24,14 +24,25 @@ public enum SunsetHueConstants: Sendable {
     public static let invalidResponseInitialBackoffSeconds: TimeInterval = 60 * 60
     public static let maxRefreshBackoffSeconds: TimeInterval = 6 * 60 * 60
     public static let rateLimitJitterMaxSeconds = 60
-    /// Pre-Sequoia iOS-style group. Kept for one-time migration only.
+    /// Base App Group name. On macOS 15+, App Groups must be prefixed with the signing Team ID.
+    public static let baseAppGroupIdentifier = "group.com.andrewtryder.SunsetHue"
+
+    /// Formats the Team-ID-prefixed App Group identifier.
+    public static func teamAppGroupIdentifier(teamID: String) -> String {
+        "\(teamID).\(baseAppGroupIdentifier)"
+    }
+
+    /// Historical raw identifier; NEVER accessed during normal runtime.
+    @available(*, deprecated, message: "Raw group.com.andrewtryder.SunsetHue triggers privacy prompts and is never queried.")
     public static let legacyAppGroupIdentifier = "group.com.andrewtryder.SunsetHue"
+
     /// macOS 15+ requires a Team-ID-prefixed App Group or widget extensions are silently denied access.
-    public static var appGroupIdentifier: String {
-        if let teamID = teamIdentifier, !teamID.isEmpty {
-            return "\(teamID).\(legacyAppGroupIdentifier)"
+    /// Returns nil when no Team ID exists (e.g. unsigned / ad-hoc builds).
+    public static var appGroupIdentifier: String? {
+        guard let teamID = teamIdentifier, !teamID.isEmpty else {
+            return nil
         }
-        return legacyAppGroupIdentifier
+        return teamAppGroupIdentifier(teamID: teamID)
     }
     public static let keychainService = "com.andrewtryder.SunsetHue"
     /// App-only Keychain account (not shared with the widget).

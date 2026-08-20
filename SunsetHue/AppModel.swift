@@ -100,6 +100,7 @@ final class AppModel: ObservableObject {
     }
 
     private func bootstrap() async {
+        AppSupportPaths.migrateUnsignedStorageToTeamGroupIfNeeded()
         do {
             let loaded = try await settingsStore.load()
             state = loaded.value

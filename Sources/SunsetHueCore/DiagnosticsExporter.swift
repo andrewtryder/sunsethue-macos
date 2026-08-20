@@ -165,9 +165,12 @@ public struct DiagnosticsExporter: Sendable {
                 macosVersion: processInfo.operatingSystemVersionString
             ),
             sandbox: .init(
-                appGroupAvailable: FileManager.default.containerURL(
-                    forSecurityApplicationGroupIdentifier: SunsetHueConstants.appGroupIdentifier
-                ) != nil
+                appGroupAvailable: {
+                    if case .teamAppGroup(let id) = AppSupportPaths.currentStorageMode() {
+                        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) != nil
+                    }
+                    return false
+                }()
             ),
             credentials: .init(configured: apiKeyConfigured),
             notifications: notificationsSummary,

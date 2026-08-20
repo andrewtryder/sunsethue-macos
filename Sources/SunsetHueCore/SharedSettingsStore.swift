@@ -24,7 +24,6 @@ public actor FileSettingsStore: SharedSettingsStore {
 
     public init(fileURL: URL = AppSupportPaths.settingsURL()) {
         self.fileURL = fileURL
-        AppSupportPaths.migrateLegacyAppGroupContainerIfNeeded()
     }
 
     public func load() async throws -> StoreLoadResult<SharedAppState> {
@@ -92,7 +91,6 @@ public actor FileForecastCache: ForecastCache {
     ) {
         self.cacheDirectory = cacheDirectory
         self.legacyFileURL = legacyFileURL
-        AppSupportPaths.migrateLegacyAppGroupContainerIfNeeded()
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 
