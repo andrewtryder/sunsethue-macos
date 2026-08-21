@@ -19,4 +19,4 @@ SUNSETHUE_APP_BUNDLE_ID = com.andrewtryder.SunsetHue
 SUNSETHUE_WIDGET_BUNDLE_ID = com.andrewtryder.SunsetHue.Widget
 
 INFOPLIST_KEY_CFBundleDisplayName = SunsetHue
-INFOPLIST_KEY_NSHumanReadableCopyright = Copyright © 2026 Andrew Tryder. All rights reserved.
+INFOPLIST_KEY_NSHumanReadableCopyright = Copyright © 2026 Andrew T Ryder. All rights reserved.

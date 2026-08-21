@@ -1,4 +1,4 @@
 // Single source for the user-facing app version (semver).
 // Updated by release-please; keep in sync with Constants.swift and project.yml.
 MARKETING_VERSION = 1.1.0 // x-release-please-version
-CURRENT_PROJECT_VERSION = 1
+CURRENT_PROJECT_VERSION = 2

@@ -733,8 +733,10 @@ struct SunsetHueSettingsView: View {
             Section {
                 Toggle("Automatically check for updates once per day", isOn: $autoCheckUpdatesDaily)
                 LabeledContent("Current version") {
-                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-                        ?? SunsetHueConstants.marketingVersion)
+                    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                        ?? SunsetHueConstants.marketingVersion
+                    let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "2"
+                    Text("\(version) (\(build))")
                 }
                 if let latestVersion {
                     LabeledContent("Latest known version") {

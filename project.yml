@@ -9,7 +9,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "1.1.0" # x-release-please-version
-    CURRENT_PROJECT_VERSION: 1
+    CURRENT_PROJECT_VERSION: 2
     SWIFT_VERSION: "5.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_UPCOMING_FEATURE_CONCISE_MAGIC_FILE: YES
@@ -43,7 +43,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.andrewtryder.SunsetHue
         PRODUCT_NAME: SunsetHue
         INFOPLIST_KEY_CFBundleDisplayName: SunsetHue
-        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Andrew Tryder. All rights reserved."
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Andrew T Ryder. All rights reserved."
         INFOPLIST_KEY_NSLocationUsageDescription: SunsetHue can use your current location to fill latitude, longitude, and time zone. Manual entry always remains available.
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: SunsetHue can use your current location to fill latitude, longitude, and time zone. Manual entry always remains available.
         CODE_SIGN_ENTITLEMENTS: SunsetHue/SunsetHue.entitlements
@@ -78,7 +78,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.andrewtryder.SunsetHue.Widget
         PRODUCT_NAME: SunsetHueWidget
         INFOPLIST_KEY_CFBundleDisplayName: SunsetHue
-        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Andrew Tryder. All rights reserved."
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Andrew T Ryder. All rights reserved."
         CODE_SIGN_ENTITLEMENTS: SunsetHueWidget/SunsetHueWidget.entitlements
         LD_RUNPATH_SEARCH_PATHS:
           - "$(inherited)"

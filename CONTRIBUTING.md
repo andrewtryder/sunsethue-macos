@@ -45,7 +45,7 @@ That builds a signed Debug app, installs it to `/Applications` for WidgetKit gal
 | Location deep link | `sunsethue://location/<location-id>` |
 | App Group (signed Personal Team) | `$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue` (macOS 15+ Team-ID form) |
 
-Organization / copyright display name: **Andrew Tryder**.
+Organization / copyright display name: **Andrew T Ryder**.
 
 ## Building from source
 
