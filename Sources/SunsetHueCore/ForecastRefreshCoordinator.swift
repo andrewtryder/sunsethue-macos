@@ -225,20 +225,34 @@ public actor ForecastRefreshCoordinator {
                     attemptedAt: attemptedAt,
                     status: .authenticationRequired
                 )
-                let saved = await persistAndEmitSideEffects(
+                let outcome = await persistAndEmitSideEffects(
                     location: location,
                     previous: previous,
                     candidate: snapshot,
                     wasSuccessfulNetworkRefresh: false
                 )
-                await activityRecorder.record(
-                    locationID: location.id,
-                    locationName: location.name,
-                    trigger: trigger,
-                    result: .authenticationRequired,
-                    details: "API key not configured"
-                )
-                return RefreshExecutionResult(snapshot: saved, performedNetworkRefresh: false)
+                let savedSnapshot: CachedLocationSnapshot?
+                switch outcome {
+                case .committed(let s), .rejectedStale(let s):
+                    savedSnapshot = s
+                    await activityRecorder.record(
+                        locationID: location.id,
+                        locationName: location.name,
+                        trigger: trigger,
+                        result: .authenticationRequired,
+                        details: "API key not configured"
+                    )
+                case .failed(let fallback):
+                    savedSnapshot = fallback
+                    await activityRecorder.record(
+                        locationID: location.id,
+                        locationName: location.name,
+                        trigger: trigger,
+                        result: .persistenceFailure,
+                        details: "Cache persistence failed"
+                    )
+                }
+                return RefreshExecutionResult(snapshot: savedSnapshot, performedNetworkRefresh: false)
             }
             apiKey = loaded
         } catch {
@@ -248,20 +262,34 @@ public actor ForecastRefreshCoordinator {
                 attemptedAt: attemptedAt,
                 status: .authenticationRequired
             )
-            let saved = await persistAndEmitSideEffects(
+            let outcome = await persistAndEmitSideEffects(
                 location: location,
                 previous: previous,
                 candidate: snapshot,
                 wasSuccessfulNetworkRefresh: false
             )
-            await activityRecorder.record(
-                locationID: location.id,
-                locationName: location.name,
-                trigger: trigger,
-                result: .authenticationRequired,
-                details: "Keychain credentials unavailable"
-            )
-            return RefreshExecutionResult(snapshot: saved, performedNetworkRefresh: false)
+            let savedSnapshot: CachedLocationSnapshot?
+            switch outcome {
+            case .committed(let s), .rejectedStale(let s):
+                savedSnapshot = s
+                await activityRecorder.record(
+                    locationID: location.id,
+                    locationName: location.name,
+                    trigger: trigger,
+                    result: .authenticationRequired,
+                    details: "Keychain credentials unavailable"
+                )
+            case .failed(let fallback):
+                savedSnapshot = fallback
+                await activityRecorder.record(
+                    locationID: location.id,
+                    locationName: location.name,
+                    trigger: trigger,
+                    result: .persistenceFailure,
+                    details: "Cache persistence failed"
+                )
+            }
+            return RefreshExecutionResult(snapshot: savedSnapshot, performedNetworkRefresh: false)
         }
 
         let outcome = await forecastService.refreshPreservingCache(
@@ -311,14 +339,17 @@ public actor ForecastRefreshCoordinator {
             )
         }
 
-        let saved = await persistAndEmitSideEffects(
+        let persistenceOutcome = await persistAndEmitSideEffects(
             location: location,
             previous: previous,
             candidate: snapshot,
             wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
         )
 
-        if saved == nil && previous != nil {
+        let savedSnapshot: CachedLocationSnapshot?
+        switch persistenceOutcome {
+        case .failed(let fallback):
+            savedSnapshot = fallback
             await activityRecorder.record(
                 locationID: location.id,
                 locationName: location.name,
@@ -326,33 +357,51 @@ public actor ForecastRefreshCoordinator {
                 result: .persistenceFailure,
                 details: "Cache persistence failed"
             )
-        } else if wasSuccessfulNetworkRefresh {
+        case .rejectedStale(let authoritative):
+            savedSnapshot = authoritative
             await activityRecorder.record(
                 locationID: location.id,
                 locationName: location.name,
                 trigger: trigger,
-                result: .refreshedSuccessfully,
-                details: "Updated \(snapshot.forecasts.count) forecasts"
+                result: .skippedFresh,
+                details: "Authoritative snapshot is newer"
             )
-        } else {
-            let resultSummary: RefreshResultSummary
-            switch snapshot.status {
-            case .authenticationRequired: resultSummary = .authenticationRequired
-            case .rateLimited: resultSummary = .rateLimited
-            case .invalidRequest: resultSummary = .invalidRequest
-            case .temporarilyUnavailable, .invalidResponse, .stale: resultSummary = .transientFailure
-            case .current: resultSummary = .refreshedSuccessfully
+        case .committed(let saved):
+            savedSnapshot = saved
+            if wasSuccessfulNetworkRefresh {
+                await activityRecorder.record(
+                    locationID: location.id,
+                    locationName: location.name,
+                    trigger: trigger,
+                    result: .refreshedSuccessfully,
+                    details: "Updated \(snapshot.forecasts.count) forecasts"
+                )
+            } else {
+                let resultSummary: RefreshResultSummary
+                switch snapshot.status {
+                case .authenticationRequired: resultSummary = .authenticationRequired
+                case .rateLimited: resultSummary = .rateLimited
+                case .invalidRequest: resultSummary = .invalidRequest
+                case .temporarilyUnavailable, .invalidResponse, .stale: resultSummary = .transientFailure
+                case .current: resultSummary = .refreshedSuccessfully
+                }
+                await activityRecorder.record(
+                    locationID: location.id,
+                    locationName: location.name,
+                    trigger: trigger,
+                    result: resultSummary,
+                    details: outcome.error?.userMessage
+                )
             }
-            await activityRecorder.record(
-                locationID: location.id,
-                locationName: location.name,
-                trigger: trigger,
-                result: resultSummary,
-                details: outcome.error?.userMessage
-            )
         }
 
-        return RefreshExecutionResult(snapshot: saved, performedNetworkRefresh: true)
+        return RefreshExecutionResult(snapshot: savedSnapshot, performedNetworkRefresh: true)
+    }
+
+    private enum PersistenceOutcome: Sendable {
+        case committed(CachedLocationSnapshot)
+        case rejectedStale(CachedLocationSnapshot)
+        case failed(fallback: CachedLocationSnapshot?)
     }
 
     private func persistAndEmitSideEffects(
@@ -360,7 +409,7 @@ public actor ForecastRefreshCoordinator {
         previous: CachedLocationSnapshot?,
         candidate: CachedLocationSnapshot,
         wasSuccessfulNetworkRefresh: Bool
-    ) async -> CachedLocationSnapshot? {
+    ) async -> PersistenceOutcome {
         do {
             let result = try await forecastCache.saveSnapshot(candidate)
             switch result {
@@ -371,20 +420,13 @@ public actor ForecastRefreshCoordinator {
                     current: snapshot,
                     wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
                 )
-                return snapshot
+                return .committed(snapshot)
             case .rejectedStale(let authoritative):
-                return authoritative
+                return .rejectedStale(authoritative)
             }
         } catch {
             logger.error("Failed to persist forecast cache for location \(location.id): \(error.localizedDescription, privacy: .public)")
-            await activityRecorder.record(
-                locationID: location.id,
-                locationName: location.name,
-                trigger: .scheduled,
-                result: .persistenceFailure,
-                details: "Persistence error: \(error.localizedDescription)"
-            )
-            return previous
+            return .failed(fallback: previous)
         }
     }
 

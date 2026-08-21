@@ -113,7 +113,7 @@ public struct NotificationPreferences: Codable, Equatable, Sendable {
         if let specific = locationRules[locationID] {
             return specific
         }
-        if locationID == self.locationID || self.locationID == nil {
+        if let selfLocationID = self.locationID, locationID == selfLocationID {
             return LocationNotificationRule(dailySummary: dailySummary, qualityAlert: qualityAlert)
         }
         return LocationNotificationRule()
@@ -121,10 +121,19 @@ public struct NotificationPreferences: Codable, Equatable, Sendable {
 
     public mutating func setRule(_ rule: LocationNotificationRule, for locationID: UUID) {
         locationRules[locationID] = rule
-        if self.locationID == nil || self.locationID == locationID {
+        if self.locationID == locationID || self.locationID == nil {
             self.locationID = locationID
             self.dailySummary = rule.dailySummary
             self.qualityAlert = rule.qualityAlert
+        }
+    }
+
+    public mutating func removeRule(for locationID: UUID) {
+        locationRules.removeValue(forKey: locationID)
+        if self.locationID == locationID {
+            self.locationID = nil
+            self.dailySummary = DailySummaryRule()
+            self.qualityAlert = QualityAlertRule()
         }
     }
 

@@ -23,6 +23,7 @@ struct SunsetHueSettingsView: View {
     @FocusState private var isAPIKeyFieldFocused: Bool
     @State private var isReplacingAPIKey = false
     @State private var confirmRemoveAPIKey = false
+    @State private var selectedNotificationLocationID: UUID?
 
     private enum SettingsTab: String {
         case general
@@ -61,6 +62,25 @@ struct SunsetHueSettingsView: View {
                 await maybeAutoCheckUpdates()
             }
         }
+    }
+
+    private var activeNotificationLocationID: UUID? {
+        if let id = selectedNotificationLocationID, appModel.state.locations.contains(where: { $0.id == id }) {
+            return id
+        }
+        return appModel.notificationPreferences.locationID
+            ?? appModel.selectedLocationID
+            ?? appModel.state.locations.first?.id
+    }
+
+    private var activeNotificationLocation: SavedLocation? {
+        guard let id = activeNotificationLocationID else { return nil }
+        return appModel.state.locations.first(where: { $0.id == id })
+    }
+
+    private var activeLocationRule: LocationNotificationRule {
+        guard let id = activeNotificationLocationID else { return LocationNotificationRule() }
+        return appModel.notificationPreferences.rule(for: id)
     }
 
     private var notificationsTab: some View {
@@ -103,18 +123,18 @@ struct SunsetHueSettingsView: View {
                 Toggle("Send first summary at", isOn: dailyFirstEnabledBinding)
                 DatePicker(
                     "First time",
-                    selection: minutesBinding(\.dailySummary.firstTimeMinutes),
+                    selection: firstTimeMinutesBinding,
                     displayedComponents: .hourAndMinute
                 )
-                .sunsetHueDisabledDim(!appModel.notificationPreferences.dailySummary.enabled)
+                .sunsetHueDisabledDim(!activeLocationRule.dailySummary.enabled)
                 Toggle("Send second summary at", isOn: dailySecondEnabledBinding)
                 DatePicker(
                     "Second time",
-                    selection: minutesBinding(\.dailySummary.secondTimeMinutes),
+                    selection: secondTimeMinutesBinding,
                     displayedComponents: .hourAndMinute
                 )
-                .sunsetHueDisabledDim(!appModel.notificationPreferences.dailySummary.secondTimeEnabled)
-                if let tz = appModel.notificationLocation?.timeZoneIdentifier {
+                .sunsetHueDisabledDim(!activeLocationRule.dailySummary.secondTimeEnabled)
+                if let tz = activeNotificationLocation?.timeZoneIdentifier {
                     Text("Times use \(tz)")
                         .sunsetHueMuted()
                 }
@@ -127,13 +147,13 @@ struct SunsetHueSettingsView: View {
                         Text(mode.displayName).tag(mode)
                     }
                 }
-                .sunsetHueDisabledDim(!appModel.notificationPreferences.qualityAlert.enabled)
+                .sunsetHueDisabledDim(!activeLocationRule.qualityAlert.enabled)
                 Picker("Threshold", selection: qualityThresholdBinding) {
                     ForEach(Array(stride(from: 50, through: 100, by: 5)), id: \.self) { percent in
                         Text("\(percent)%").tag(Double(percent) / 100.0)
                     }
                 }
-                .sunsetHueDisabledDim(!appModel.notificationPreferences.qualityAlert.enabled)
+                .sunsetHueDisabledDim(!activeLocationRule.qualityAlert.enabled)
                 Text("Only once per sunrise or sunset forecast occurrence.")
                     .sunsetHueMuted()
                 Text("Quality alerts are evaluated while SunsetHue is running (Launch at Login makes this more reliable). Daily summaries can still deliver after you quit.")
@@ -187,89 +207,96 @@ struct SunsetHueSettingsView: View {
         Binding(
             get: { appModel.notificationPreferences.notificationsEnabled },
             set: { enabled in
-                var prefs = appModel.notificationPreferences
-                prefs.notificationsEnabled = enabled
-                if enabled, prefs.locationID == nil {
-                    prefs.locationID = appModel.selectedLocationID ?? appModel.state.locations.first?.id
-                }
-                Task { await appModel.updateNotificationPreferences(prefs) }
+                Task { await appModel.updateNotificationMaster(enabled: enabled) }
             }
         )
     }
 
     private var notificationLocationBinding: Binding<UUID?> {
         Binding(
-            get: { appModel.notificationPreferences.locationID ?? appModel.selectedLocationID },
+            get: { activeNotificationLocationID },
             set: { id in
-                var prefs = appModel.notificationPreferences
-                prefs.locationID = id
-                if let id {
-                    let rule = prefs.rule(for: id)
-                    prefs.dailySummary = rule.dailySummary
-                    prefs.qualityAlert = rule.qualityAlert
-                }
-                Task { await appModel.updateNotificationPreferences(prefs) }
+                selectedNotificationLocationID = id
             }
         )
     }
 
     private var dailyFirstEnabledBinding: Binding<Bool> {
         Binding(
-            get: { appModel.notificationPreferences.dailySummary.enabled },
+            get: { activeLocationRule.dailySummary.enabled },
             set: { enabled in
-                var prefs = appModel.notificationPreferences
-                prefs.dailySummary.enabled = enabled
-                if enabled { prefs.notificationsEnabled = true }
-                Task { await appModel.updateNotificationPreferences(prefs) }
+                guard let id = activeNotificationLocationID else { return }
+                Task {
+                    await appModel.updateLocationNotificationRule(for: id) { rule in
+                        rule.dailySummary.enabled = enabled
+                    }
+                    if enabled {
+                        await appModel.updateNotificationMaster(enabled: true)
+                    }
+                }
             }
         )
     }
 
     private var dailySecondEnabledBinding: Binding<Bool> {
         Binding(
-            get: { appModel.notificationPreferences.dailySummary.secondTimeEnabled },
+            get: { activeLocationRule.dailySummary.secondTimeEnabled },
             set: { enabled in
-                var prefs = appModel.notificationPreferences
-                prefs.dailySummary.secondTimeEnabled = enabled
-                if enabled {
-                    prefs.dailySummary.enabled = true
-                    prefs.notificationsEnabled = true
+                guard let id = activeNotificationLocationID else { return }
+                Task {
+                    await appModel.updateLocationNotificationRule(for: id) { rule in
+                        rule.dailySummary.secondTimeEnabled = enabled
+                        if enabled { rule.dailySummary.enabled = true }
+                    }
+                    if enabled {
+                        await appModel.updateNotificationMaster(enabled: true)
+                    }
                 }
-                Task { await appModel.updateNotificationPreferences(prefs) }
             }
         )
     }
 
     private var qualityEnabledBinding: Binding<Bool> {
         Binding(
-            get: { appModel.notificationPreferences.qualityAlert.enabled },
+            get: { activeLocationRule.qualityAlert.enabled },
             set: { enabled in
-                var prefs = appModel.notificationPreferences
-                prefs.qualityAlert.enabled = enabled
-                if enabled { prefs.notificationsEnabled = true }
-                Task { await appModel.updateNotificationPreferences(prefs) }
+                guard let id = activeNotificationLocationID else { return }
+                Task {
+                    await appModel.updateLocationNotificationRule(for: id) { rule in
+                        rule.qualityAlert.enabled = enabled
+                    }
+                    if enabled {
+                        await appModel.updateNotificationMaster(enabled: true)
+                    }
+                }
             }
         )
     }
 
     private var qualityEventBinding: Binding<NotificationEventMode> {
         Binding(
-            get: { appModel.notificationPreferences.qualityAlert.eventMode },
+            get: { activeLocationRule.qualityAlert.eventMode },
             set: { mode in
-                var prefs = appModel.notificationPreferences
-                prefs.qualityAlert.eventMode = mode
-                Task { await appModel.updateNotificationPreferences(prefs) }
+                guard let id = activeNotificationLocationID else { return }
+                Task {
+                    await appModel.updateLocationNotificationRule(for: id) { rule in
+                        rule.qualityAlert.eventMode = mode
+                    }
+                }
             }
         )
     }
 
     private var qualityThresholdBinding: Binding<Double> {
         Binding(
-            get: { appModel.notificationPreferences.qualityAlert.threshold },
+            get: { activeLocationRule.qualityAlert.threshold },
             set: { value in
-                var prefs = appModel.notificationPreferences
-                prefs.qualityAlert.threshold = value
-                Task { await appModel.updateNotificationPreferences(prefs) }
+                guard let id = activeNotificationLocationID else { return }
+                Task {
+                    await appModel.updateLocationNotificationRule(for: id) { rule in
+                        rule.qualityAlert.threshold = value
+                    }
+                }
             }
         )
     }
@@ -278,28 +305,51 @@ struct SunsetHueSettingsView: View {
         Binding(
             get: { appModel.notificationPreferences.playSound },
             set: { value in
-                var prefs = appModel.notificationPreferences
-                prefs.playSound = value
-                Task { await appModel.updateNotificationPreferences(prefs) }
+                Task { await appModel.updateNotificationPlaySound(playSound: value) }
             }
         )
     }
 
-    private func minutesBinding(_ keyPath: WritableKeyPath<NotificationPreferences, Int>) -> Binding<Date> {
+    private var firstTimeMinutesBinding: Binding<Date> {
         Binding(
             get: {
-                let minutes = appModel.notificationPreferences[keyPath: keyPath]
+                let minutes = activeLocationRule.dailySummary.firstTimeMinutes
                 let calendar = Calendar.current
                 let start = calendar.startOfDay(for: Date())
                 return calendar.date(byAdding: .minute, value: minutes, to: start) ?? Date()
             },
             set: { date in
+                guard let id = activeNotificationLocationID else { return }
                 let calendar = Calendar.current
                 let start = calendar.startOfDay(for: date)
-                let minutes = Int(date.timeIntervalSince(start) / 60)
-                var prefs = appModel.notificationPreferences
-                prefs[keyPath: keyPath] = min(max(0, minutes), (23 * 60) + 59)
-                Task { await appModel.updateNotificationPreferences(prefs) }
+                let minutes = min(max(0, Int(date.timeIntervalSince(start) / 60)), (23 * 60) + 59)
+                Task {
+                    await appModel.updateLocationNotificationRule(for: id) { rule in
+                        rule.dailySummary.firstTimeMinutes = minutes
+                    }
+                }
+            }
+        )
+    }
+
+    private var secondTimeMinutesBinding: Binding<Date> {
+        Binding(
+            get: {
+                let minutes = activeLocationRule.dailySummary.secondTimeMinutes
+                let calendar = Calendar.current
+                let start = calendar.startOfDay(for: Date())
+                return calendar.date(byAdding: .minute, value: minutes, to: start) ?? Date()
+            },
+            set: { date in
+                guard let id = activeNotificationLocationID else { return }
+                let calendar = Calendar.current
+                let start = calendar.startOfDay(for: date)
+                let minutes = min(max(0, Int(date.timeIntervalSince(start) / 60)), (23 * 60) + 59)
+                Task {
+                    await appModel.updateLocationNotificationRule(for: id) { rule in
+                        rule.dailySummary.secondTimeMinutes = minutes
+                    }
+                }
             }
         )
     }

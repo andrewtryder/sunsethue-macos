@@ -152,18 +152,73 @@ struct DayForecastSection: View {
             }
 
             HStack(alignment: .top, spacing: 16) {
-                if let sunrise = section.sunrise {
-                    EventForecastCard(forecast: sunrise, timeZone: timeZone)
+                switch section.sunriseState {
+                case .available(let forecast):
+                    EventForecastCard(forecast: forecast, timeZone: timeZone)
+                case .unavailable(let type):
+                    UnavailableEventCard(eventType: type)
+                case .disabled:
+                    EmptyView()
                 }
-                if let sunset = section.sunset {
-                    EventForecastCard(forecast: sunset, timeZone: timeZone)
+
+                switch section.sunsetState {
+                case .available(let forecast):
+                    EventForecastCard(forecast: forecast, timeZone: timeZone)
+                case .unavailable(let type):
+                    UnavailableEventCard(eventType: type)
+                case .disabled:
+                    EmptyView()
                 }
-                if section.sunrise == nil && section.sunset == nil {
+
+                if case .disabled = section.sunriseState, case .disabled = section.sunsetState {
                     Text("No events configured for this day.")
                         .foregroundStyle(.secondary)
                 }
             }
         }
+    }
+}
+
+struct UnavailableEventCard: View {
+    let eventType: EventType
+
+    var body: some View {
+        SectionCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: eventType.symbolName)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(eventType.iconColor)
+                        .accessibilityHidden(true)
+                    Text(eventType.displayName)
+                        .font(SunsetHueTypography.cardTitle)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 8)
+                    Text("—")
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(alignment: .center, spacing: 12) {
+                    Text("—")
+                        .font(SunsetHueTypography.heroQuality)
+                        .foregroundStyle(.secondary)
+
+                    StatusBadge(
+                        title: "No Forecast",
+                        tone: .neutral,
+                        accessibilityLabelText: "Forecast status",
+                        accessibilityValueText: "No forecast"
+                    )
+                }
+
+                Text("Quality forecast not available for this event.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(eventType.displayName) forecast unavailable")
     }
 }
 

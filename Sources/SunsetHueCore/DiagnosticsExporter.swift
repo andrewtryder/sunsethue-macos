@@ -245,25 +245,45 @@ public struct DiagnosticsExporter: Sendable {
         lines.append("  Last Disposition: \(backgroundDiagnostics.lastDisposition ?? "None")")
         lines.append("  Launch at Login: \(backgroundDiagnostics.isLaunchAtLoginEnabled ? "On" : "Off")")
         lines.append("")
+        // Build location anonymization map
+        var locationLabels: [UUID: String] = [:]
+        for (index, location) in state.locations.enumerated() {
+            locationLabels[location.id] = "Location \(index + 1)"
+        }
+
         lines.append("Notifications:")
         lines.append("  Authorization: \(notificationAuthorization)")
         if let notif = notificationPreferences {
             lines.append("  Master Enabled: \(notif.notificationsEnabled ? "Yes" : "No")")
             lines.append("  Play Sound: \(notif.playSound ? "Yes" : "No")")
-            lines.append("  Quality Alerts: \(notif.qualityAlert.enabled ? "Enabled (\(Int(notif.qualityAlert.threshold * 100))%)" : "Disabled")")
-            lines.append("  Daily Summary: \(notif.dailySummary.enabled ? "\(notif.dailySummary.firstTimeMinutes / 60):\(String(format: "%02d", notif.dailySummary.firstTimeMinutes % 60))" : "Disabled")")
+            if state.locations.isEmpty {
+                lines.append("  Location Rules: None")
+            } else {
+                for (index, location) in state.locations.enumerated() {
+                    let label = "Location \(index + 1)"
+                    let rule = notif.rule(for: location.id)
+                    let qualityDesc = rule.qualityAlert.enabled
+                        ? "Alerts >= \(Int(rule.qualityAlert.threshold * 100))% (\(rule.qualityAlert.eventMode.displayName))"
+                        : "Alerts off"
+                    let summaryDesc = rule.dailySummary.enabled
+                        ? "Summary \(rule.dailySummary.firstTimeMinutes / 60):\(String(format: "%02d", rule.dailySummary.firstTimeMinutes % 60))"
+                        : "Summary off"
+                    lines.append("  - \(label): \(qualityDesc), \(summaryDesc)")
+                }
+            }
         } else {
             lines.append("  Preferences: Not configured")
         }
         lines.append("")
         lines.append("Locations (\(state.locations.count)):")
-        for location in state.locations {
+        for (index, location) in state.locations.enumerated() {
             let snap = snapshots[location.id]
             let diag = LocationRefreshDiagnostics.make(location: location, snapshot: snap, isRefreshing: false, now: now)
             let coords = options.includeApproximateCoordinates
                 ? String(format: " (%.1f, %.1f)", location.latitude, location.longitude)
                 : ""
-            lines.append("  - \(location.name)\(coords):")
+            let anonymizedTitle = "Location \(index + 1)"
+            lines.append("  - \(anonymizedTitle)\(coords):")
             lines.append("      Status: \(diag.statusDisplayName)")
             if let succ = diag.lastSuccess {
                 lines.append("      Last Success: \(PresentationFormatting.iso8601String(from: succ))")
@@ -290,8 +310,15 @@ public struct DiagnosticsExporter: Sendable {
         } else {
             for entry in recentActivity {
                 let time = PresentationFormatting.iso8601String(from: entry.timestamp)
-                let detailStr = entry.details.map { " - \($0)" } ?? ""
-                lines.append("  - [\(time)] \(entry.locationName): \(entry.trigger.rawValue) -> \(entry.result.rawValue)\(detailStr)")
+                let label = entry.locationID.flatMap { locationLabels[$0] } ?? "Location"
+                let detailStr: String
+                if let details = entry.details {
+                    let sanitized = details.replacingOccurrences(of: #"/Users/[^/\s]+(/[^/\s]+)*"#, with: "[path]", options: .regularExpression)
+                    detailStr = " - \(sanitized)"
+                } else {
+                    detailStr = ""
+                }
+                lines.append("  - [\(time)] \(label): \(entry.trigger.rawValue) -> \(entry.result.rawValue)\(detailStr)")
             }
         }
 

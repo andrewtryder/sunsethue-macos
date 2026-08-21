@@ -174,6 +174,101 @@ final class Diagnostics13Tests: XCTestCase {
         XCTAssertEqual(entries.first?.result, .refreshedSuccessfully)
     }
 
+    func testPlainTextDiagnosticsAnonymizesLocationNamesAndSanitizesPaths() throws {
+        let loc1 = SavedLocation(
+            id: UUID(),
+            name: "Secret Home Brooklyn",
+            latitude: 40.7128,
+            longitude: -74.006,
+            timeZoneIdentifier: "America/New_York"
+        )
+        let now = Date()
+        let record = RefreshActivityRecord(
+            id: UUID(),
+            timestamp: now,
+            locationID: loc1.id,
+            locationName: loc1.name,
+            trigger: .manual,
+            result: .persistenceFailure,
+            details: "Failed writing to /Users/johnappleseed/Library/Application Support/SunsetHue/cache.json"
+        )
+
+        let text = try DiagnosticsExporter().makePlainTextDiagnostics(
+            state: SharedAppState(locations: [loc1], selectedLocationID: loc1.id),
+            snapshots: [:],
+            storageDiagnostics: StorageDiagnostics(
+                storageMode: .localApplicationSupport,
+                storageModeDisplayName: "Application Support Fallback",
+                appGroupIdentifier: nil,
+                isAppGroupAvailable: false,
+                isSettingsReadable: true,
+                isForecastCacheReadable: true,
+                lastCacheCommit: nil,
+                lastWidgetReloadRequested: nil
+            ),
+            backgroundDiagnostics: BackgroundRefreshDiagnostics(
+                isActive: false,
+                schedulerName: "None",
+                intervalDescription: "None",
+                lastActivityAt: nil,
+                lastDisposition: nil,
+                isLaunchAtLoginEnabled: false
+            ),
+            recentActivity: [record],
+            notificationPreferences: NotificationPreferences(),
+            notificationAuthorization: "Authorized",
+            apiKeyConfigured: true,
+            appVersion: "1.3.0",
+            build: "42",
+            now: now
+        )
+
+        // Must anonymize location name
+        XCTAssertFalse(text.contains("Secret Home Brooklyn"))
+        XCTAssertTrue(text.contains("Location 1"))
+
+        // Must sanitize user file path
+        XCTAssertFalse(text.contains("/Users/johnappleseed"))
+        XCTAssertTrue(text.contains("[path]"))
+    }
+
+    private actor FailingForecastCache: ForecastCache {
+        func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? { nil }
+        func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? { nil }
+        func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
+            throw SunsetHueError.invalidResponse("Disk IO Failure")
+        }
+        func deleteLocation(_ locationID: UUID) async throws {}
+    }
+
+    func testPersistenceFailureRecordsFailureAndNeverRecordsSuccess() async throws {
+        let location = PreviewFixtures.sampleLocation
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [location], selectedLocationID: location.id))
+        let failingCache = FailingForecastCache()
+        let credentials = InMemoryCredentialStore(apiKey: "test-key")
+        let recorder = RefreshActivityRecorder()
+
+        let body = try loadFixture("event_full")
+        let transport = MockHTTPTransport(stubs: [MockHTTPTransport.Stub(statusCode: 200, body: body)])
+
+        let coordinator = ForecastRefreshCoordinator(
+            settingsStore: settings,
+            forecastCache: failingCache,
+            credentialStore: credentials,
+            forecastService: ForecastService(transport: transport),
+            activityRecorder: recorder
+        )
+
+        _ = await coordinator.refreshLocation(id: location.id, force: true, trigger: .manual)
+
+        let entries = await recorder.recentEntries()
+        // Exactly ONE diagnostic entry must be recorded, reporting .persistenceFailure with .manual trigger
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.trigger, .manual)
+        XCTAssertEqual(entries.first?.result, .persistenceFailure)
+        XCTAssertFalse(entries.contains(where: { $0.result == .refreshedSuccessfully }))
+    }
+
     private func loadFixture(_ name: String) throws -> Data {
         let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures")
             ?? Bundle.module.url(forResource: name, withExtension: "json")

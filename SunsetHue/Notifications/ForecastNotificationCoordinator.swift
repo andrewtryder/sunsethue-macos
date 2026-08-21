@@ -199,10 +199,8 @@ actor ForecastNotificationCoordinator {
         unCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
 
         var preferences = preferencesStore.load()
-        if preferences.locationID == locationID {
-            preferences.locationID = nil
-            preferencesStore.save(preferences)
-        }
+        preferences.removeRule(for: locationID)
+        preferencesStore.save(preferences)
     }
 
     func runTestNotification(

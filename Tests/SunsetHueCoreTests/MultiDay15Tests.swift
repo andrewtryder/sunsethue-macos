@@ -159,6 +159,110 @@ final class MultiDay15Tests: XCTestCase {
         XCTAssertNil(best)
     }
 
+    func testSingleDayDisplayHorizonDoesNotExposeTomorrowInOpportunityBanner() {
+        let loc = SavedLocation(
+            id: UUID(),
+            name: "Single Day Place",
+            latitude: 40.7128,
+            longitude: -74.0060,
+            timeZoneIdentifier: "America/New_York",
+            forecastDays: 1, // Only 1-day horizon!
+            includeSunrise: true,
+            includeSunset: true
+        )
+
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York")!
+        let now = cal.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 14, minute: 0))!
+        let todaySunset = cal.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 19, minute: 30))!
+        let tomorrowSunset = cal.date(from: DateComponents(year: 2026, month: 8, day: 22, hour: 19, minute: 30))!
+
+        let fToday = EventForecast(
+            responseTime: now,
+            location: loc.coordinates,
+            gridLocation: loc.coordinates,
+            eventType: .sunset,
+            modelData: true,
+            quality: 0.60,
+            qualityText: "Fair",
+            cloudCover: 0.4,
+            eventTime: todaySunset,
+            direction: 270,
+            blueHour: nil,
+            goldenHour: nil,
+            forecastDate: now
+        )
+
+        let fTomorrow = EventForecast(
+            responseTime: now,
+            location: loc.coordinates,
+            gridLocation: loc.coordinates,
+            eventType: .sunset,
+            modelData: true,
+            quality: 0.95, // Higher quality, but in tomorrow's operational cache
+            qualityText: "Excellent",
+            cloudCover: 0.1,
+            eventTime: tomorrowSunset,
+            direction: 270,
+            blueHour: nil,
+            goldenHour: nil,
+            forecastDate: tomorrowSunset
+        )
+
+        let bundle = LocationForecastBundle(
+            locationID: loc.id,
+            fetchedAt: now,
+            forecasts: [fToday, fTomorrow]
+        )
+
+        let best = MultiDayForecastPresenter.nextBestUpcomingEvent(location: loc, bundle: bundle, now: now)
+        XCTAssertNotNil(best)
+        // Must pick today's 0.60 quality, NOT tomorrow's 0.95 quality!
+        XCTAssertEqual(best?.quality, 0.60)
+        XCTAssertEqual(best?.eventTime, todaySunset)
+    }
+
+    func testEnabledEventWithMissingDataProducesUnavailableState() {
+        let loc = SavedLocation(
+            id: UUID(),
+            name: "Both Enabled",
+            latitude: 40.7128,
+            longitude: -74.0060,
+            timeZoneIdentifier: "America/New_York",
+            forecastDays: 1,
+            includeSunrise: true,
+            includeSunset: true
+        )
+
+        let now = Date()
+        let sunsetOnly = EventForecast(
+            responseTime: now,
+            location: loc.coordinates,
+            gridLocation: loc.coordinates,
+            eventType: .sunset,
+            modelData: true,
+            quality: 0.80,
+            qualityText: "Great",
+            cloudCover: 0.2,
+            eventTime: now.addingTimeInterval(3600),
+            direction: 270,
+            blueHour: nil,
+            goldenHour: nil,
+            forecastDate: now
+        )
+
+        let bundle = LocationForecastBundle(
+            locationID: loc.id,
+            fetchedAt: now,
+            forecasts: [sunsetOnly]
+        )
+
+        let sections = MultiDayForecastPresenter.buildSections(location: loc, bundle: bundle, now: now)
+        XCTAssertEqual(sections.count, 1)
+        XCTAssertEqual(sections[0].sunriseState, .unavailable(.sunrise))
+        XCTAssertEqual(sections[0].sunsetState, .available(sunsetOnly))
+    }
+
     func testRelativeDayLabelFormatting() {
         let tz = TimeZone(identifier: "America/New_York")!
         let ref = Date(timeIntervalSince1970: 1700000000)

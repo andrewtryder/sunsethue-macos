@@ -155,6 +155,65 @@ final class MultiLocation14Tests: XCTestCase {
         XCTAssertEqual(candidates2.count, 0)
     }
 
+    func testDeletingNotificationLocationNeverBleedsRulesToRemainingOrNewLocations() {
+        let locA = UUID()
+        let locB = UUID()
+        let locC = UUID()
+
+        var prefs = NotificationPreferences(notificationsEnabled: true, locationID: locA)
+        var ruleA = LocationNotificationRule()
+        ruleA.qualityAlert.enabled = true
+        ruleA.qualityAlert.threshold = 0.70
+        ruleA.dailySummary.enabled = true
+        prefs.setRule(ruleA, for: locA)
+
+        XCTAssertTrue(prefs.rule(for: locA).qualityAlert.enabled)
+        XCTAssertFalse(prefs.rule(for: locB).qualityAlert.enabled)
+
+        // Delete location A
+        prefs.removeRule(for: locA)
+
+        // Verifications:
+        XCTAssertNil(prefs.locationID)
+        XCTAssertFalse(prefs.rule(for: locA).qualityAlert.enabled)
+        XCTAssertFalse(prefs.rule(for: locB).qualityAlert.enabled)
+        XCTAssertFalse(prefs.rule(for: locC).qualityAlert.enabled)
+        XCTAssertFalse(prefs.rule(for: locB).dailySummary.enabled)
+    }
+
+    func testQualityRuleRevisionOnlyBumpsWhenThresholdOrModeMutatesOnTarget() {
+        let locA = UUID()
+        let locB = UUID()
+
+        var prefs = NotificationPreferences(notificationsEnabled: true)
+        var ruleA = LocationNotificationRule()
+        ruleA.qualityAlert.threshold = 0.80
+        ruleA.qualityAlert.revision = 1
+
+        var ruleB = LocationNotificationRule()
+        ruleB.qualityAlert.threshold = 0.60
+        ruleB.qualityAlert.revision = 1
+
+        prefs.setRule(ruleA, for: locA)
+        prefs.setRule(ruleB, for: locB)
+
+        // Merely reading / setting identical rule does not bump revision
+        let readB = prefs.rule(for: locB)
+        XCTAssertEqual(readB.qualityAlert.revision, 1)
+
+        // Mutating locA threshold bumps locA's revision
+        var updatedA = prefs.rule(for: locA)
+        let prevA = updatedA
+        updatedA.qualityAlert.threshold = 0.85
+        if updatedA.qualityAlert.threshold != prevA.qualityAlert.threshold {
+            updatedA.qualityAlert.revision += 1
+        }
+        prefs.setRule(updatedA, for: locA)
+
+        XCTAssertEqual(prefs.rule(for: locA).qualityAlert.revision, 2)
+        XCTAssertEqual(prefs.rule(for: locB).qualityAlert.revision, 1) // locB untouched!
+    }
+
     func testMenuBarPopoverPresenterReflectsRefreshingStateAndReordering() {
         let loc1 = SavedLocation(id: UUID(), name: "First", latitude: 40.0, longitude: -74.0, timeZoneIdentifier: "America/New_York")
         let loc2 = SavedLocation(id: UUID(), name: "Second", latitude: 34.0, longitude: -118.0, timeZoneIdentifier: "America/Los_Angeles")

@@ -179,7 +179,16 @@ final class AppModel: ObservableObject {
     }
 
     func refreshAllFromCommand() {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        for loc in state.locations {
+            refreshingLocationIDs.insert(loc.id)
+        }
         Task {
+            defer {
+                isRefreshing = false
+                refreshingLocationIDs.removeAll()
+            }
             await refreshCoordinator.refreshAllStaleLocations(trigger: .manual)
             await reloadSelectedSnapshot()
         }
@@ -255,6 +264,9 @@ final class AppModel: ObservableObject {
             selectedLocationID = state.locations.first?.id
             state.selectedLocationID = selectedLocationID
         }
+        var prefs = notificationPreferences
+        prefs.removeRule(for: location.id)
+        notificationPreferences = prefs
         Task {
             try? await forecastCache.deleteLocation(location.id)
             await notificationCoordinator.removeNotifications(for: location.id)
@@ -326,6 +338,23 @@ final class AppModel: ObservableObject {
 
     func reloadNotificationState() async {
         notificationPreferences = await notificationCoordinator.loadPreferences()
+        await refreshAuthorizationStatus()
+    }
+
+    func refreshSelected(force: Bool) async {
+        guard let location = selectedLocation else { return }
+        isRefreshing = true
+        refreshingLocationIDs.insert(location.id)
+        defer {
+            isRefreshing = false
+            refreshingLocationIDs.remove(location.id)
+        }
+        _ = await refreshCoordinator.refreshLocation(id: location.id, force: force, trigger: .manual)
+        await reloadSelectedSnapshot()
+        await refreshCoordinator.scheduleNextRefresh()
+    }
+
+    func refreshAuthorizationStatus() async {
         await notificationCoordinator.refreshAuthorizationStatus()
         notificationAuthorization = await notificationCoordinator.authorizationState
     }
@@ -338,22 +367,45 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func updateLocationNotificationRule(
+        for locationID: UUID,
+        mutate: (inout LocationNotificationRule) -> Void
+    ) async {
+        var next = notificationPreferences
+        var rule = next.rule(for: locationID)
+        let previousRule = rule
+        mutate(&rule)
+
+        // Only bump revision if threshold or event mode changed on THIS specific rule
+        if rule.qualityAlert.threshold != previousRule.qualityAlert.threshold
+            || rule.qualityAlert.eventMode != previousRule.qualityAlert.eventMode {
+            rule.qualityAlert.revision += 1
+        }
+
+        next.setRule(rule, for: locationID)
+        await updateNotificationPreferences(next)
+    }
+
+    func updateNotificationMaster(enabled: Bool) async {
+        var next = notificationPreferences
+        next.notificationsEnabled = enabled
+        await updateNotificationPreferences(next)
+    }
+
+    func updateNotificationPlaySound(playSound: Bool) async {
+        var next = notificationPreferences
+        next.playSound = playSound
+        await updateNotificationPreferences(next)
+    }
+
     func updateNotificationPreferences(_ preferences: NotificationPreferences) async {
-        var next = preferences
+        let next = preferences
         let previous = notificationPreferences
         let enablingNotifications =
             (next.notificationsEnabled && !previous.notificationsEnabled)
-            || (next.dailySummary.enabled && !previous.dailySummary.enabled)
-            || (next.dailySummary.secondTimeEnabled && !previous.dailySummary.secondTimeEnabled)
-            || (next.qualityAlert.enabled && !previous.qualityAlert.enabled)
+            || (next.hasAnyDeliveryRuleEnabled && !previous.hasAnyDeliveryRuleEnabled)
 
-        let wantsNotifications =
-            next.notificationsEnabled
-            || next.dailySummary.enabled
-            || next.qualityAlert.enabled
-            || next.dailySummary.secondTimeEnabled
-
-        if wantsNotifications {
+        if next.notificationsEnabled || next.hasAnyDeliveryRuleEnabled {
             let result = (try? await notificationCoordinator.ensureAuthorization()) ?? .unavailable
             await notificationCoordinator.refreshAuthorizationStatus()
             notificationAuthorization = await notificationCoordinator.authorizationState
@@ -361,23 +413,6 @@ final class AppModel: ObservableObject {
                 notificationStatusMessage =
                     "Notifications are disabled in System Settings. Use “Open System Notification Settings…” to enable them."
             }
-        }
-
-        // Bump quality revision when threshold or event mode changes.
-        if next.qualityAlert.threshold != previous.qualityAlert.threshold
-            || next.qualityAlert.eventMode != previous.qualityAlert.eventMode {
-            next.qualityAlert.revision += 1
-        }
-
-        if next.locationID == nil {
-            next.locationID = selectedLocationID ?? state.locations.first?.id
-        }
-
-        if let locID = next.locationID {
-            var currentRule = next.rule(for: locID)
-            currentRule.dailySummary = next.dailySummary
-            currentRule.qualityAlert = next.qualityAlert
-            next.setRule(currentRule, for: locID)
         }
 
         await notificationCoordinator.savePreferences(next)
@@ -526,16 +561,6 @@ final class AppModel: ObservableObject {
         } catch {
             return "Unable to test connection."
         }
-    }
-
-    func refreshSelected(force: Bool) async {
-        guard let location = selectedLocation else { return }
-        if isRefreshing { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
-        _ = await refreshCoordinator.refreshLocation(id: location.id, force: force)
-        await reloadSelectedSnapshot()
-        await refreshCoordinator.scheduleNextRefresh()
     }
 
     private func reloadSelectedSnapshot() async {
