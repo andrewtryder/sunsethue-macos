@@ -1,94 +1,106 @@
 # SunsetHue for macOS
 
-Unofficial native macOS app (and optional WidgetKit extension) that shows SunsetHue sunrise and sunset forecast quality for one or more saved locations.
+An unofficial native macOS menu-bar app for [SunsetHue](https://sunsethue.com) sunrise and sunset quality forecasts across multiple saved locations.
 
 **This project is unofficial and is not reviewed, endorsed, or supported by SunsetHue or Apple.**
 
-## Screenshots
-
 <p>
-  <img src="docs/images/app-sandown.png" alt="SunsetHue macOS app showing Sandown sunrise and sunset forecast quality for today" width="720" />
+  <img src="docs/images/app-sandown.png" alt="SunsetHue macOS app showing Sandown sunrise and sunset forecast quality" width="720" />
 </p>
 
-<p>
-  <img src="docs/images/widget-sandown.png" alt="SunsetHue small, medium, and large desktop widgets for Sandown" width="360" />
-</p>
+## Features
+
+- **Compact menu-bar forecast:** View current and upcoming forecast quality for all saved locations at a glance.
+- **Accurate event timing:** Next sunrise/sunset with exact time, countdown, and quality score rating.
+- **Multi-day main forecast:** Detailed multi-day forecast cards showing cloud layers (low/medium/high), temperature, humidity, and visibility.
+- **Background refresh:** Automatically refreshes forecasts in the background via `NSBackgroundActivityScheduler`.
+- **Launch at Login:** Runs quietly in the background without needing the main window open.
+- **Per-location notifications:** Granular notification rules and quality score thresholds for each location.
+- **Location reordering:** Drag-and-drop location ordering reflected across sidebar and menu bar.
+- **Privacy-safe diagnostics:** Copy/export sanitized diagnostics for troubleshooting without exposing personal locations or credentials.
+- **Secure Keychain storage:** SunsetHue API key is stored strictly in your macOS login Keychain.
+- **Universal binary:** Native support for both Apple Silicon (arm64) and Intel (x86_64).
 
 ## Requirements
 
 - macOS 15 or newer
-- A SunsetHue API key from [sunsethue.com/dev-api](https://sunsethue.com/dev-api)
+- SunsetHue API key from [sunsethue.com/dev-api](https://sunsethue.com/dev-api)
 
-## Download and open
+## Download
 
-[Download SunsetHue for macOS (DMG)](https://github.com/andrewtryder/sunsethue-macos/releases/latest/download/SunsetHue-macos-unsigned.dmg)
+[**Download SunsetHue for macOS (DMG)**](https://github.com/andrewtryder/sunsethue-macos/releases/latest/download/SunsetHue-macos-unsigned.dmg)
 
-GitHub Releases ship an **unsigned** DMG (main app only). No paid Apple Developer Program is required to use the app.
+The GitHub release is an **unsigned universal macOS app**. It does not require Xcode, an Apple ID, or an Apple Developer account.
 
-1. Open the DMG and drag **SunsetHue** into **Applications**.
-2. Open the app once via **Right-click** → **Open** → **Open**, or use **System Settings → Privacy & Security → Open Anyway** if macOS blocks the first launch.  
-   (Gatekeeper blocks unsigned apps until you confirm once.)
-3. Add your SunsetHue API key (Settings → Account) and at least one location.
+### Installation
 
-## Obtaining an API key
+1. Download and open `SunsetHue-macos-unsigned.dmg`.
+2. Drag **SunsetHue.app** into your **Applications** folder.
+3. On first launch:
+   - **Right-click** `SunsetHue.app` → **Open** → **Open**, or
+   - Go to **System Settings → Privacy & Security → Open Anyway** if macOS Gatekeeper blocks the initial run.
+4. Enter your SunsetHue API key in **Settings → Account**.
+5. Add one or more locations.
 
-1. Visit [https://sunsethue.com/dev-api](https://sunsethue.com/dev-api).
-2. Create an API key with SunsetHue.
-3. Paste it into **Settings → Account**. It is stored **only** in the macOS Keychain (never in disk files or logs).
+*(Note: The one-time Gatekeeper confirmation occurs because SunsetHue is distributed free directly on GitHub without paid Apple Developer ID signing or notarization. SunsetHue does not require disabling Gatekeeper globally.)*
 
-After upgrading to the current architecture, re-enter your API key once in Settings → Account.
+## Using SunsetHue
 
-## Privacy and data on your Mac
+- **Menu-Bar Popup:** Click the menu bar icon to view all configured locations with immediate quality badges. Click any row to deep-link directly to that location in the main window.
+- **Main Window:** View comprehensive multi-day timelines, detailed atmospheric metrics, and opportunity summaries.
+- **Background Refresh:** While SunsetHue is running (including menu bar-only mode), stale forecasts update automatically in the background.
+- **Launch at Login:** Enable in Settings → General to keep forecasts updated without manual app launches.
+- **Notifications:** Configure automated alerts in Settings → Notifications with custom quality thresholds (e.g. notify if sunset quality ≥ 75%).
+- **Forecast Days:** Configure 1, 2, or 3 visible forecast days per location in Settings → General.
 
-- API key: login Keychain only (`api-key-v2`), never written to disk files or logs.
-- Unsigned GitHub build storage: `~/Library/Application Support/SunsetHue/` (widget stripped).
-- Personal Team signed build storage: `<TEAMID>.group.com.andrewtryder.SunsetHue` (app + widget share cache without accessing external or legacy containers).
-- See [PRIVACY.md](PRIVACY.md) for the full statement.
+## Privacy
 
-## Desktop widgets
+- **Keychain Only:** Your API key is stored exclusively in the macOS Keychain (`api-key-v2`) and never written to disk files or logs.
+- **Local Storage:** App settings and forecast caches are stored locally in `~/Library/Application Support/SunsetHue/`.
+- **Zero Telemetry:** SunsetHue contains no analytics, telemetry, crash trackers, or third-party SDKs.
+- See [PRIVACY.md](PRIVACY.md) for the complete privacy policy.
 
-macOS **will not list** a WidgetKit extension from the unsigned GitHub Release DMG. That is why SunsetHue does not appear under Edit Widgets when you run the free download.
+## Updating
 
-To enable the widget on your own Mac (still free — no $99 program):
+1. Download the latest `SunsetHue-macos-unsigned.dmg` from GitHub Releases.
+2. Quit the running SunsetHue app.
+3. Replace `/Applications/SunsetHue.app` with the new version from the DMG.
+4. Launch SunsetHue. Your saved locations, settings, and API key are preserved automatically.
 
-1. Create a free [Apple ID](https://appleid.apple.com) if you do not have one.
-2. Install [Xcode](https://developer.apple.com/xcode/) from the Mac App Store.
-3. Xcode → Settings → Accounts → add that Apple ID.
-4. Clone this repository, then copy `Config/Local.xcconfig.example` → `Config/Local.xcconfig` and set your **Personal Team** ID, **or** in the `SunsetHue` and `SunsetHueWidget` targets enable **Automatically manage signing** and pick your Personal Team.
-5. Confirm both targets have **App Sandbox** and **App Groups** (`$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue`). The widget does **not** need network or Keychain entitlements.
-6. **Product → Run** from Xcode (Debug, signed — not the unsigned Release DMG).  
-   Or from a terminal: `./scripts/run-debug.sh`
-7. Right-click the desktop → **Edit Widgets** → search **SunsetHue**.
+## Development
 
-### Storage & App Group Notes
-- **Personal Team signed build:** Main app and widget share `<TEAMID>.group.com.andrewtryder.SunsetHue`. A correctly signed build avoids recurring macOS 15+ privacy prompts ("SunsetHue would like to access data from other apps") by never querying raw non-prefixed App Groups.
-- **Unsigned GitHub build:** Uses local `~/Library/Application Support/SunsetHue/` exclusively without probing any App Groups.
-- **Personal Team profile expiration:** Free Personal Team provisioning profiles expire periodically (typically 7 days), requiring rebuilding from Xcode. This expiration is normal Apple behavior and distinct from App Group privacy prompts.
-- **Verifying entitlements locally:**
-  ```bash
-  codesign -d --entitlements :- /Applications/SunsetHue.app
-  codesign -d --entitlements :- /Applications/SunsetHue.app/Contents/PlugIns/SunsetHueWidget.appex
-  ```
+For standard unsigned macOS development and testing:
 
-## Background forecast refresh & architecture
+```bash
+./scripts/run-debug.sh
+```
 
-- **App-owned networking:** Forecast networking and Keychain API key access are strictly owned by the SunsetHue app. The WidgetKit extension contains no network code, no API key access, and acts purely as a read-only consumer of cached forecasts from the shared App Group.
-- **Background refresh:** While SunsetHue is running (including windowless/menu-bar mode), macOS background activity (`NSBackgroundActivityScheduler`) periodically refreshes stale forecasts in the background.
-- **Launch at Login:** For the best widget experience across system restarts, enable **Launch at Login** in Settings → General. This keeps SunsetHue running quietly in the background so cached forecasts remain fresh.
-- **Quitting the app:** Explicitly quitting SunsetHue stops app-owned background networking.
-- **Widget reload:** WidgetKit controls exact timeline reload execution and budget; the app updates shared storage and requests timeline updates.
+This builds the unsigned Debug app, strips any widget extension, copies the app to `/Applications/SunsetHue.app`, and launches it.
 
-## Known widget limitations
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflows, test commands, and project architecture.
 
-- Unsigned GitHub Release DMGs strip the WidgetKit extension due to macOS signing requirements (see Desktop Widgets section above for signed build instructions)
-- WidgetKit ultimately controls widget display reload timing; configured refresh intervals are target preferences
-- Transient failures preserve the last authoritative cached forecast in shared storage
-- Auth failures prompt you to update the API key in Settings → Account
+## Building a release locally
+
+Public release binaries are built and packaged locally on macOS rather than cloud runners:
+
+```bash
+./scripts/release-local.sh v1.2.0
+```
+
+Release Please creates the version tag and release entry on GitHub; `release-local.sh` builds, tests, packages, checksums, and uploads the universal unsigned DMG.
+
+## Desktop widget status
+
+WidgetKit support exists in the source tree but is currently **shelved** and is not included in standard GitHub releases.
+
+Free Personal Team widget builds require periodic reprovisioning (typically every 7 days) and are not the supported distribution path.
+
+For experimental widget development using a Personal Team Apple ID, see [CONTRIBUTING.md](CONTRIBUTING.md#experimental-widget-development).
+
+<p>
+  <img src="docs/images/widget-sandown.png" alt="SunsetHue desktop widgets (shelved/experimental)" width="360" />
+</p>
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Developers and contributors
-
-Build instructions, project layout, identifiers, tests, and release notes live in [CONTRIBUTING.md](CONTRIBUTING.md).

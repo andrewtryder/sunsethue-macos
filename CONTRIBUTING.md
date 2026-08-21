@@ -1,38 +1,77 @@
-# Contributing
+# Contributing to SunsetHue for macOS
 
-Thanks for your interest in improving SunsetHue for macOS.
+Thanks for your interest in contributing to SunsetHue for macOS.
 
-This page covers **development**, packaging, and contribution workflow. End-user install and widget setup live in [README.md](README.md).
+This guide covers **local development**, testing, unsigned distribution packaging, local release publishing, and optional experimental widget development.
 
-This project ships free unsigned GitHub Release builds without a paid Apple Developer account. App Sandbox and Team-ID App Groups remain in the repo for **local signed Personal Team widget development**; do not require a paid team for CI or the unsigned DMG.
+End-user installation instructions live in [README.md](README.md).
 
-## Development setup
+---
 
-1. Fork and clone the repository.
-2. Install Xcode 15+ (Xcode 26 recommended) and optionally [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
-3. Run `xcodegen generate` if you change `project.yml`.
-4. Run `python3 scripts/verify_release_metadata.py` and `swift test --package-path .` before opening a pull request.
-5. Build an unsigned DMG with `./scripts/package-unsigned.sh` or the `SunsetHue` scheme (`CODE_SIGNING_ALLOWED=NO`).
+## Normal Development Setup
 
-For local widget testing with a free Personal Team, see [Desktop widgets](README.md#desktop-widgets) in the README, or run:
+SunsetHue is developed and distributed primarily as an **unsigned macOS application**. No paid Apple Developer account, provisioning profile, or signing identity is required for normal development.
 
+1. Clone the repository.
+2. Ensure Xcode 15+ (macOS 15+ SDK) is installed.
+3. (Optional) Install [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) if editing `project.yml`.
+4. Build and launch the unsigned development app:
+   ```bash
+   ./scripts/run-debug.sh
+   ```
+
+`./scripts/run-debug.sh` will:
+- Regenerate the Xcode project with `xcodegen` if available.
+- Build the `SunsetHue` scheme in `Debug` configuration with code signing disabled.
+- Strip any WidgetKit extension from the bundle so it behaves identically to the unsigned public release.
+- Terminate any running SunsetHue instance and install to `/Applications/SunsetHue.app`.
+- Launch the newly built app.
+
+To skip `/Applications` installation during debug runs:
 ```bash
-./scripts/run-debug.sh
+INSTALL_TO_APPLICATIONS=0 ./scripts/run-debug.sh
 ```
 
-That builds a signed Debug app, installs it to `/Applications` for WidgetKit gallery discovery, refreshes PluginKit, and launches the app.
+---
 
-## Project layout
+## Testing & Quality Assurance
+
+Run the test suite before submitting pull requests:
+
+```bash
+# Standard unit tests (mocked networking, no live API required)
+swift test --package-path .
+
+# Concurrency and thread safety verification
+swift test --package-path . --sanitize=thread
+
+# Memory safety validation
+swift test --package-path . --sanitize=address
+```
+
+Verify version metadata consistency across manifests and xcconfigs:
+```bash
+python3 scripts/verify_release_metadata.py
+```
+
+---
+
+## Project Layout
 
 | Path | Purpose |
 |------|---------|
-| `Sources/SunsetHueCore` | Shared Swift package: API, models, Keychain, file storage, dates |
-| `Tests/SunsetHueCoreTests` | Unit tests (no live network) |
-| `SunsetHue` | Main macOS SwiftUI app |
-| `SunsetHueWidget` | WidgetKit + App Intents extension |
-| `scripts/package-unsigned.sh` | Builds unsigned GitHub Release DMG |
-| `scripts/run-debug.sh` | Signed Debug build + PluginKit register + launch |
-| `project.yml` | XcodeGen project definition |
+| `Sources/SunsetHueCore` | Shared Swift package: API client, models, Keychain, storage, date formatting |
+| `Tests/SunsetHueCoreTests` | Comprehensive unit tests (using `MockHTTPTransport` and recorded fixtures) |
+| `SunsetHue` | Main macOS SwiftUI application and Menu Bar Extra |
+| `SunsetHueWidget` | Shelved WidgetKit + App Intents extension (experimental) |
+| `scripts/lib/app-tools.sh` | Shared shell utilities for stripping widgets and verifying binaries |
+| `scripts/run-debug.sh` | Canonical unsigned Debug build, install, and launch script |
+| `scripts/package-unsigned.sh` | Canonical unsigned universal DMG packaging script |
+| `scripts/release-local.sh` | Local release build, test, package, checksum, and upload script |
+| `scripts/run-widget-debug.sh` | Experimental Personal Team signed widget runner |
+| `project.yml` | XcodeGen project configuration |
+
+---
 
 ## Identifiers
 
@@ -40,109 +79,97 @@ That builds a signed Debug app, installs it to `/Applications` for WidgetKit gal
 |------|--------|
 | App bundle ID | `com.andrewtryder.SunsetHue` |
 | Widget bundle ID | `com.andrewtryder.SunsetHue.Widget` |
-| Shared data folder | `~/Library/Application Support/SunsetHue/` |
-| URL scheme | `sunsethue` |
-| Location deep link | `sunsethue://location/<location-id>` |
-| App Group (signed Personal Team) | `$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue` (macOS 15+ Team-ID form) |
+| Unsigned Storage | `~/Library/Application Support/SunsetHue/` |
+| URL Scheme | `sunsethue` |
+| Location Deep Link | `sunsethue://location/<location-id>` |
+| App Group (Signed Dev) | `$(TeamIdentifierPrefix)group.com.andrewtryder.SunsetHue` |
 
 Organization / copyright display name: **Andrew T Ryder**.
 
-## Building from source
+---
+
+## Packaging the Unsigned DMG
+
+To build the universal unsigned distribution DMG locally:
 
 ```bash
-# Unit tests (no live API)
-swift test --package-path .
-
-# Regenerate the Xcode project if you edit project.yml
-xcodegen generate
-
-# Unsigned build (default for this repo / CI)
-xcodebuild -scheme SunsetHue -destination 'platform=macOS' \
-  -derivedDataPath build/DerivedData \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- build
-```
-
-Or open `SunsetHue.xcodeproj` in Xcode and run the `SunsetHue` scheme (signing can stay off for the main app; widgets need Personal Team Debug signing — see the README).
-
-## Testing
-
-```bash
-swift test --package-path .
-```
-
-Tests use `MockHTTPTransport` and fixtures. They never call the live API. Prefer tests for parser, validation, and timeline date logic.
-
-## Packaging the unsigned DMG
-
-```bash
-python3 scripts/verify_release_metadata.py
 ./scripts/package-unsigned.sh
-# → dist/SunsetHue-<version>-macos-unsigned.dmg
-# → dist/SunsetHue-macos-unsigned.dmg   # stable name for latest/download
 ```
 
-On `main`, release-please opens version PRs from Conventional Commits and, when merged, tags a release and uploads the unsigned DMG assets automatically.
+Artifacts produced:
+- `dist/SunsetHue-<VERSION>-macos-unsigned.dmg` (versioned release DMG)
+- `dist/SunsetHue-macos-unsigned.dmg` (stable name for direct download links)
 
-### Unsigned DMG Keychain checklist
+The packaging script verifies:
+1. Universal binary architecture (`arm64` and `x86_64` via `lipo`).
+2. WidgetKit extension is stripped from the bundle.
+3. DMG includes the drag-to-install `/Applications` link and `README-FIRST.txt`.
 
-Before cutting a public release, validate Keychain against the **GitHub release DMG** (not an Xcode build):
+---
 
-1. Install the app into `/Applications`.
-2. Save an API key in Settings → Account.
-3. Quit and reopen; confirm the key still loads.
-4. Reboot and reopen; confirm the key still loads.
-5. Replace the app with a newer unsigned release build; confirm the old key still loads.
-6. Launch from Finder and from the menu bar login item; confirm credentials work in both paths.
+## Local Release Publishing
 
-Unsigned builds use the traditional login Keychain when Data Protection Keychain access is unavailable. Signed Personal Team builds use the Data Protection Keychain.
+Release binaries are built and packaged on macOS rather than cloud runners:
 
-## Commit messages
+1. **Release Please** creates the version PR and tag (`vX.Y.Z`) on GitHub when Conventional Commits merge to `main`.
+2. On your Mac, run the local release script to test, build universal binaries, checksum, and upload the DMG assets to GitHub:
 
-Use [Conventional Commits](https://www.conventionalcommits.org/). CI enforces this with commitlint on pull requests.
+```bash
+# Test release packaging locally without uploading (Dry Run):
+./scripts/release-local.sh --dry-run v1.2.0
 
-- `feat:` new user-facing capability (minor semver bump)
+# Build, validate, package, checksum, and upload assets to GitHub Release:
+./scripts/release-local.sh v1.2.0
+```
+
+To run full sanitizer test passes during release packaging:
+```bash
+FULL_VALIDATION=1 ./scripts/release-local.sh v1.2.0
+```
+
+---
+
+## Unsigned DMG Keychain Checklist
+
+Before cutting a public release, validate Keychain behavior against the **unsigned DMG** build:
+
+1. Install SunsetHue from the generated DMG into `/Applications`.
+2. Save your API key in **Settings → Account**.
+3. Quit and relaunch SunsetHue; confirm the key loads without prompting.
+4. Reboot the Mac and launch SunsetHue; confirm credentials persist.
+5. Replace the application with a newer unsigned DMG build; confirm settings and API key persist across upgrades.
+
+---
+
+## Experimental Widget Development
+
+> **Note:** Desktop widgets via WidgetKit are currently **shelved** for public releases because macOS requires signed App Group entitlements that expire periodically on free Apple ID Personal Teams.
+
+To build and test the experimental desktop widgets locally with a free Apple ID:
+
+1. Create a `Config/Local.xcconfig` file from the example:
+   ```bash
+   cp Config/Local.xcconfig.example Config/Local.xcconfig
+   ```
+2. Open Xcode → Settings → Accounts → select your Apple ID → copy your 10-character **Team ID**.
+3. Set `DEVELOPMENT_TEAM = YOURTEAMID` in `Config/Local.xcconfig`.
+4. Build, sign, register, and launch the widget-enabled build:
+   ```bash
+   ./scripts/run-widget-debug.sh
+   ```
+5. Right-click the desktop → **Edit Widgets** → add **SunsetHue**.
+
+*Personal Team provisioning profiles expire every 7 days. Re-run `./scripts/run-widget-debug.sh` to renew.*
+
+---
+
+## Commit Messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+- `feat:` new user-facing functionality (minor semver bump)
 - `fix:` bug fix (patch semver bump)
-- `feat!:` / `fix!:` or a `BREAKING CHANGE:` footer (major semver bump)
-- `test:` tests only
-- `docs:` documentation only
-- `refactor:` internal change without behavior change
-- `chore:` maintenance, CI, tooling
-
-Examples:
-
-```text
-feat: add large widget three-day layout
-fix: preserve forecast cache on timeout
-test: cover Retry-After HTTP-date parsing
-```
-
-## Versioning and releases
-
-Versions are **semver** (`MAJOR.MINOR.PATCH`), managed by [release-please](https://github.com/googleapis/release-please) from Conventional Commits on `main`.
-
-Keep these in sync (release-please updates them; CI verifies):
-
-| File | Field |
-|------|--------|
-| [Config/Version.xcconfig](Config/Version.xcconfig) | `MARKETING_VERSION` → app `CFBundleShortVersionString` |
-| [project.yml](project.yml) | `MARKETING_VERSION` |
-| [Sources/SunsetHueCore/Constants.swift](Sources/SunsetHueCore/Constants.swift) | `marketingVersion` (User-Agent) |
-| [.release-please-manifest.json](.release-please-manifest.json) | release-please manifest |
-
-When a release PR merges, GitHub Actions builds and attaches:
-
-- `SunsetHue-<version>-macos-unsigned.dmg`
-- `SunsetHue-macos-unsigned.dmg` (stable name for `releases/latest/download/`)
-
-## Pull requests
-
-- Keep changes focused.
-- Do not commit API keys, provisioning profiles, or precise private coordinates.
-- Update [README.md](README.md) for user-facing install or widget steps; update this file for developer setup.
-- Prefer tests for parser, validation, and timeline date logic.
-
-## Code style
-
-- Prefer native Apple frameworks; avoid third-party dependencies unless necessary.
-- Keep user-facing errors concise and free of secrets.
-- Use Swift Concurrency (`async`/`await`) for networking.
+- `feat!:` or `fix!:` with breaking change footer (major semver bump)
+- `test:` test suite additions or adjustments
+- `docs:` documentation updates
+- `refactor:` code refactoring without behavior change
+- `chore:` maintenance, build scripts, release tooling

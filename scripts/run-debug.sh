@@ -1,77 +1,66 @@
 #!/usr/bin/env bash
-# Build a signed Debug app, register its WidgetKit extension, and launch it.
-# Use this for local widget development (Personal Team). Avoids stale
-# /Applications or unsigned DerivedData copies poisoning PluginKit.
+# Build and launch the unsigned SunsetHue app for local development.
+# No Apple Developer account, signing identity, or WidgetKit extension required.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DERIVED="${ROOT}/build/DerivedData-signed"
-APP="${DERIVED}/Build/Products/Debug/SunsetHue.app"
-APPEX="${APP}/Contents/PlugIns/SunsetHueWidget.appex"
-LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+DERIVED="${ROOT}/build/DerivedData-debug-unsigned"
+APP_NAME="SunsetHue"
+APP="${DERIVED}/Build/Products/Debug/${APP_NAME}.app"
 INSTALL_TO_APPLICATIONS="${INSTALL_TO_APPLICATIONS:-1}"
 
-cd "${ROOT}"
+# Source shared app tools
+source "${ROOT}/scripts/lib/app-tools.sh"
 
-if [[ ! -f Config/Local.xcconfig ]]; then
-  echo "Missing Config/Local.xcconfig (needed for Personal Team signing)." >&2
-  echo "  cp Config/Local.xcconfig.example Config/Local.xcconfig" >&2
-  echo "  # then set DEVELOPMENT_TEAM" >&2
-  exit 2
-fi
+cd "${ROOT}"
 
 if command -v xcodegen >/dev/null 2>&1; then
   xcodegen generate
 fi
 
-echo "Building signed Debug…"
+echo "Building unsigned Debug (${APP_NAME})…"
 xcodebuild \
-  -scheme SunsetHue \
+  -scheme "${APP_NAME}" \
   -configuration Debug \
   -destination 'platform=macOS' \
   -derivedDataPath "${DERIVED}" \
-  -allowProvisioningUpdates \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGN_IDENTITY=- \
   build
 
 if [[ ! -d "${APP}" ]]; then
   echo "Debug app not found at ${APP}" >&2
-  exit 2
+  exit 1
 fi
 
-pkill -x SunsetHue 2>/dev/null || true
+# Unregister and strip the widget extension for unsigned development
+unregister_sunsethue_app "${APP}"
+strip_widget_extension "${APP}"
+verify_widget_absent "${APP}"
+
+# Terminate existing instance before replacing/relaunching
+pkill -x "${APP_NAME}" 2>/dev/null || true
 pkill -f 'SunsetHueWidget.appex' 2>/dev/null || true
 sleep 1
 
-# Drop stale hosts that hide the Debug appex from Edit Widgets.
-if [[ -d /Applications/SunsetHue.app && "$(realpath /Applications/SunsetHue.app 2>/dev/null || true)" != "$(realpath "${APP}")" ]]; then
-  pluginkit -r "/Applications/SunsetHue.app/Contents/PlugIns/SunsetHueWidget.appex" >/dev/null 2>&1 || true
-  "${LSREGISTER}" -u "/Applications/SunsetHue.app" >/dev/null 2>&1 || true
-fi
-OTHER="${ROOT}/build/DerivedData/Build/Products/Debug/SunsetHue.app"
-if [[ -d "${OTHER}" ]]; then
-  pluginkit -r "${OTHER}/Contents/PlugIns/SunsetHueWidget.appex" >/dev/null 2>&1 || true
-  "${LSREGISTER}" -u "${OTHER}" >/dev/null 2>&1 || true
-fi
+FINAL_APP="${APP}"
 
 if [[ "${INSTALL_TO_APPLICATIONS}" == "1" ]]; then
-  echo "Installing signed Debug build to /Applications/SunsetHue.app (gallery discovery)…"
-  rm -rf /Applications/SunsetHue.app
-  ditto "${APP}" /Applications/SunsetHue.app
-  APP="/Applications/SunsetHue.app"
-  APPEX="${APP}/Contents/PlugIns/SunsetHueWidget.appex"
+  TARGET_APP="/Applications/${APP_NAME}.app"
+  echo "Installing unsigned Debug build to ${TARGET_APP}…"
+  unregister_sunsethue_app "${TARGET_APP}"
+  rm -rf "${TARGET_APP}"
+  ditto "${APP}" "${TARGET_APP}"
+  strip_widget_extension "${TARGET_APP}"
+  verify_widget_absent "${TARGET_APP}"
+  FINAL_APP="${TARGET_APP}"
 fi
 
-killall chronod 2>/dev/null || true
-sleep 1
+open -na "${FINAL_APP}"
 
-"${LSREGISTER}" -f "${APP}"
-pluginkit -a "${APPEX}" >/dev/null 2>&1 || true
-pluginkit -e use -i com.andrewtryder.SunsetHue.Widget >/dev/null 2>&1 || true
-
-echo "PluginKit:"
-pluginkit -mv -i com.andrewtryder.SunsetHue.Widget || true
-
-open -na "${APP}"
 echo
-echo "Launched: ${APP}"
-echo "Next: remove any old SunsetHue widgets, then Edit Widgets → add SunsetHue."
+echo "Build mode: unsigned Debug"
+echo "Widget: excluded"
+echo "Storage: ~/Library/Application Support/SunsetHue/"
+echo "App: ${FINAL_APP}"

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Build an unsigned SunsetHue.dmg for free GitHub Releases (no Apple Developer account).
+# Build an unsigned universal SunsetHue.dmg for GitHub Releases (no Apple Developer account).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+# Source shared app tools
+source "${ROOT}/scripts/lib/app-tools.sh"
 
 DERIVED="${ROOT}/build/DerivedData"
 DIST="${ROOT}/dist"
@@ -20,8 +23,9 @@ fi
 rm -rf "${DERIVED}" "${DIST}"
 mkdir -p "${DIST}"
 
+echo "Building unsigned Release (${APP_NAME} ${VERSION}, universal arm64 + x86_64)…"
 xcodebuild \
-  -scheme SunsetHue \
+  -scheme "${APP_NAME}" \
   -destination 'platform=macOS' \
   -derivedDataPath "${DERIVED}" \
   -configuration Release \
@@ -43,53 +47,13 @@ if [[ ! -d "${APP_PATH}" ]]; then
   exit 1
 fi
 
-verify_universal() {
-  local binary="$1"
-  local label="$2"
-  local archs
-  archs="$(lipo -archs "${binary}")"
-  if [[ "${archs}" != "x86_64 arm64" && "${archs}" != "arm64 x86_64" ]]; then
-    echo "${label} is not universal (got: ${archs})" >&2
-    exit 1
-  fi
-  echo "${label}: ${archs}"
-}
+# Verify universal executable
+verify_universal_binary "${APP_PATH}/Contents/MacOS/${APP_NAME}" "${APP_NAME}"
 
-verify_universal "${APP_PATH}/Contents/MacOS/${APP_NAME}" "App"
-
-# Public unsigned DMG is main-app only. Widgets need a signed Personal Team build.
-strip_widget() {
-  local app="$1"
-  local plugins="${app}/Contents/PlugIns"
-  local appex="${plugins}/SunsetHueWidget.appex"
-  if [[ -d "${appex}" ]]; then
-    pluginkit -r "${appex}" >/dev/null 2>&1 || true
-    rm -rf "${appex}"
-  fi
-  if [[ -d "${plugins}" ]] && [[ -z "$(ls -A "${plugins}" 2>/dev/null || true)" ]]; then
-    rmdir "${plugins}" 2>/dev/null || true
-  fi
-}
-
-# xcodebuild registers the product with Launch Services / PluginKit. An ad-hoc
-# unsigned .app poisons desktop widgets while developing a signed Debug build.
-unregister_app() {
-  local app="$1"
-  local appex="${app}/Contents/PlugIns/SunsetHueWidget.appex"
-  local lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-  if [[ -d "${appex}" ]]; then
-    pluginkit -r "${appex}" >/dev/null 2>&1 || true
-  fi
-  if [[ -d "${app}" && -x "${lsregister}" ]]; then
-    "${lsregister}" -u "${app}" >/dev/null 2>&1 || true
-  fi
-}
-unregister_app "${APP_PATH}"
-strip_widget "${APP_PATH}"
-if [[ -d "${APP_PATH}/Contents/PlugIns/SunsetHueWidget.appex" ]]; then
-  echo "Failed to strip widget appex from unsigned package" >&2
-  exit 1
-fi
+# Strip widget extension from unsigned distribution
+unregister_sunsethue_app "${APP_PATH}"
+strip_widget_extension "${APP_PATH}"
+verify_widget_absent "${APP_PATH}"
 
 # Stage app + first-run readme, then assemble DMG root (drag-to-install).
 STAGE="${DIST}/stage"
@@ -97,35 +61,39 @@ DMG_ROOT="${DIST}/dmg-root"
 rm -rf "${STAGE}" "${DMG_ROOT}"
 mkdir -p "${STAGE}" "${DMG_ROOT}"
 ditto "${APP_PATH}" "${STAGE}/${APP_NAME}.app"
-unregister_app "${STAGE}/${APP_NAME}.app"
-strip_widget "${STAGE}/${APP_NAME}.app"
+unregister_sunsethue_app "${STAGE}/${APP_NAME}.app"
+strip_widget_extension "${STAGE}/${APP_NAME}.app"
+verify_widget_absent "${STAGE}/${APP_NAME}.app"
 
 cat > "${STAGE}/README-FIRST.txt" <<EOF
-SunsetHue for macOS (unsigned build)
+SunsetHue for macOS
 
-This build is distributed free on GitHub without Apple notarization.
+1. Drag SunsetHue.app to Applications.
+2. On first launch, right-click SunsetHue → Open.
+   If blocked, use System Settings → Privacy & Security → Open Anyway.
+3. Add your SunsetHue API key in Settings → Account.
+4. Add at least one location.
 
-Install from the DMG:
-1. Drag SunsetHue.app to Applications
-2. Right-click SunsetHue.app → Open → Open
-   (or System Settings → Privacy & Security → Open Anyway)
-3. Add your SunsetHue API key and a location in the app.
+This is an unsigned, unnotarized build distributed from the project's
+official GitHub Releases page.
 
-Notes:
-- Settings/cache live in ~/Library/Application Support/SunsetHue/
-- The API key is stored in your login Keychain only
-- This DMG does not include the desktop widget; widgets require a signed Personal Team build from Xcode
-- Unofficial; not affiliated with SunsetHue or Apple
+No Apple Developer account or Xcode is required.
+
+Desktop widgets are not included in this build.
+
+API keys are stored in macOS Keychain.
 EOF
 
 ditto "${STAGE}/${APP_NAME}.app" "${DMG_ROOT}/${APP_NAME}.app"
 cp "${STAGE}/README-FIRST.txt" "${DMG_ROOT}/README-FIRST.txt"
 ln -s /Applications "${DMG_ROOT}/Applications"
-unregister_app "${DMG_ROOT}/${APP_NAME}.app"
+unregister_sunsethue_app "${DMG_ROOT}/${APP_NAME}.app"
 
 DMG_VERSIONED="${DIST}/${APP_NAME}-${VERSION}-macos-unsigned.dmg"
 DMG_STABLE="${DIST}/${APP_NAME}-macos-unsigned.dmg"
 rm -f "${DMG_VERSIONED}" "${DMG_STABLE}"
+
+echo "Creating DMG image…"
 hdiutil create \
   -volname "${APP_NAME}" \
   -srcfolder "${DMG_ROOT}" \
@@ -134,12 +102,11 @@ hdiutil create \
   "${DMG_VERSIONED}"
 cp -f "${DMG_VERSIONED}" "${DMG_STABLE}"
 
-# Keep only archives on disk so Spotlight / PluginKit do not rediscover the
-# unsigned .app next to a signed Xcode Debug build.
+# Clean up stage and dmg-root temporary directories
 rm -rf "${STAGE}" "${DMG_ROOT}"
-unregister_app "${APP_PATH}"
+unregister_sunsethue_app "${APP_PATH}"
 
-echo "Created ${DMG_VERSIONED}"
-echo "Created ${DMG_STABLE}"
+echo
+echo "Created: ${DMG_VERSIONED}"
+echo "Created: ${DMG_STABLE}"
 ls -lh "${DMG_VERSIONED}" "${DMG_STABLE}"
-echo "Note: unsigned .app was unregistered from Launch Services (widgets need a signed Xcode Debug run)."

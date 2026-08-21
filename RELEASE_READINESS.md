@@ -60,4 +60,7 @@ git diff --exit-code -- SunsetHue.xcodeproj
 
 # 5. Release metadata verification
 python3 scripts/verify_release_metadata.py
+
+# 6. Local release dry-run validation
+./scripts/release-local.sh --dry-run v1.2.0
 ```

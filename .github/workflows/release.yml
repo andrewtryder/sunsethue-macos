@@ -9,6 +9,9 @@ permissions:
   issues: write
   pull-requests: write
 
+# macOS binaries are intentionally built locally to avoid GitHub macOS runner usage
+# and because the public distribution is an unsigned universal DMG.
+# After Release Please creates a tag/release, run: ./scripts/release-local.sh vX.Y.Z
 jobs:
   release-please:
     runs-on: ubuntu-latest
@@ -21,49 +24,3 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
-  package:
-    needs: release-please
-    if: false # Temporarily disabled to save macOS runner minutes: ${{ needs.release-please.outputs.release_created == 'true' }}
-    runs-on: macos-15
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
-
-      - name: Select Xcode
-        run: |
-          if [[ -d /Applications/Xcode.app ]]; then
-            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-          else
-            latest="$(find /Applications -maxdepth 1 -type d -name 'Xcode_*.app' | sort -V | tail -1)"
-            sudo xcode-select -s "${latest}/Contents/Developer"
-          fi
-          xcodebuild -version
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Verify released version
-        env:
-          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: python3 scripts/verify_release_metadata.py --expected-version "${RELEASE_TAG#v}"
-
-      - name: Package unsigned app
-        run: ./scripts/package-unsigned.sh
-
-      - name: Upload release assets
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          assets=(
-            dist/SunsetHue-*-macos-unsigned.dmg
-            dist/SunsetHue-macos-unsigned.dmg
-          )
-          test "${#assets[@]}" -ge 2
-          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
