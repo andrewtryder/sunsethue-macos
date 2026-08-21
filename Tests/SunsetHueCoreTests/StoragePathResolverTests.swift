@@ -4,15 +4,15 @@ import XCTest
 final class StoragePathResolverTests: XCTestCase {
 
     func testNoTeamIDResolvesToApplicationSupportWithoutProbingAppGroup() {
-        var groupLookupCallCount = 0
-        var requestedGroups: [String] = []
+        let groupLookupCallCount = LockIsolated<Int>(0)
+        let requestedGroups = LockIsolated<[String]>([])
 
         let appSupportDir = URL(fileURLWithPath: "/tmp/test-app-support")
         let env = StorageEnvironment(
             teamIdentifier: { nil },
             groupContainerURL: { group in
-                groupLookupCallCount += 1
-                requestedGroups.append(group)
+                groupLookupCallCount.withValue { $0 += 1 }
+                requestedGroups.withValue { $0.append(group) }
                 return URL(fileURLWithPath: "/tmp/group-container")
             },
             applicationSupportURL: { appSupportDir }
@@ -22,19 +22,19 @@ final class StoragePathResolverTests: XCTestCase {
         let mode = resolver.resolveStorageMode()
 
         XCTAssertEqual(mode, .localApplicationSupport)
-        XCTAssertEqual(groupLookupCallCount, 0, "Unsigned build must never probe containerURL for any App Group")
-        XCTAssertTrue(requestedGroups.isEmpty)
+        XCTAssertEqual(groupLookupCallCount.value, 0, "Unsigned build must never probe containerURL for any App Group")
+        XCTAssertTrue(requestedGroups.value.isEmpty)
         XCTAssertEqual(resolver.preferredContainerURL(), appSupportDir)
     }
 
     func testEmptyTeamIDResolvesToApplicationSupportWithoutProbingAppGroup() {
-        var groupLookupCallCount = 0
+        let groupLookupCallCount = LockIsolated<Int>(0)
 
         let appSupportDir = URL(fileURLWithPath: "/tmp/test-app-support")
         let env = StorageEnvironment(
             teamIdentifier: { "   " },
             groupContainerURL: { _ in
-                groupLookupCallCount += 1
+                groupLookupCallCount.withValue { $0 += 1 }
                 return URL(fileURLWithPath: "/tmp/group-container")
             },
             applicationSupportURL: { appSupportDir }
@@ -42,19 +42,19 @@ final class StoragePathResolverTests: XCTestCase {
 
         let resolver = StoragePathResolver(environment: env)
         XCTAssertEqual(resolver.resolveStorageMode(), .localApplicationSupport)
-        XCTAssertEqual(groupLookupCallCount, 0)
+        XCTAssertEqual(groupLookupCallCount.value, 0)
     }
 
     func testTeamIDResolvesToTeamPrefixedAppGroup() {
         let teamID = "ABCDEFGHIJ"
-        var requestedGroups: [String] = []
+        let requestedGroups = LockIsolated<[String]>([])
         let groupDir = URL(fileURLWithPath: "/tmp/team-group-container")
         let appSupportDir = URL(fileURLWithPath: "/tmp/test-app-support")
 
         let env = StorageEnvironment(
             teamIdentifier: { teamID },
             groupContainerURL: { group in
-                requestedGroups.append(group)
+                requestedGroups.withValue { $0.append(group) }
                 return groupDir
             },
             applicationSupportURL: { appSupportDir }
@@ -64,19 +64,19 @@ final class StoragePathResolverTests: XCTestCase {
         let mode = resolver.resolveStorageMode()
 
         XCTAssertEqual(mode, .teamAppGroup(identifier: "ABCDEFGHIJ.group.com.andrewtryder.SunsetHue"))
-        XCTAssertEqual(requestedGroups, ["ABCDEFGHIJ.group.com.andrewtryder.SunsetHue"])
+        XCTAssertEqual(requestedGroups.value, ["ABCDEFGHIJ.group.com.andrewtryder.SunsetHue"])
         XCTAssertEqual(resolver.preferredContainerURL(), groupDir)
     }
 
     func testTeamIDContainerUnavailableFallsBackToLocalApplicationSupportWithoutRawLegacyProbe() {
         let teamID = "ABCDEFGHIJ"
-        var requestedGroups: [String] = []
+        let requestedGroups = LockIsolated<[String]>([])
         let appSupportDir = URL(fileURLWithPath: "/tmp/test-app-support")
 
         let env = StorageEnvironment(
             teamIdentifier: { teamID },
             groupContainerURL: { group in
-                requestedGroups.append(group)
+                requestedGroups.withValue { $0.append(group) }
                 return nil // simulate containerURL returning nil for team group
             },
             applicationSupportURL: { appSupportDir }
@@ -86,19 +86,19 @@ final class StoragePathResolverTests: XCTestCase {
         let mode = resolver.resolveStorageMode()
 
         XCTAssertEqual(mode, .localApplicationSupport)
-        XCTAssertEqual(requestedGroups, ["ABCDEFGHIJ.group.com.andrewtryder.SunsetHue"])
-        XCTAssertFalse(requestedGroups.contains("group.com.andrewtryder.SunsetHue"), "Must never probe raw legacy group")
+        XCTAssertEqual(requestedGroups.value, ["ABCDEFGHIJ.group.com.andrewtryder.SunsetHue"])
+        XCTAssertFalse(requestedGroups.value.contains("group.com.andrewtryder.SunsetHue"), "Must never probe raw legacy group")
         XCTAssertEqual(resolver.preferredContainerURL(), appSupportDir)
     }
 
     func testUnsignedModeNeverCallsGroupContainerURL() {
-        var groupLookupCallCount = 0
+        let groupLookupCallCount = LockIsolated<Int>(0)
         let appSupportDir = URL(fileURLWithPath: "/tmp/test-app-support")
 
         let env = StorageEnvironment(
             teamIdentifier: { nil },
             groupContainerURL: { _ in
-                groupLookupCallCount += 1
+                groupLookupCallCount.withValue { $0 += 1 }
                 return nil
             },
             applicationSupportURL: { appSupportDir }
@@ -112,18 +112,18 @@ final class StoragePathResolverTests: XCTestCase {
         _ = resolver.cacheFileURL(for: UUID())
         _ = resolver.legacyCacheURL()
 
-        XCTAssertEqual(groupLookupCallCount, 0, "Unsigned mode must NEVER call groupContainerURL")
+        XCTAssertEqual(groupLookupCallCount.value, 0, "Unsigned mode must NEVER call groupContainerURL")
     }
 
     func testPersonalTeamModeQueriesOnlyTeamPrefixedIdentifierOnce() {
-        var requestedGroups: [String] = []
+        let requestedGroups = LockIsolated<[String]>([])
         let groupDir = URL(fileURLWithPath: "/tmp/team-group-container")
         let appSupportDir = URL(fileURLWithPath: "/tmp/test-app-support")
 
         let env = StorageEnvironment(
             teamIdentifier: { "TEAM123456" },
             groupContainerURL: { group in
-                requestedGroups.append(group)
+                requestedGroups.withValue { $0.append(group) }
                 return groupDir
             },
             applicationSupportURL: { appSupportDir }
@@ -133,7 +133,7 @@ final class StoragePathResolverTests: XCTestCase {
         let container = resolver.preferredContainerURL()
 
         XCTAssertEqual(container, groupDir)
-        XCTAssertEqual(requestedGroups, ["TEAM123456.group.com.andrewtryder.SunsetHue"], "Personal Team mode must query groupContainerURL once with only the Team-prefixed identifier")
+        XCTAssertEqual(requestedGroups.value, ["TEAM123456.group.com.andrewtryder.SunsetHue"], "Personal Team mode must query groupContainerURL once with only the Team-prefixed identifier")
     }
 
     func testNormalStorageResolutionNeverRequestsRawLegacyAppGroup() {

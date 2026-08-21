@@ -276,11 +276,12 @@ final class OperationalForecastCoverageTests: XCTestCase {
     // I. A recently fetched current cache with insufficient horizon is selected for automatic refresh.
     func testRecentlyFetchedCacheWithInsufficientHorizonIsSelectedForRefresh() async throws {
         let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
+        let now = Date()
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
-        let today = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0))!
-        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0))!
-        let fToday = makeForecast(eventType: .sunset, date: today, eventTime: today.addingTimeInterval(19 * 3600))
+        let today = calendar.startOfDay(for: now)
+        let sunsetToday = calendar.date(bySettingHour: 19, minute: 0, second: 0, of: today) ?? today.addingTimeInterval(19 * 3600)
+        let fToday = makeForecast(eventType: .sunset, date: today, eventTime: sunsetToday)
 
         let snapshot = CachedLocationSnapshot(
             locationID: location.id,
@@ -317,14 +318,16 @@ final class OperationalForecastCoverageTests: XCTestCase {
     // J. A recently fetched current cache with sufficient two-day coverage is NOT gratuitously refreshed.
     func testRecentlyFetchedCacheWithSufficientCoverageIsNotGratuitouslyRefreshed() async throws {
         let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
+        let now = Date()
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
-        let today = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0))!
-        let tomorrow = calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 0, minute: 0))!
-        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0))!
+        let today = calendar.startOfDay(for: now)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let sunsetToday = calendar.date(bySettingHour: 19, minute: 0, second: 0, of: today) ?? today.addingTimeInterval(19 * 3600)
+        let sunsetTomorrow = calendar.date(bySettingHour: 19, minute: 0, second: 0, of: tomorrow) ?? tomorrow.addingTimeInterval(19 * 3600)
 
-        let fToday = makeForecast(eventType: .sunset, date: today, eventTime: today.addingTimeInterval(19 * 3600))
-        let fTomorrow = makeForecast(eventType: .sunset, date: tomorrow, eventTime: tomorrow.addingTimeInterval(19 * 3600))
+        let fToday = makeForecast(eventType: .sunset, date: today, eventTime: sunsetToday)
+        let fTomorrow = makeForecast(eventType: .sunset, date: tomorrow, eventTime: sunsetTomorrow)
 
         let snapshot = CachedLocationSnapshot(
             locationID: location.id,
