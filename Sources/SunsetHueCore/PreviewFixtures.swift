@@ -142,14 +142,14 @@ public enum PreviewFixtures {
         )
     }
 
-    public static func sampleBundle(fetchedAt: Date = Date()) -> LocationForecastBundle {
+    public static func sampleBundle(locationID: UUID = sampleLocationID, fetchedAt: Date = Date()) -> LocationForecastBundle {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = sampleTimeZone
         let today = calendar.startOfDay(for: fetchedAt)
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
         let dayAfter = calendar.date(byAdding: .day, value: 2, to: today)!
         return LocationForecastBundle(
-            locationID: sampleLocationID,
+            locationID: locationID,
             fetchedAt: fetchedAt,
             forecasts: [
                 averageSunrise(on: today),

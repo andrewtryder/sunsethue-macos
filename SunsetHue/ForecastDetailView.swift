@@ -13,19 +13,17 @@ struct ForecastDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+
                 if let bundle = appModel.bundle, bundle.locationID == location.id {
-                    ForEach(0..<location.forecastDays, id: \.self) { dayOffset in
-                        DayForecastSection(
-                            title: PresentationFormatting.relativeDayLabel(dayOffset: dayOffset, timeZone: timeZone),
-                            sunrise: location.includeSunrise
-                                ? bundle.forecast(dayOffset: dayOffset, eventType: .sunrise, timeZone: timeZone)
-                                : nil,
-                            sunset: location.includeSunset
-                                ? bundle.forecast(dayOffset: dayOffset, eventType: .sunset, timeZone: timeZone)
-                                : nil,
-                            timeZone: timeZone
-                        )
+                    if let bestEvent = MultiDayForecastPresenter.nextBestUpcomingEvent(location: location, bundle: bundle) {
+                        UpcomingOpportunityBanner(forecast: bestEvent, timeZone: timeZone)
                     }
+
+                    let sections = MultiDayForecastPresenter.buildSections(location: location, bundle: bundle)
+                    ForEach(sections) { section in
+                        DayForecastSection(section: section, timeZone: timeZone)
+                    }
+
                     Text("Last successful update: \(bundle.fetchedAt.formatted(date: .abbreviated, time: .shortened))")
                         .sunsetHueMuted()
                         .accessibilityLabel("Last successful update")
@@ -82,24 +80,85 @@ struct ForecastDetailView: View {
     }
 }
 
+struct UpcomingOpportunityBanner: View {
+    let forecast: EventForecast
+    let timeZone: TimeZone
+
+    private var qualityStyle: QualityStyle {
+        QualityStyle.resolve(quality: forecast.quality, qualityText: forecast.qualityText)
+    }
+
+    var body: some View {
+        SectionCard {
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: "sparkles")
+                    .font(.title2)
+                    .foregroundStyle(qualityStyle.tint)
+                    .frame(width: 32)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Top Upcoming Opportunity")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(qualityStyle.tint)
+                        .textCase(.uppercase)
+
+                    HStack(spacing: 6) {
+                        Image(systemName: forecast.eventType.symbolName)
+                            .foregroundStyle(forecast.eventType.iconColor)
+                        Text(forecast.eventType.displayName)
+                            .font(.headline)
+                        Text("·")
+                            .foregroundStyle(.secondary)
+                        Text(PresentationFormatting.timeString(forecast.eventTime, timeZone: timeZone) ?? "—")
+                            .font(.headline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                HStack(spacing: 10) {
+                    Text(qualityStyle.percentage)
+                        .font(SunsetHueTypography.cardTitle.weight(.bold))
+                        .foregroundStyle(qualityStyle.tint)
+
+                    StatusBadge(quality: qualityStyle)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Top Upcoming Opportunity: \(forecast.eventType.displayName), \(qualityStyle.percentage), \(qualityStyle.status)")
+    }
+}
+
 struct DayForecastSection: View {
-    let title: String
-    let sunrise: EventForecast?
-    let sunset: EventForecast?
+    let section: ForecastDaySectionData
     let timeZone: TimeZone
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(SunsetHueTypography.sectionHeader)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(section.dayLabel)
+                    .font(SunsetHueTypography.sectionHeader)
+                    .accessibilityAddTraits(.isHeader)
+
+                if let dateStr = section.dateString, section.dayOffset < 2 {
+                    Text(dateStr)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             HStack(alignment: .top, spacing: 16) {
-                if let sunrise {
+                if let sunrise = section.sunrise {
                     EventForecastCard(forecast: sunrise, timeZone: timeZone)
                 }
-                if let sunset {
+                if let sunset = section.sunset {
                     EventForecastCard(forecast: sunset, timeZone: timeZone)
                 }
-                if sunrise == nil && sunset == nil {
+                if section.sunrise == nil && section.sunset == nil {
                     Text("No events configured for this day.")
                         .foregroundStyle(.secondary)
                 }

@@ -47,10 +47,10 @@ public enum PresentationFormatting: Sendable {
         case 0: return "Today"
         case 1: return "Tomorrow"
         default:
-            let calendar = Calendar(identifier: .gregorian)
-            var cal = calendar
+            var cal = Calendar(identifier: .gregorian)
             cal.timeZone = timeZone
-            let day = cal.startOfDay(for: reference).addingTimeInterval(TimeInterval(dayOffset * 86_400))
+            let start = cal.startOfDay(for: reference)
+            let day = cal.date(byAdding: .day, value: dayOffset, to: start) ?? start
             let formatter = DateFormatter()
             formatter.timeZone = timeZone
             formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
