@@ -8,6 +8,7 @@ private struct RefreshExecutionResult: Sendable {
 
 /// Sole writer of forecast cache snapshots. Owns networking + Keychain reads for refresh.
 public actor ForecastRefreshCoordinator {
+    public let activityRecorder: RefreshActivityRecorder
     private let settingsStore: any SharedSettingsStore
     private let forecastCache: any ForecastCache
     private let credentialStore: CredentialStore
@@ -23,22 +24,24 @@ public actor ForecastRefreshCoordinator {
         forecastCache: any ForecastCache = SharedStorageFactory.makeForecastCache(),
         credentialStore: CredentialStore = KeychainCredentialStore(),
         forecastService: ForecastService = ForecastService(),
-        sideEffectSink: any ForecastRefreshSideEffectSink = NoOpForecastRefreshSideEffectSink()
+        sideEffectSink: any ForecastRefreshSideEffectSink = NoOpForecastRefreshSideEffectSink(),
+        activityRecorder: RefreshActivityRecorder = RefreshActivityRecorder()
     ) {
         self.settingsStore = settingsStore
         self.forecastCache = forecastCache
         self.credentialStore = credentialStore
         self.forecastService = forecastService
         self.sideEffectSink = sideEffectSink
+        self.activityRecorder = activityRecorder
     }
 
-    public func refreshLocation(id: UUID, force: Bool) async -> CachedLocationSnapshot? {
+    public func refreshLocation(id: UUID, force: Bool, trigger: RefreshTrigger = .manual) async -> CachedLocationSnapshot? {
         let state = (try? await settingsStore.load())?.value ?? SharedAppState()
         guard let location = state.locations.first(where: { $0.id == id }) else { return nil }
-        return await refresh(location: location, force: force)
+        return await refresh(location: location, force: force, trigger: trigger)
     }
 
-    public func refreshAllStaleLocations() async {
+    public func refreshAllStaleLocations(trigger: RefreshTrigger = .scheduled) async {
         guard !isRefreshingAll else { return }
         isRefreshingAll = true
         defer { isRefreshingAll = false }
@@ -48,19 +51,19 @@ public actor ForecastRefreshCoordinator {
             let existing = try? await forecastCache.loadSnapshot(for: location.id)
             let needsRefresh = forceNeeded(existing: existing, location: location, force: false)
             if needsRefresh {
-                _ = await refresh(location: location, force: false)
+                _ = await refresh(location: location, force: false, trigger: trigger)
             }
         }
         await scheduleNextRefresh()
     }
 
     /// Force-refresh every location currently marked authentication-required (e.g. after saving a new API key).
-    public func refreshAuthenticationRequiredLocations() async {
+    public func refreshAuthenticationRequiredLocations(trigger: RefreshTrigger = .apiKeyChanged) async {
         let state = (try? await settingsStore.load())?.value ?? SharedAppState()
         for location in state.locations {
             let existing = try? await forecastCache.loadSnapshot(for: location.id)
             guard existing?.status == .authenticationRequired else { continue }
-            _ = await refresh(location: location, force: true)
+            _ = await refresh(location: location, force: true, trigger: trigger)
         }
         await scheduleNextRefresh()
     }
@@ -121,7 +124,7 @@ public actor ForecastRefreshCoordinator {
     }
 
     public func applicationDidWake() async {
-        await refreshAllStaleLocations()
+        await refreshAllStaleLocations(trigger: .didWake)
     }
 
     private func forceNeeded(existing: CachedLocationSnapshot?, location: SavedLocation, force: Bool) -> Bool {
@@ -156,7 +159,7 @@ public actor ForecastRefreshCoordinator {
         }
     }
 
-    private func refresh(location: SavedLocation, force: Bool) async -> CachedLocationSnapshot? {
+    private func refresh(location: SavedLocation, force: Bool, trigger: RefreshTrigger) async -> CachedLocationSnapshot? {
         let locationID = location.id
 
         if let existingTask = inFlightRefreshes[locationID] {
@@ -171,7 +174,7 @@ public actor ForecastRefreshCoordinator {
         }
 
         let task = Task<RefreshExecutionResult, Never> {
-            await self.performRefresh(location: location, force: force)
+            await self.performRefresh(location: location, force: force, trigger: trigger)
         }
         inFlightRefreshes[locationID] = task
         defer {
@@ -183,18 +186,32 @@ public actor ForecastRefreshCoordinator {
         return result.snapshot
     }
 
-    private func performRefresh(location: SavedLocation, force: Bool) async -> RefreshExecutionResult {
+    private func performRefresh(location: SavedLocation, force: Bool, trigger: RefreshTrigger) async -> RefreshExecutionResult {
         let previous = try? await forecastCache.loadSnapshot(for: location.id)
         let now = Date()
 
         if !force {
             if let previous, !forceNeeded(existing: previous, location: location, force: false) {
+                await activityRecorder.record(
+                    locationID: location.id,
+                    locationName: location.name,
+                    trigger: trigger,
+                    result: .skippedFresh,
+                    details: "Forecast is fresh"
+                )
                 return RefreshExecutionResult(snapshot: previous, performedNetworkRefresh: false)
             }
         } else if let previous,
                   case .rateLimited(let retryAfter) = previous.status,
                   let retryAfter, retryAfter > now {
             // Manual refresh still respects an active rate-limit deadline.
+            await activityRecorder.record(
+                locationID: location.id,
+                locationName: location.name,
+                trigger: trigger,
+                result: .rateLimited,
+                details: "Active rate limit deadline"
+            )
             return RefreshExecutionResult(snapshot: previous, performedNetworkRefresh: false)
         }
 
@@ -214,6 +231,13 @@ public actor ForecastRefreshCoordinator {
                     candidate: snapshot,
                     wasSuccessfulNetworkRefresh: false
                 )
+                await activityRecorder.record(
+                    locationID: location.id,
+                    locationName: location.name,
+                    trigger: trigger,
+                    result: .authenticationRequired,
+                    details: "API key not configured"
+                )
                 return RefreshExecutionResult(snapshot: saved, performedNetworkRefresh: false)
             }
             apiKey = loaded
@@ -229,6 +253,13 @@ public actor ForecastRefreshCoordinator {
                 previous: previous,
                 candidate: snapshot,
                 wasSuccessfulNetworkRefresh: false
+            )
+            await activityRecorder.record(
+                locationID: location.id,
+                locationName: location.name,
+                trigger: trigger,
+                result: .authenticationRequired,
+                details: "Keychain credentials unavailable"
             )
             return RefreshExecutionResult(snapshot: saved, performedNetworkRefresh: false)
         }
@@ -286,6 +317,41 @@ public actor ForecastRefreshCoordinator {
             candidate: snapshot,
             wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
         )
+
+        if saved == nil && previous != nil {
+            await activityRecorder.record(
+                locationID: location.id,
+                locationName: location.name,
+                trigger: trigger,
+                result: .persistenceFailure,
+                details: "Cache persistence failed"
+            )
+        } else if wasSuccessfulNetworkRefresh {
+            await activityRecorder.record(
+                locationID: location.id,
+                locationName: location.name,
+                trigger: trigger,
+                result: .refreshedSuccessfully,
+                details: "Updated \(snapshot.forecasts.count) forecasts"
+            )
+        } else {
+            let resultSummary: RefreshResultSummary
+            switch snapshot.status {
+            case .authenticationRequired: resultSummary = .authenticationRequired
+            case .rateLimited: resultSummary = .rateLimited
+            case .invalidRequest: resultSummary = .invalidRequest
+            case .temporarilyUnavailable, .invalidResponse, .stale: resultSummary = .transientFailure
+            case .current: resultSummary = .refreshedSuccessfully
+            }
+            await activityRecorder.record(
+                locationID: location.id,
+                locationName: location.name,
+                trigger: trigger,
+                result: resultSummary,
+                details: outcome.error?.userMessage
+            )
+        }
+
         return RefreshExecutionResult(snapshot: saved, performedNetworkRefresh: true)
     }
 
@@ -311,6 +377,13 @@ public actor ForecastRefreshCoordinator {
             }
         } catch {
             logger.error("Failed to persist forecast cache for location \(location.id): \(error.localizedDescription, privacy: .public)")
+            await activityRecorder.record(
+                locationID: location.id,
+                locationName: location.name,
+                trigger: .scheduled,
+                result: .persistenceFailure,
+                details: "Persistence error: \(error.localizedDescription)"
+            )
             return previous
         }
     }

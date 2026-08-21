@@ -190,6 +190,120 @@ public struct DiagnosticsExporter: Sendable {
         return data
     }
 
+    public func makePlainTextDiagnostics(
+        state: SharedAppState,
+        snapshots: [UUID: CachedLocationSnapshot],
+        storageDiagnostics: StorageDiagnostics,
+        backgroundDiagnostics: BackgroundRefreshDiagnostics,
+        recentActivity: [RefreshActivityRecord],
+        notificationPreferences: NotificationPreferences?,
+        notificationAuthorization: String,
+        apiKeyConfigured: Bool,
+        apiKeyValueForRedactionTests: String? = nil,
+        appVersion: String = SunsetHueConstants.marketingVersion,
+        build: String = "1",
+        now: Date = Date(),
+        options: DiagnosticsExportOptions = DiagnosticsExportOptions()
+    ) throws -> String {
+        var lines: [String] = []
+        lines.append("SunsetHue Diagnostics")
+        lines.append("====================")
+        lines.append("App Version: \(appVersion) (\(build))")
+        lines.append("macOS Version: \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        lines.append("Architecture: \(architecture())")
+        lines.append("Storage Mode: \(storageDiagnostics.storageModeDisplayName)")
+        if let groupID = storageDiagnostics.appGroupIdentifier {
+            lines.append("App Group Identifier: \(groupID)")
+            lines.append("App Group Available: \(storageDiagnostics.isAppGroupAvailable ? "Yes" : "No")")
+        } else {
+            lines.append("App Group: Not configured (Unsigned / Local fallback)")
+        }
+        lines.append("Shared Settings File: \(storageDiagnostics.isSettingsReadable ? "Readable" : "Unavailable")")
+        lines.append("Shared Forecast Cache: \(storageDiagnostics.isForecastCacheReadable ? "Readable" : "Unavailable")")
+        if let commit = storageDiagnostics.lastCacheCommit {
+            lines.append("Last Cache Commit: \(PresentationFormatting.iso8601String(from: commit))")
+        } else {
+            lines.append("Last Cache Commit: None")
+        }
+        lines.append("Widget Sharing: \(storageDiagnostics.isAppGroupAvailable ? "Available" : "Local only")")
+        if let reload = storageDiagnostics.lastWidgetReloadRequested {
+            lines.append("Last Widget Reload Requested: \(PresentationFormatting.iso8601String(from: reload))")
+        } else {
+            lines.append("Last Widget Reload Requested: None")
+        }
+        lines.append("API Key: \(apiKeyConfigured ? "Configured" : "Not configured")")
+        lines.append("")
+        lines.append("Background Refresh:")
+        lines.append("  Status: \(backgroundDiagnostics.isActive ? "Active" : "Inactive")")
+        lines.append("  Scheduler: \(backgroundDiagnostics.schedulerName)")
+        lines.append("  Interval: \(backgroundDiagnostics.intervalDescription) (Timing controlled by macOS energy management)")
+        if let act = backgroundDiagnostics.lastActivityAt {
+            lines.append("  Last Activity: \(PresentationFormatting.iso8601String(from: act))")
+        } else {
+            lines.append("  Last Activity: None")
+        }
+        lines.append("  Last Disposition: \(backgroundDiagnostics.lastDisposition ?? "None")")
+        lines.append("  Launch at Login: \(backgroundDiagnostics.isLaunchAtLoginEnabled ? "On" : "Off")")
+        lines.append("")
+        lines.append("Notifications:")
+        lines.append("  Authorization: \(notificationAuthorization)")
+        if let notif = notificationPreferences {
+            lines.append("  Master Enabled: \(notif.notificationsEnabled ? "Yes" : "No")")
+            lines.append("  Play Sound: \(notif.playSound ? "Yes" : "No")")
+            lines.append("  Quality Alerts: \(notif.qualityAlert.enabled ? "Enabled (\(Int(notif.qualityAlert.threshold * 100))%)" : "Disabled")")
+            lines.append("  Daily Summary: \(notif.dailySummary.enabled ? "\(notif.dailySummary.firstTimeMinutes / 60):\(String(format: "%02d", notif.dailySummary.firstTimeMinutes % 60))" : "Disabled")")
+        } else {
+            lines.append("  Preferences: Not configured")
+        }
+        lines.append("")
+        lines.append("Locations (\(state.locations.count)):")
+        for location in state.locations {
+            let snap = snapshots[location.id]
+            let diag = LocationRefreshDiagnostics.make(location: location, snapshot: snap, isRefreshing: false, now: now)
+            let coords = options.includeApproximateCoordinates
+                ? String(format: " (%.1f, %.1f)", location.latitude, location.longitude)
+                : ""
+            lines.append("  - \(location.name)\(coords):")
+            lines.append("      Status: \(diag.statusDisplayName)")
+            if let succ = diag.lastSuccess {
+                lines.append("      Last Success: \(PresentationFormatting.iso8601String(from: succ))")
+            } else {
+                lines.append("      Last Success: None")
+            }
+            if let att = diag.lastAttempt {
+                lines.append("      Last Attempt: \(PresentationFormatting.iso8601String(from: att))")
+            } else {
+                lines.append("      Last Attempt: None")
+            }
+            if let next = diag.nextScheduledRefresh {
+                lines.append("      Next Scheduled: \(PresentationFormatting.iso8601String(from: next))")
+            } else {
+                lines.append("      Next Scheduled: None")
+            }
+            lines.append("      Cache Coverage: \(diag.coverageDescription)")
+            lines.append("      Refresh Interval: \(diag.refreshIntervalHours) hours")
+        }
+        lines.append("")
+        lines.append("Recent Activity (Newest First):")
+        if recentActivity.isEmpty {
+            lines.append("  (No recent refresh activity recorded)")
+        } else {
+            for entry in recentActivity {
+                let time = PresentationFormatting.iso8601String(from: entry.timestamp)
+                let detailStr = entry.details.map { " - \($0)" } ?? ""
+                lines.append("  - [\(time)] \(entry.locationName): \(entry.trigger.rawValue) -> \(entry.result.rawValue)\(detailStr)")
+            }
+        }
+
+        let output = lines.joined(separator: "\n")
+        if let secret = apiKeyValueForRedactionTests, !secret.isEmpty {
+            if output.contains(secret) {
+                throw SunsetHueError.invalidResponse("diagnostics_leaked_secret")
+            }
+        }
+        return output
+    }
+
     private func statusString(_ status: RefreshStatus?) -> String {
         guard let status else { return "missing" }
         switch status {

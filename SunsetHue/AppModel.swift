@@ -112,7 +112,7 @@ final class AppModel: ObservableObject {
             await reloadNotificationState()
             await reloadSelectedSnapshot()
             await persistState()
-            await refreshCoordinator.refreshAllStaleLocations()
+            await refreshCoordinator.refreshAllStaleLocations(trigger: .bootstrap)
             await reloadSelectedSnapshot()
             await refreshCoordinator.scheduleNextRefresh()
             await rescheduleNotifications()
@@ -141,16 +141,16 @@ final class AppModel: ObservableObject {
             snapshots: snapshotsByLocationID,
             preferences: preferences,
             selectedLocationID: selectedLocationID,
+            refreshingLocationIDs: refreshingLocationIDs,
             now: now
         )
     }
-
 
     func refreshLocationFromMenuBar(id: UUID) {
         Task {
             refreshingLocationIDs.insert(id)
             defer { refreshingLocationIDs.remove(id) }
-            _ = await refreshCoordinator.refreshLocation(id: id, force: true)
+            _ = await refreshCoordinator.refreshLocation(id: id, force: true, trigger: .manual)
             await reloadSelectedSnapshot()
         }
     }
@@ -173,14 +173,14 @@ final class AppModel: ObservableObject {
     func applicationDidBecomeActive() {
         refreshCredentialState()
         Task {
-            await refreshCoordinator.refreshAllStaleLocations()
+            await refreshCoordinator.refreshAllStaleLocations(trigger: .didBecomeActive)
             await reloadSelectedSnapshot()
         }
     }
 
     func refreshAllFromCommand() {
         Task {
-            await refreshCoordinator.refreshAllStaleLocations()
+            await refreshCoordinator.refreshAllStaleLocations(trigger: .manual)
             await reloadSelectedSnapshot()
         }
     }
@@ -572,6 +572,99 @@ final class AppModel: ObservableObject {
         case .current, .none:
             lastErrorMessage = nil
             lastErrorIsAuthentication = false
+        }
+    }
+
+    func storageDiagnostics() -> StorageDiagnostics {
+        let (mode, _) = StoragePathResolver().resolveContainerURL()
+        let modeName: String
+        let appGroupID: String?
+        let isAppGroupAvailable: Bool
+        switch mode {
+        case .teamAppGroup(let id):
+            modeName = "Personal Team App Group"
+            appGroupID = id
+            isAppGroupAvailable = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) != nil
+        case .localApplicationSupport:
+            modeName = "Local Application Support"
+            appGroupID = nil
+            isAppGroupAvailable = false
+        }
+        let isSettingsReadable = (try? Data(contentsOf: StoragePathResolver().settingsURL())) != nil
+        let isCacheReadable = FileManager.default.fileExists(atPath: StoragePathResolver().cacheDirectoryURL().path)
+        return StorageDiagnostics(
+            storageMode: mode,
+            storageModeDisplayName: modeName,
+            appGroupIdentifier: appGroupID,
+            isAppGroupAvailable: isAppGroupAvailable,
+            isSettingsReadable: isSettingsReadable,
+            isForecastCacheReadable: isCacheReadable,
+            lastCacheCommit: WidgetReloadStateTracker.shared.lastCacheCommit,
+            lastWidgetReloadRequested: WidgetReloadStateTracker.shared.lastReloadRequested
+        )
+    }
+
+    func backgroundRefreshDiagnostics() -> BackgroundRefreshDiagnostics {
+        BackgroundRefreshDiagnostics(
+            isActive: backgroundRefreshController.isActive,
+            schedulerName: "NSBackgroundActivityScheduler",
+            intervalDescription: "~30 min",
+            lastActivityAt: backgroundRefreshController.lastActivityAt,
+            lastDisposition: backgroundRefreshController.lastDisposition,
+            isLaunchAtLoginEnabled: LaunchAtLoginController().isEnabled
+        )
+    }
+
+    func locationDiagnostics() -> [LocationRefreshDiagnostics] {
+        state.locations.map { loc in
+            LocationRefreshDiagnostics.make(
+                location: loc,
+                snapshot: snapshotsByLocationID[loc.id] ?? (loc.id == selectedLocationID ? snapshot : nil),
+                isRefreshing: refreshingLocationIDs.contains(loc.id) || isRefreshing
+            )
+        }
+    }
+
+    func recentActivities() async -> [RefreshActivityRecord] {
+        await refreshCoordinator.activityRecorder.recentEntries()
+    }
+
+    func copyDiagnosticsToPasteboard(includeApproximateCoordinates: Bool = false) async -> String {
+        let exporter = DiagnosticsExporter()
+        let storageDiag = storageDiagnostics()
+        let bgDiag = backgroundRefreshDiagnostics()
+        let recent = await recentActivities()
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? SunsetHueConstants.marketingVersion
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        let authDesc: String = {
+            switch notificationAuthorization {
+            case .authorized: return "Authorized"
+            case .denied: return "Denied"
+            case .notDetermined: return "Not Determined"
+            case .provisional: return "Provisional"
+            case .ephemeral: return "Ephemeral"
+            }
+        }()
+
+        do {
+            let text = try exporter.makePlainTextDiagnostics(
+                state: state,
+                snapshots: snapshotsByLocationID,
+                storageDiagnostics: storageDiag,
+                backgroundDiagnostics: bgDiag,
+                recentActivity: recent,
+                notificationPreferences: notificationPreferences,
+                notificationAuthorization: authDesc,
+                apiKeyConfigured: hasAPIKey,
+                appVersion: version,
+                build: build,
+                options: DiagnosticsExportOptions(includeApproximateCoordinates: includeApproximateCoordinates)
+            )
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            return "Diagnostics copied to clipboard."
+        } catch {
+            return "Unable to copy diagnostics."
         }
     }
 

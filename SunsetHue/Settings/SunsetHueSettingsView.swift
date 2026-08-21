@@ -19,6 +19,7 @@ struct SunsetHueSettingsView: View {
     @State private var accountTestMessage: String?
     @State private var isTestingAccount = false
     @State private var diagnosticsMessage: String?
+    @State private var recentActivities: [RefreshActivityRecord] = []
     @FocusState private var isAPIKeyFieldFocused: Bool
     @State private var isReplacingAPIKey = false
     @State private var confirmRemoveAPIKey = false
@@ -709,31 +710,174 @@ struct SunsetHueSettingsView: View {
 
     private var diagnosticsTab: some View {
         Form {
-            Section("Privacy") {
-                Toggle("Include approximate coordinates (1 decimal place)", isOn: $includeApproximateCoordinates)
-                Text("Even with coordinates redacted, a time zone can imply a broad geographic region.")
+            Section("Background Refresh") {
+                let bg = appModel.backgroundRefreshDiagnostics()
+                LabeledContent("Status") {
+                    Text(bg.isActive ? "Active" : "Inactive")
+                        .foregroundStyle(bg.isActive ? .primary : .secondary)
+                }
+                LabeledContent("Scheduler", value: bg.schedulerName)
+                LabeledContent("Activity interval", value: bg.intervalDescription)
+                LabeledContent("Last activity") {
+                    if let last = bg.lastActivityAt {
+                        Text(last.formatted(date: .omitted, time: .standard))
+                    } else {
+                        Text("None").foregroundStyle(.secondary)
+                    }
+                }
+                LabeledContent("Last disposition") {
+                    Text(bg.lastDisposition ?? "None")
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent("Launch at Login") {
+                    Text(bg.isLaunchAtLoginEnabled ? "On" : "Off")
+                }
+                Text("macOS controls background execution timing based on system power and activity conditions.")
                     .sunsetHueMuted()
-                Button("Open Privacy Policy…") {
-                    if let url = URL(string: "https://github.com/andrewtryder/sunsethue-macos/blob/main/PRIVACY.md") {
-                        NSWorkspace.shared.open(url)
+            }
+
+            Section("Storage & Shared Cache") {
+                let storage = appModel.storageDiagnostics()
+                LabeledContent("Storage mode", value: storage.storageModeDisplayName)
+                if storage.isAppGroupAvailable {
+                    LabeledContent("App Group", value: "Available")
+                } else {
+                    LabeledContent("App Group", value: "Local fallback")
+                }
+                LabeledContent("Shared settings file") {
+                    Text(storage.isSettingsReadable ? "Readable" : "Unavailable")
+                        .foregroundStyle(storage.isSettingsReadable ? .primary : .secondary)
+                }
+                LabeledContent("Shared forecast cache") {
+                    Text(storage.isForecastCacheReadable ? "Readable" : "Unavailable")
+                        .foregroundStyle(storage.isForecastCacheReadable ? .primary : .secondary)
+                }
+                LabeledContent("Last cache commit") {
+                    if let commit = storage.lastCacheCommit {
+                        Text(commit.formatted(date: .omitted, time: .standard))
+                    } else {
+                        Text("None").foregroundStyle(.secondary)
+                    }
+                }
+                LabeledContent("Last reload requested") {
+                    if let reload = storage.lastWidgetReloadRequested {
+                        Text(reload.formatted(date: .omitted, time: .standard))
+                    } else {
+                        Text("None").foregroundStyle(.secondary)
                     }
                 }
             }
-            Section("Export") {
+
+            Section("Locations (\(appModel.state.locations.count))") {
+                let locations = appModel.locationDiagnostics()
+                if locations.isEmpty {
+                    Text("No locations configured.")
+                        .sunsetHueMuted()
+                } else {
+                    ForEach(locations) { loc in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(loc.locationName)
+                                    .font(.headline)
+                                Spacer()
+                                StatusBadge(
+                                    title: loc.statusDisplayName,
+                                    tone: tone(for: loc.status),
+                                    accessibilityLabelText: "Location status",
+                                    accessibilityValueText: loc.statusDisplayName
+                                )
+                            }
+                            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 3) {
+                                GridRow {
+                                    Text("Last success:").foregroundStyle(.secondary)
+                                    Text(loc.lastSuccess.map { $0.formatted(date: .omitted, time: .shortened) } ?? "None")
+                                    Text("Last attempt:").foregroundStyle(.secondary)
+                                    Text(loc.lastAttempt.map { $0.formatted(date: .omitted, time: .shortened) } ?? "None")
+                                }
+                                GridRow {
+                                    Text("Next scheduled:").foregroundStyle(.secondary)
+                                    Text(loc.nextScheduledRefresh.map { $0.formatted(date: .omitted, time: .shortened) } ?? "None")
+                                    Text("Coverage:").foregroundStyle(.secondary)
+                                    Text(loc.coverageDescription)
+                                }
+                                GridRow {
+                                    Text("Refresh interval:").foregroundStyle(.secondary)
+                                    Text("\(loc.refreshIntervalHours) hours")
+                                }
+                            }
+                            .font(.caption)
+                        }
+                        .padding(.vertical, 4)
+                        if loc.id != locations.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+            }
+
+            Section("Recent Refresh Activity") {
+                if recentActivities.isEmpty {
+                    Text("No activity recorded yet.")
+                        .sunsetHueMuted()
+                } else {
+                    ForEach(recentActivities.prefix(15)) { entry in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(entry.timestamp.formatted(date: .omitted, time: .standard))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 4) {
+                                    Text(entry.locationName)
+                                        .font(.caption.weight(.medium))
+                                    Text("·")
+                                        .foregroundStyle(.secondary)
+                                    Text(entry.trigger.displayName)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(entry.result.displayName)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(toneColor(for: entry.result))
+                                if let details = entry.details, !details.isEmpty {
+                                    Text(details)
+                                        .font(.caption2)
+                                        .sunsetHueMuted()
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+
+            Section("Diagnostics Export & Actions") {
+                Toggle("Include approximate coordinates (1 decimal place)", isOn: $includeApproximateCoordinates)
+                Text("Even with coordinates redacted, a time zone can imply a broad geographic region.")
+                    .sunsetHueMuted()
                 HStack {
+                    Button("Copy Diagnostics") {
+                        Task {
+                            diagnosticsMessage = await appModel.copyDiagnosticsToPasteboard(
+                                includeApproximateCoordinates: includeApproximateCoordinates
+                            )
+                        }
+                    }
                     Button("Export Diagnostics…") {
                         exportDiagnostics()
                     }
-                    Button("Open cache folder") {
+                    Button("Open Cache Folder") {
                         let url = AppSupportPaths.preferredContainerURL()
                         NSWorkspace.shared.open(url)
                     }
-                    Button("Copy version information") {
-                        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-                            ?? SunsetHueConstants.marketingVersion
-                        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString("SunsetHue \(version) (\(build))", forType: .string)
+                }
+                HStack {
+                    Button("Open Privacy Policy…") {
+                        if let url = URL(string: "https://github.com/andrewtryder/sunsethue-macos/blob/main/PRIVACY.md") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    Button("Refresh View") {
+                        Task { recentActivities = await appModel.recentActivities() }
                     }
                 }
                 if let diagnosticsMessage {
@@ -743,6 +887,25 @@ struct SunsetHueSettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func tone(for status: RefreshStatus) -> StatusTone {
+        switch status {
+        case .current: return .positive
+        case .stale: return .neutral
+        case .authenticationRequired: return .warning
+        case .rateLimited: return .warning
+        case .temporarilyUnavailable, .invalidResponse, .invalidRequest: return .negative
+        }
+    }
+
+    private func toneColor(for result: RefreshResultSummary) -> Color {
+        switch result {
+        case .refreshedSuccessfully: return .green
+        case .skippedFresh: return .secondary
+        case .authenticationRequired, .rateLimited: return .orange
+        case .transientFailure, .invalidRequest, .persistenceFailure: return .red
+        }
     }
 
     private func maybeAutoCheckUpdates() async {

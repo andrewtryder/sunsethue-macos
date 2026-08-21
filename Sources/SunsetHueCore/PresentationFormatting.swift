@@ -57,4 +57,10 @@ public enum PresentationFormatting: Sendable {
             return formatter.string(from: day)
         }
     }
+
+    public static func iso8601String(from date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: date)
+    }
 }

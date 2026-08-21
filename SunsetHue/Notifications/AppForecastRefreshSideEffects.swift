@@ -45,6 +45,7 @@ final class AppForecastRefreshSideEffects: ForecastRefreshSideEffectSink, @unche
         current: CachedLocationSnapshot,
         wasSuccessfulNetworkRefresh: Bool
     ) async {
+        WidgetReloadStateTracker.shared.recordCacheCommit()
         WidgetReload.timelines()
 
         await notificationCoordinator.evaluateSuccessfulRefresh(

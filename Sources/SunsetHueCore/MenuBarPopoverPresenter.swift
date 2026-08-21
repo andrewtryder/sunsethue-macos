@@ -1,6 +1,5 @@
 import Foundation
 
-/// Presentation model for a single compact row in the menu-bar window dropdown.
 public struct MenuBarPopoverRow: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let name: String
@@ -11,6 +10,8 @@ public struct MenuBarPopoverRow: Identifiable, Equatable, Sendable {
     public let statusMessage: String?
     public let statusSymbolName: String?
     public let isSelected: Bool
+    public let isStale: Bool
+    public let isRefreshing: Bool
     public let accessibilityValue: String
 
     public init(
@@ -23,6 +24,8 @@ public struct MenuBarPopoverRow: Identifiable, Equatable, Sendable {
         statusMessage: String? = nil,
         statusSymbolName: String? = nil,
         isSelected: Bool = false,
+        isStale: Bool = false,
+        isRefreshing: Bool = false,
         accessibilityValue: String = ""
     ) {
         self.id = id
@@ -34,6 +37,8 @@ public struct MenuBarPopoverRow: Identifiable, Equatable, Sendable {
         self.statusMessage = statusMessage
         self.statusSymbolName = statusSymbolName
         self.isSelected = isSelected
+        self.isStale = isStale
+        self.isRefreshing = isRefreshing
         self.accessibilityValue = accessibilityValue
     }
 }
@@ -45,6 +50,7 @@ public enum MenuBarPopoverPresenter: Sendable {
         snapshot: CachedLocationSnapshot?,
         preferences: MenuBarPreferences,
         isSelected: Bool,
+        isRefreshing: Bool = false,
         now: Date = Date()
     ) -> MenuBarPopoverRow {
         let timeZone = location.timeZone ?? .current
@@ -55,6 +61,8 @@ public enum MenuBarPopoverPresenter: Sendable {
             now: now
         )
 
+        let isStale = (snapshot?.status == .stale) || (snapshot != nil && !snapshot!.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now))
+
         if let item {
             let dayTime = MenuBarStatusFormatting.compactDayTimeLabel(
                 eventTime: item.eventTime,
@@ -63,7 +71,8 @@ public enum MenuBarPopoverPresenter: Sendable {
             )
             let quality = MenuBarStatusFormatting.compactPercentage(fromNormalized: item.quality)
             let qualityNumber = quality.replacingOccurrences(of: "%", with: " percent")
-            let accessibility = "\(item.eventType.displayName), \(dayTime), quality \(qualityNumber)"
+            let staleSuffix = isStale ? ", forecast is stale" : ""
+            let accessibility = "\(item.eventType.displayName), \(dayTime), quality \(qualityNumber)\(staleSuffix)"
             return MenuBarPopoverRow(
                 id: location.id,
                 name: location.name,
@@ -74,6 +83,8 @@ public enum MenuBarPopoverPresenter: Sendable {
                 statusMessage: nil,
                 statusSymbolName: nil,
                 isSelected: isSelected,
+                isStale: isStale,
+                isRefreshing: isRefreshing,
                 accessibilityValue: accessibility
             )
         }
@@ -93,6 +104,8 @@ public enum MenuBarPopoverPresenter: Sendable {
             statusMessage: message,
             statusSymbolName: symbol,
             isSelected: isSelected,
+            isStale: isStale,
+            isRefreshing: isRefreshing,
             accessibilityValue: message
         )
     }
@@ -102,6 +115,7 @@ public enum MenuBarPopoverPresenter: Sendable {
         snapshots: [UUID: CachedLocationSnapshot],
         preferences: MenuBarPreferences,
         selectedLocationID: UUID?,
+        refreshingLocationIDs: Set<UUID> = [],
         now: Date = Date()
     ) -> [MenuBarPopoverRow] {
         let effectiveSelectedID = selectedLocationID ?? locations.first?.id
@@ -111,6 +125,7 @@ public enum MenuBarPopoverPresenter: Sendable {
                 snapshot: snapshots[location.id],
                 preferences: preferences,
                 isSelected: location.id == effectiveSelectedID,
+                isRefreshing: refreshingLocationIDs.contains(location.id),
                 now: now
             )
         }

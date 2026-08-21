@@ -156,6 +156,13 @@ struct SunsetHueMenuBarPopoverView: View {
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.primary)
                     .frame(minWidth: 38, alignment: .trailing)
+
+                if row.isStale && !row.isRefreshing {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .help("Forecast is stale")
+                }
             }
         } else if let statusMessage = row.statusMessage {
             // Unavailable / Error row
