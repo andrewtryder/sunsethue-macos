@@ -96,11 +96,16 @@ public actor ForecastRefreshCoordinator {
         var nextDates: [Date] = []
         for location in state.locations {
             let snapshot = try? await forecastCache.loadSnapshot(for: location.id)
-            if let snapshot, let next = snapshot.nextScheduledRefresh(
-                refreshIntervalHours: location.refreshIntervalHours,
-                now: now
-            ), next > now {
-                nextDates.append(next)
+            if let snapshot {
+                if snapshot.status == .current && !snapshot.hasOperationalCoverage(for: location, now: now) {
+                    nextDates.append(now)
+                } else if let next = snapshot.nextScheduledRefresh(
+                    refreshIntervalHours: location.refreshIntervalHours,
+                    timeZone: location.timeZone,
+                    now: now
+                ), next > now {
+                    nextDates.append(next)
+                }
             } else if snapshot == nil {
                 // No cache yet: attempt soon once (not a 60s loop on auth failures).
                 nextDates.append(now.addingTimeInterval(60))
@@ -139,7 +144,9 @@ public actor ForecastRefreshCoordinator {
             if let next = existing.nextAttemptAt, next > now { return false }
             return true
         case .current:
-            return !existing.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now)
+            let isFresh = existing.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now)
+            let hasCoverage = existing.hasOperationalCoverage(for: location, now: now)
+            return !isFresh || !hasCoverage
         case .stale:
             if let next = existing.nextAttemptAt, next > now { return false }
             return true

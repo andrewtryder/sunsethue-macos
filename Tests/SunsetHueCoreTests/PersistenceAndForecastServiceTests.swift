@@ -137,12 +137,16 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         let successTransport = MockHTTPTransport(stubs: [
             .init(statusCode: 200, body: sunrise),
             .init(statusCode: 200, body: body),
+            .init(statusCode: 200, body: sunrise),
+            .init(statusCode: 200, body: body),
         ])
         let service = ForecastService(transport: successTransport)
         let previous = try await service.refresh(location: location, apiKey: "test-key")
-        XCTAssertEqual(previous.forecasts.count, 2)
+        XCTAssertEqual(previous.forecasts.count, 4)
 
         let failingTransport = MockHTTPTransport(stubs: [
+            .init(error: .timeout),
+            .init(error: .timeout),
             .init(error: .timeout),
             .init(error: .timeout),
         ])
@@ -261,7 +265,10 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         let settings = InMemorySettingsStore(state: SharedAppState(locations: [location]))
         let credentials = InMemoryCredentialStore(apiKey: "test-key")
         let body = try loadFixture("event_full")
-        let transport = MockHTTPTransport(stubs: [.init(statusCode: 200, body: body)])
+        let transport = MockHTTPTransport(stubs: [
+            .init(statusCode: 200, body: body),
+            .init(statusCode: 200, body: body),
+        ])
         let service = ForecastService(transport: transport)
 
         let coordinator = ForecastRefreshCoordinator(
@@ -301,11 +308,15 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
             refreshIntervalHours: 6
         )
         let seededDate = Date().addingTimeInterval(-100)
+        let seededTomorrow = seededDate.addingTimeInterval(86400)
         let seededSnapshot = CachedLocationSnapshot(
             locationID: location.id,
             fetchedAt: seededDate,
             lastAttemptAt: seededDate,
-            forecasts: [PreviewFixtures.excellentSunset(on: seededDate)],
+            forecasts: [
+                PreviewFixtures.excellentSunset(on: seededDate).withForecastDate(seededDate),
+                PreviewFixtures.excellentSunset(on: seededTomorrow).withForecastDate(seededTomorrow),
+            ],
             status: .current
         )
         let innerCache = InMemoryForecastCache()
@@ -352,8 +363,8 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         XCTAssertNotNil(result2)
         XCTAssertGreaterThan(result2?.fetchedAt ?? Date.distantPast, seededDate)
 
-        // total network refresh count is exactly 1 (from forced refresh)
-        XCTAssertEqual(stats.total, 1)
+        // total network request count is 2 (1 forced refresh flight for 2 operational days)
+        XCTAssertEqual(stats.total, 2)
 
         // simultaneous network requests never exceeded 1
         XCTAssertLessThanOrEqual(stats.maxActive, 1)
@@ -435,8 +446,8 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
             }
         }
 
-        // Single location with 1 event forecast; concurrent calls coalesce to 1 request.
-        XCTAssertEqual(transport.requests.count, 1)
+        // Single location with 1 event forecast across 2 operational days; concurrent calls coalesce to 2 requests.
+        XCTAssertEqual(transport.requests.count, 2)
     }
 }
 

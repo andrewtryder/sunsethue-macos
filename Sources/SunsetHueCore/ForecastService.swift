@@ -29,8 +29,14 @@ public struct ForecastService: Sendable {
         }
 
         let client = SunsetHueClient(apiKey: apiKey, transport: transport)
+        // Internal operational cache horizon requires at least 2 days to ensure continuous
+        // next-event resolution across local-day rollover, independent of user-configured display forecastDays.
+        let effectiveForecastDays = min(
+            SunsetHueConstants.maxForecastDays,
+            max(validated.forecastDays, SunsetHueConstants.minimumOperationalForecastDays)
+        )
         let dates = dateCalculator.localCalendarDates(
-            dayCount: validated.forecastDays,
+            dayCount: effectiveForecastDays,
             timeZone: timeZone,
             now: now
         )

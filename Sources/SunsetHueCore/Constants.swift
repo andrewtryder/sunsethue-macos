@@ -70,6 +70,7 @@ public enum SunsetHueConstants: Sendable {
     public static let validRefreshIntervalHours: Set<Int> = [6, 12, 24]
     public static let defaultRefreshIntervalHours = 6
     public static let defaultForecastDays = 1
+    public static let minimumOperationalForecastDays = 2
     public static let maxForecastDays = 3
     public static let coordinateDecimalPlaces = 5
 

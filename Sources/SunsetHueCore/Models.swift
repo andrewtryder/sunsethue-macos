@@ -248,13 +248,32 @@ public struct LocationForecastBundle: Codable, Hashable, Sendable {
     public func forecast(dayOffset: Int, eventType: EventType, timeZone: TimeZone, now: Date = Date()) -> EventForecast? {
         let calculator = ForecastDateCalculator()
         return forecasts.first { forecast in
-            guard forecast.eventType == eventType, let forecastDate = forecast.forecastDate else { return false }
-            return calculator.dayOffset(for: forecastDate, timeZone: timeZone, now: now) == dayOffset
+            guard forecast.eventType == eventType else { return false }
+            let refDate = forecast.forecastDate ?? forecast.eventTime
+            guard let refDate else { return false }
+            return calculator.dayOffset(for: refDate, timeZone: timeZone, now: now) == dayOffset
         }
     }
 
     public func forecasts(forDayOffset dayOffset: Int, timeZone: TimeZone, now: Date = Date()) -> [EventForecast] {
         EventType.allCases.compactMap { forecast(dayOffset: dayOffset, eventType: $0, timeZone: timeZone, now: now) }
+    }
+
+    /// Whether this bundle contains forecast coverage into at least the next local calendar day
+    /// (day offset 1) for each enabled event.
+    public func hasOperationalCoverage(
+        for location: SavedLocation,
+        now: Date = Date()
+    ) -> Bool {
+        guard let timeZone = location.timeZone, !location.enabledEvents.isEmpty else {
+            return true
+        }
+        for event in location.enabledEvents {
+            if forecast(dayOffset: 1, eventType: event, timeZone: timeZone, now: now) == nil {
+                return false
+            }
+        }
+        return true
     }
 }
 
@@ -438,6 +457,16 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
             && status == .current
     }
 
+    /// Determines whether this snapshot has sufficient future forecast coverage
+    /// into at least the next local calendar day (day offset 1) for the location's enabled events.
+    public func hasOperationalCoverage(
+        for location: SavedLocation,
+        now: Date = Date()
+    ) -> Bool {
+        guard let bundle else { return false }
+        return bundle.hasOperationalCoverage(for: location, now: now)
+    }
+
     public static func fromSuccessful(bundle: LocationForecastBundle, attemptedAt: Date = Date()) -> CachedLocationSnapshot {
         CachedLocationSnapshot(
             locationID: bundle.locationID,
@@ -453,6 +482,7 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
     /// Next automatic refresh time for this snapshot, or nil when no automatic retry should be scheduled.
     public func nextScheduledRefresh(
         refreshIntervalHours: Int,
+        timeZone: TimeZone? = nil,
         now: Date = Date()
     ) -> Date? {
         switch status {
@@ -466,7 +496,12 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
             let hours = SunsetHueConstants.validRefreshIntervalHours.contains(refreshIntervalHours)
                 ? refreshIntervalHours
                 : SunsetHueConstants.defaultRefreshIntervalHours
-            return fetchedAt.addingTimeInterval(TimeInterval(hours * 3600))
+            let intervalDate = fetchedAt.addingTimeInterval(TimeInterval(hours * 3600))
+            if let timeZone {
+                let midnight = ForecastDateCalculator().nextMidnightRefresh(timeZone: timeZone, now: now)
+                return min(intervalDate, midnight)
+            }
+            return intervalDate
         case .stale:
             return nextAttemptAt ?? now
         case .temporarilyUnavailable, .invalidResponse:
