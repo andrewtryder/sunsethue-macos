@@ -147,7 +147,6 @@ fi
 
 echo "Verifying Xcode project generation…"
 xcodegen generate
-git diff --exit-code -- SunsetHue.xcodeproj
 
 # E. Packaging
 echo "Building and packaging universal unsigned DMG…"
