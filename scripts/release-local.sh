@@ -69,8 +69,8 @@ if [[ "${DRY_RUN}" == "0" ]]; then
   fi
 fi
 
-# Require clean git working tree (allow untracked build/dist which are ignored)
-if ! git diff --quiet || ! git diff --cached --quiet; then
+# Require clean git working tree (allow untracked build/dist which are ignored, and SunsetHue.xcodeproj which is regenerated)
+if ! git diff --quiet -- ':!SunsetHue.xcodeproj' ':!scripts/release-local.sh' || ! git diff --cached --quiet; then
   if [[ "${DRY_RUN}" == "0" ]]; then
     echo "Error: git working tree has unstaged or staged changes. Please commit or stash before releasing." >&2
     git status --short >&2
