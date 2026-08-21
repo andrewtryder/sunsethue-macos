@@ -651,7 +651,7 @@ final class AppModel: ObservableObject {
             intervalDescription: "~30 min",
             lastActivityAt: backgroundRefreshController.lastActivityAt,
             lastDisposition: backgroundRefreshController.lastDisposition,
-            isLaunchAtLoginEnabled: LaunchAtLoginController().isEnabled
+            isLaunchAtLoginEnabled: LaunchAtLoginController.isEnabled
         )
     }
 
