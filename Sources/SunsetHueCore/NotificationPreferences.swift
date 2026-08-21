@@ -67,8 +67,21 @@ public struct QualityAlertRule: Codable, Equatable, Sendable {
     }
 }
 
+public struct LocationNotificationRule: Codable, Equatable, Sendable {
+    public var dailySummary: DailySummaryRule
+    public var qualityAlert: QualityAlertRule
+
+    public init(
+        dailySummary: DailySummaryRule = DailySummaryRule(),
+        qualityAlert: QualityAlertRule = QualityAlertRule()
+    ) {
+        self.dailySummary = dailySummary
+        self.qualityAlert = qualityAlert
+    }
+}
+
 public struct NotificationPreferences: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var notificationsEnabled: Bool
@@ -76,6 +89,7 @@ public struct NotificationPreferences: Codable, Equatable, Sendable {
     public var dailySummary: DailySummaryRule
     public var qualityAlert: QualityAlertRule
     public var playSound: Bool
+    public var locationRules: [UUID: LocationNotificationRule]
 
     public init(
         schemaVersion: Int = NotificationPreferences.currentSchemaVersion,
@@ -83,7 +97,8 @@ public struct NotificationPreferences: Codable, Equatable, Sendable {
         locationID: UUID? = nil,
         dailySummary: DailySummaryRule = DailySummaryRule(),
         qualityAlert: QualityAlertRule = QualityAlertRule(),
-        playSound: Bool = true
+        playSound: Bool = true,
+        locationRules: [UUID: LocationNotificationRule] = [:]
     ) {
         self.schemaVersion = schemaVersion
         self.notificationsEnabled = notificationsEnabled
@@ -91,10 +106,53 @@ public struct NotificationPreferences: Codable, Equatable, Sendable {
         self.dailySummary = dailySummary
         self.qualityAlert = qualityAlert
         self.playSound = playSound
+        self.locationRules = locationRules
+    }
+
+    public func rule(for locationID: UUID) -> LocationNotificationRule {
+        if let specific = locationRules[locationID] {
+            return specific
+        }
+        if locationID == self.locationID || self.locationID == nil {
+            return LocationNotificationRule(dailySummary: dailySummary, qualityAlert: qualityAlert)
+        }
+        return LocationNotificationRule()
+    }
+
+    public mutating func setRule(_ rule: LocationNotificationRule, for locationID: UUID) {
+        locationRules[locationID] = rule
+        if self.locationID == nil || self.locationID == locationID {
+            self.locationID = locationID
+            self.dailySummary = rule.dailySummary
+            self.qualityAlert = rule.qualityAlert
+        }
     }
 
     public var hasAnyDeliveryRuleEnabled: Bool {
-        notificationsEnabled && (dailySummary.enabled || qualityAlert.enabled)
+        guard notificationsEnabled else { return false }
+        if dailySummary.enabled || qualityAlert.enabled { return true }
+        return locationRules.values.contains { $0.dailySummary.enabled || $0.qualityAlert.enabled }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case notificationsEnabled
+        case locationID
+        case dailySummary
+        case qualityAlert
+        case playSound
+        case locationRules
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        self.notificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? false
+        self.locationID = try container.decodeIfPresent(UUID.self, forKey: .locationID)
+        self.dailySummary = try container.decodeIfPresent(DailySummaryRule.self, forKey: .dailySummary) ?? DailySummaryRule()
+        self.qualityAlert = try container.decodeIfPresent(QualityAlertRule.self, forKey: .qualityAlert) ?? QualityAlertRule()
+        self.playSound = try container.decodeIfPresent(Bool.self, forKey: .playSound) ?? true
+        self.locationRules = try container.decodeIfPresent([UUID: LocationNotificationRule].self, forKey: .locationRules) ?? [:]
     }
 }
 

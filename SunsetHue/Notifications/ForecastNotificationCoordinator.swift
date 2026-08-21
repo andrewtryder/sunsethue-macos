@@ -86,55 +86,59 @@ actor ForecastNotificationCoordinator {
         await removePendingDailyRequests()
 
         guard preferences.notificationsEnabled,
-              preferences.dailySummary.enabled,
-              authorizationState == .authorized || authorizationState == .provisional,
-              let locationID = preferences.locationID,
-              let location = state.locations.first(where: { $0.id == locationID }),
-              let snapshot = snapshots[locationID],
-              let bundle = snapshot.bundle,
-              let timeZone = location.timeZone else {
+              authorizationState == .authorized || authorizationState == .provisional else {
             return
         }
 
-        let plans = DailyNotificationSchedulePlanner.plans(
-            location: location,
-            rule: preferences.dailySummary,
-            now: Date(),
-            dayCount: max(2, location.forecastDays)
-        )
-
-        for plan in plans {
-            guard let contentDraft = DailySummaryContentBuilder.content(
-                location: location,
-                bundle: bundle,
-                deliveryDate: plan.deliveryDate
-            ) else { continue }
-
-            let content = UNMutableNotificationContent()
-            content.title = contentDraft.title
-            content.body = contentDraft.body
-            content.userInfo = [
-                "locationID": location.id.uuidString,
-                "kind": "dailySummary",
-            ]
-            if preferences.playSound {
-                content.sound = .default
+        for location in state.locations {
+            let rule = preferences.rule(for: location.id).dailySummary
+            guard rule.enabled,
+                  let snapshot = snapshots[location.id],
+                  let bundle = snapshot.bundle,
+                  let timeZone = location.timeZone else {
+                continue
             }
 
-            let components = DailyNotificationSchedulePlanner.dateComponents(
-                for: plan,
-                timeZone: timeZone
+            let plans = DailyNotificationSchedulePlanner.plans(
+                location: location,
+                rule: rule,
+                now: Date(),
+                dayCount: max(2, location.forecastDays)
             )
-            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-            let request = UNNotificationRequest(
-                identifier: plan.identifier,
-                content: content,
-                trigger: trigger
-            )
-            do {
-                try await unCenter.add(request)
-            } catch {
-                logger.error("Failed to schedule daily summary notification: \(error.localizedDescription, privacy: .public)")
+
+            for plan in plans {
+                guard let contentDraft = DailySummaryContentBuilder.content(
+                    location: location,
+                    bundle: bundle,
+                    deliveryDate: plan.deliveryDate
+                ) else { continue }
+
+                let content = UNMutableNotificationContent()
+                content.title = contentDraft.title
+                content.body = contentDraft.body
+                content.userInfo = [
+                    "locationID": location.id.uuidString,
+                    "kind": "dailySummary",
+                ]
+                if preferences.playSound {
+                    content.sound = .default
+                }
+
+                let components = DailyNotificationSchedulePlanner.dateComponents(
+                    for: plan,
+                    timeZone: timeZone
+                )
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                let request = UNNotificationRequest(
+                    identifier: plan.identifier,
+                    content: content,
+                    trigger: trigger
+                )
+                do {
+                    try await unCenter.add(request)
+                } catch {
+                    logger.error("Failed to schedule daily summary notification: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }

@@ -22,6 +22,9 @@ struct LocationSidebar: View {
                         appModel.deleteLocation(appModel.state.locations[index])
                     }
                 }
+                .onMove { indices, newOffset in
+                    appModel.moveLocations(from: indices, to: newOffset)
+                }
             }
 
             if appModel.lastErrorIsAuthentication || appModel.credentialState == .missing || appModel.credentialState == .unavailable {

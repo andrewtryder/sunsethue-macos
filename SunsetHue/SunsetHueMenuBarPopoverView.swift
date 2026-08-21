@@ -124,6 +124,32 @@ struct SunsetHueMenuBarPopoverView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Refresh Now") {
+                appModel.refreshLocationFromMenuBar(id: row.id)
+            }
+            if !row.isSelected {
+                Button("Select Location") {
+                    appModel.selectLocation(id: row.id)
+                }
+            }
+            if let loc = appModel.state.locations.first(where: { $0.id == row.id }) {
+                Button("Edit Location…") {
+                    appModel.selectLocation(id: row.id)
+                    appModel.beginEditLocation(loc)
+                    dismissPopupThen {
+                        MainWindowPresenter.present(openWindow: openWindow)
+                    }
+                }
+                Button("Copy Coordinates") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(
+                        String(format: "%.4f, %.4f", loc.latitude, loc.longitude),
+                        forType: .string
+                    )
+                }
+            }
+        }
         .accessibilityLabel(row.name)
         .accessibilityValue(row.accessibilityValue)
         .accessibilityHint("Opens this location in SunsetHue")
@@ -157,7 +183,10 @@ struct SunsetHueMenuBarPopoverView: View {
                     .foregroundStyle(.primary)
                     .frame(minWidth: 38, alignment: .trailing)
 
-                if row.isStale && !row.isRefreshing {
+                if row.isRefreshing {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else if row.isStale {
                     Image(systemName: "arrow.clockwise")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -167,7 +196,10 @@ struct SunsetHueMenuBarPopoverView: View {
         } else if let statusMessage = row.statusMessage {
             // Unavailable / Error row
             HStack(spacing: 4) {
-                if let symbolName = row.statusSymbolName {
+                if row.isRefreshing {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else if let symbolName = row.statusSymbolName {
                     Image(systemName: symbolName)
                         .foregroundStyle(.secondary)
                 }
@@ -181,9 +213,18 @@ struct SunsetHueMenuBarPopoverView: View {
 
     private var controls: some View {
         VStack(spacing: 6) {
-            Button("Refresh All") {
+            Button {
                 appModel.refreshAllFromCommand()
+            } label: {
+                HStack(spacing: 4) {
+                    if appModel.isRefreshing {
+                        ProgressView()
+                            .controlSize(.mini)
+                    }
+                    Text(appModel.isRefreshing ? "Refreshing…" : "Refresh All")
+                }
             }
+            .disabled(appModel.isRefreshing)
             .controlSize(.small)
             .disabled(appModel.isRefreshing)
             .keyboardShortcut("r", modifiers: [.command])

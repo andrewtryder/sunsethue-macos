@@ -25,16 +25,15 @@ public enum QualityAlertEvaluator: Sendable {
         now: Date = Date(),
         locale: Locale = .autoupdatingCurrent
     ) -> [QualityAlertCandidate] {
+        let rule = preferences.rule(for: location.id).qualityAlert
         guard preferences.notificationsEnabled,
-              preferences.qualityAlert.enabled,
-              preferences.locationID == location.id,
+              rule.enabled,
               wasSuccessfulNetworkRefresh,
               snapshot.status == .current,
               let timeZone = location.timeZone else {
             return []
         }
 
-        let rule = preferences.qualityAlert
         let allowed = rule.eventMode.allowedTypes.intersection(Set(location.enabledEvents))
         var results: [QualityAlertCandidate] = []
 

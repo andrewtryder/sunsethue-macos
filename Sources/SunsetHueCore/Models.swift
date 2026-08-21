@@ -333,6 +333,17 @@ public struct SharedAppState: Codable, Hashable, Sendable {
         guard let selectedLocationID else { return locations.first }
         return locations.first(where: { $0.id == selectedLocationID }) ?? locations.first
     }
+
+    public mutating func moveLocations(fromOffsets: IndexSet, toOffset: Int) {
+        var items = locations
+        let movingElements = fromOffsets.map { items[$0] }
+        for index in fromOffsets.sorted(by: >) {
+            items.remove(at: index)
+        }
+        let insertIndex = min(toOffset - fromOffsets.filter { $0 < toOffset }.count, items.count)
+        items.insert(contentsOf: movingElements, at: max(0, insertIndex))
+        locations = items
+    }
 }
 
 /// Widget-safe per-location forecast snapshot (no secrets).

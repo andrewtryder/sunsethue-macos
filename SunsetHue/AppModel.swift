@@ -330,6 +330,14 @@ final class AppModel: ObservableObject {
         notificationAuthorization = await notificationCoordinator.authorizationState
     }
 
+    func moveLocations(from indices: IndexSet, to newOffset: Int) {
+        state.moveLocations(fromOffsets: indices, toOffset: newOffset)
+        Task {
+            await persistState()
+            WidgetReload.timelines()
+        }
+    }
+
     func updateNotificationPreferences(_ preferences: NotificationPreferences) async {
         var next = preferences
         let previous = notificationPreferences
@@ -363,6 +371,13 @@ final class AppModel: ObservableObject {
 
         if next.locationID == nil {
             next.locationID = selectedLocationID ?? state.locations.first?.id
+        }
+
+        if let locID = next.locationID {
+            var currentRule = next.rule(for: locID)
+            currentRule.dailySummary = next.dailySummary
+            currentRule.qualityAlert = next.qualityAlert
+            next.setRule(currentRule, for: locID)
         }
 
         await notificationCoordinator.savePreferences(next)

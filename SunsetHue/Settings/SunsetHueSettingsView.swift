@@ -203,6 +203,11 @@ struct SunsetHueSettingsView: View {
             set: { id in
                 var prefs = appModel.notificationPreferences
                 prefs.locationID = id
+                if let id {
+                    let rule = prefs.rule(for: id)
+                    prefs.dailySummary = rule.dailySummary
+                    prefs.qualityAlert = rule.qualityAlert
+                }
                 Task { await appModel.updateNotificationPreferences(prefs) }
             }
         )
