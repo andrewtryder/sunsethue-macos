@@ -499,9 +499,12 @@ public actor ForecastRefreshCoordinator {
             switch result {
             case .committed(let snapshot):
                 // Re-verify that the location was not removed or edited while awaiting forecastCache.saveSnapshot.
-                // If it was removed, undo the stale write by deleting the cache entry.
+                // If it was removed, or if its identity changed without a newer valid snapshot having replaced
+                // this write, undo the stale write by deleting the cache entry.
                 guard canPersist(locationID: location.id, generation: generation) else {
                     if removedLocationIDs.contains(location.id) {
+                        try? await forecastCache.deleteLocation(location.id)
+                    } else if let cached = try? await forecastCache.loadSnapshot(for: location.id), cached == snapshot {
                         try? await forecastCache.deleteLocation(location.id)
                     }
                     return .discarded

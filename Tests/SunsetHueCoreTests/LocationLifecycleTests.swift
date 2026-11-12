@@ -396,64 +396,6 @@ final class LocationLifecycleTests: XCTestCase {
     }
 
     func testEditOrDeleteDuringPersistenceDiscardsSideEffects() async throws {
-        actor TestGate {
-            private var isGateOpen = false
-            private var waiters: [CheckedContinuation<Void, Never>] = []
-
-            func wait() async {
-                if isGateOpen { return }
-                await withCheckedContinuation { c in
-                    waiters.append(c)
-                }
-            }
-
-            func open() {
-                isGateOpen = true
-                let pending = waiters
-                waiters = []
-                for c in pending {
-                    c.resume()
-                }
-            }
-        }
-
-        actor BlockingCache: ForecastCache {
-            var onSaveStart: (@Sendable () -> Void)?
-            let gate = TestGate()
-            var internalCache = InMemoryForecastCache()
-
-            func setOnSaveStart(_ action: (@Sendable () -> Void)?) {
-                self.onSaveStart = action
-            }
-
-            func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? {
-                try await internalCache.loadSnapshot(for: locationID)
-            }
-            func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? {
-                try await internalCache.loadBundle(for: locationID)
-            }
-            func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
-                onSaveStart?()
-                await gate.wait()
-                return try await internalCache.saveSnapshot(snapshot)
-            }
-            func deleteLocation(_ locationID: UUID) async throws {
-                try await internalCache.deleteLocation(locationID)
-            }
-        }
-
-        final class SpySideEffectSink: ForecastRefreshSideEffectSink, @unchecked Sendable {
-            var emitted = false
-            func didPersistSnapshot(
-                location: SavedLocation,
-                previous: CachedLocationSnapshot?,
-                current: CachedLocationSnapshot,
-                wasSuccessfulNetworkRefresh: Bool
-            ) async {
-                emitted = true
-            }
-        }
-
         let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
         let body = try loadFixture("event_full")
         let transport = MockHTTPTransport(stubs: [
@@ -496,5 +438,166 @@ final class LocationLifecycleTests: XCTestCase {
         // Crucial check: verify that the deleted location's cache was NOT recreated or left on disk
         let cacheAfter = try await blockingCache.loadSnapshot(for: location.id)
         XCTAssertNil(cacheAfter, "Cache must not be recreated or retained when location was deleted during persistence")
+    }
+
+    func testIdentityChangeDuringPersistenceDiscardsStaleCache() async throws {
+        let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
+        let body = try loadFixture("event_full")
+        let transport = MockHTTPTransport(stubs: [
+            .init(statusCode: 200, body: body),
+            .init(statusCode: 200, body: body),
+        ])
+        let blockingCache = BlockingCache()
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [location]))
+        let sink = SpySideEffectSink()
+
+        let coordinator = ForecastRefreshCoordinator(
+            settingsStore: settings,
+            forecastCache: blockingCache,
+            credentialStore: InMemoryCredentialStore(apiKey: "test-key"),
+            forecastService: ForecastService(transport: transport),
+            sideEffectSink: sink
+        )
+
+        let saveStartedExpectation = expectation(description: "saveSnapshot started")
+        await blockingCache.setOnSaveStart {
+            saveStartedExpectation.fulfill()
+        }
+
+        let refreshTask = Task {
+            await coordinator.refreshLocation(id: location.id, force: true)
+        }
+
+        await fulfillment(of: [saveStartedExpectation], timeout: 5)
+
+        // While suspended in saveSnapshot, the location's forecast identity changes
+        await coordinator.locationForecastIdentityChanged(id: location.id)
+
+        // Resume save via actor-managed gate
+        await blockingCache.gate.open()
+
+        let result = await refreshTask.value
+        XCTAssertNil(result, "Result should be discarded because location identity changed")
+        XCTAssertFalse(sink.emitted, "Side effects must not be emitted when location identity changed during persistence")
+
+        // Stale snapshot that was written by the outdated save must be removed
+        let cacheAfter = try await blockingCache.loadSnapshot(for: location.id)
+        XCTAssertNil(cacheAfter, "Stale cache must be deleted when identity changed during persistence")
+    }
+
+    func testIdentityChangeDuringPersistencePreservesNewerValidSnapshot() async throws {
+        let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
+        let body = try loadFixture("event_full")
+        let transport = MockHTTPTransport(stubs: [
+            .init(statusCode: 200, body: body),
+            .init(statusCode: 200, body: body),
+        ])
+        let blockingCache = BlockingCache()
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [location]))
+        let sink = SpySideEffectSink()
+
+        let coordinator = ForecastRefreshCoordinator(
+            settingsStore: settings,
+            forecastCache: blockingCache,
+            credentialStore: InMemoryCredentialStore(apiKey: "test-key"),
+            forecastService: ForecastService(transport: transport),
+            sideEffectSink: sink
+        )
+
+        let saveStartedExpectation = expectation(description: "saveSnapshot started")
+        await blockingCache.setOnSaveStart {
+            saveStartedExpectation.fulfill()
+        }
+
+        let refreshTask = Task {
+            await coordinator.refreshLocation(id: location.id, force: true)
+        }
+
+        await fulfillment(of: [saveStartedExpectation], timeout: 5)
+
+        // While suspended in saveSnapshot, the location's forecast identity changes
+        await coordinator.locationForecastIdentityChanged(id: location.id)
+
+        // A newer valid snapshot is written for the location before the stale save completes
+        let newerFetchedAt = Date().addingTimeInterval(10)
+        let newerSnapshot = CachedLocationSnapshot(
+            schemaVersion: SunsetHueConstants.currentCacheSchemaVersion,
+            locationID: location.id,
+            fetchedAt: newerFetchedAt,
+            lastAttemptAt: newerFetchedAt,
+            forecasts: [],
+            status: .current
+        )
+        try await blockingCache.internalCache.saveSnapshot(newerSnapshot)
+
+        // Resume stale save
+        await blockingCache.gate.open()
+
+        let result = await refreshTask.value
+        XCTAssertNil(result, "Result should be discarded because location identity changed")
+        XCTAssertFalse(sink.emitted, "Side effects must not be emitted for stale refresh")
+
+        // The newer valid snapshot must NOT be deleted by the stale save's cleanup
+        let cacheAfter = try await blockingCache.loadSnapshot(for: location.id)
+        XCTAssertNotNil(cacheAfter, "Newer valid snapshot must be preserved")
+        XCTAssertEqual(cacheAfter?.fetchedAt, newerFetchedAt, "Preserved snapshot must be the newer valid one")
+    }
+}
+
+private actor TestGate {
+    private var isGateOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if isGateOpen { return }
+        await withCheckedContinuation { c in
+            waiters.append(c)
+        }
+    }
+
+    func open() {
+        isGateOpen = true
+        let pending = waiters
+        waiters = []
+        for c in pending {
+            c.resume()
+        }
+    }
+}
+
+private actor BlockingCache: ForecastCache {
+    var onSaveStart: (@Sendable () -> Void)?
+    let gate = TestGate()
+    var internalCache = InMemoryForecastCache()
+
+    func setOnSaveStart(_ action: (@Sendable () -> Void)?) {
+        self.onSaveStart = action
+    }
+
+    func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? {
+        try await internalCache.loadSnapshot(for: locationID)
+    }
+    func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? {
+        try await internalCache.loadBundle(for: locationID)
+    }
+    func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
+        onSaveStart?()
+        await gate.wait()
+        return try await internalCache.saveSnapshot(snapshot)
+    }
+    func deleteLocation(_ locationID: UUID) async throws {
+        try await internalCache.deleteLocation(locationID)
+    }
+}
+
+private final class SpySideEffectSink: ForecastRefreshSideEffectSink, @unchecked Sendable {
+    var emitted = false
+    func didPersistSnapshot(
+        location: SavedLocation,
+        previous: CachedLocationSnapshot?,
+        current: CachedLocationSnapshot,
+        wasSuccessfulNetworkRefresh: Bool
+    ) async {
+        emitted = true
     }
 }
