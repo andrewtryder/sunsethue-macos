@@ -131,15 +131,15 @@ Release binaries are built and packaged on macOS rather than cloud runners:
 
 ```bash
 # Test release packaging locally without uploading (Dry Run):
-./scripts/release-local.sh --dry-run v1.2.0
+./scripts/release-local.sh --dry-run vX.Y.Z
 
 # Build, validate, package, checksum, and upload assets to GitHub Release:
-./scripts/release-local.sh v1.2.0
+./scripts/release-local.sh vX.Y.Z
 ```
 
 To run full sanitizer test passes during release packaging:
 ```bash
-FULL_VALIDATION=1 ./scripts/release-local.sh v1.2.0
+FULL_VALIDATION=1 ./scripts/release-local.sh vX.Y.Z
 ```
 
 ---

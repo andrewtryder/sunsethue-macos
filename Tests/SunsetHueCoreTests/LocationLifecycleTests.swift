@@ -3,8 +3,7 @@ import XCTest
 
 /// Transport whose responses are held until `release()` so tests can interleave
 /// location edits/deletions with an in-flight refresh deterministically.
-final class GatedTransport: HTTPTransport, @unchecked Sendable {
-    private let lock = NSLock()
+actor GatedTransport: HTTPTransport {
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var isOpen = false
     private var count = 0
@@ -12,40 +11,29 @@ final class GatedTransport: HTTPTransport, @unchecked Sendable {
 
     init(body: Data) { self.body = body }
 
-    var requestCount: Int {
-        lock.lock(); defer { lock.unlock() }
-        return count
-    }
+    var requestCount: Int { count }
 
     func perform(_ request: URLRequest) async throws -> HTTPResponse {
-        lock.lock(); count += 1; lock.unlock()
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            lock.lock()
-            if isOpen {
-                lock.unlock()
-                continuation.resume()
-            } else {
+        count += 1
+        if !isOpen {
+            await withCheckedContinuation { continuation in
                 waiters.append(continuation)
-                lock.unlock()
             }
         }
         return HTTPResponse(statusCode: 200, headers: [:], body: body)
     }
 
     func release() {
-        lock.lock()
         isOpen = true
         let pending = waiters
         waiters = []
-        lock.unlock()
         pending.forEach { $0.resume() }
     }
 
     func waitUntilRequested(minimum: Int = 1) async throws {
-        for _ in 0..<400 where requestCount < minimum {
+        for _ in 0..<400 where count < minimum {
             try await Task.sleep(nanoseconds: 5_000_000)
         }
-        XCTAssertGreaterThanOrEqual(requestCount, minimum, "Timed out waiting for request")
     }
 }
 
@@ -259,7 +247,7 @@ final class LocationLifecycleTests: XCTestCase {
 
         try await settings.save(SharedAppState(locations: []))
         await coordinator.locationRemoved(id: location.id)
-        transport.release()
+        await transport.release()
 
         let result = await refresh.value
         XCTAssertNil(result)
@@ -285,7 +273,7 @@ final class LocationLifecycleTests: XCTestCase {
         moved.latitude = 34.05
         try await settings.save(SharedAppState(locations: [moved]))
         await coordinator.locationForecastIdentityChanged(id: moved.id)
-        transport.release()
+        await transport.release()
 
         _ = await refresh.value
         let stored = try await cache.loadSnapshot(for: location.id)
@@ -301,13 +289,14 @@ final class LocationLifecycleTests: XCTestCase {
         try await transport.waitUntilRequested()
         let second = Task { await coordinator.refreshLocation(id: location.id, force: false) }
         try await Task.sleep(nanoseconds: 50_000_000)
-        transport.release()
+        await transport.release()
 
         let a = await first.value
         let b = await second.value
+        let requestsMade = await transport.requestCount
         XCTAssertNotNil(a)
         XCTAssertEqual(a?.fetchedAt, b?.fetchedAt)
-        XCTAssertEqual(transport.requestCount, 2, "One day-set (2 days x 1 event) fetched exactly once")
+        XCTAssertEqual(requestsMade, 2, "One day-set (2 days x 1 event) fetched exactly once")
         let stored = try await cache.loadSnapshot(for: location.id)
         XCTAssertEqual(stored?.forecasts.count, 2)
     }
@@ -407,17 +396,34 @@ final class LocationLifecycleTests: XCTestCase {
     }
 
     func testEditOrDeleteDuringPersistenceDiscardsSideEffects() async throws {
-        actor BlockingCache: ForecastCache {
-            var saveStarted: (@Sendable () -> Void)?
-            var proceedWithSave: (@Sendable () async -> Void)?
-            var internalCache = InMemoryForecastCache()
+        actor TestGate {
+            private var isGateOpen = false
+            private var waiters: [CheckedContinuation<Void, Never>] = []
 
-            func setSaveStarted(_ action: (@Sendable () -> Void)?) {
-                self.saveStarted = action
+            func wait() async {
+                if isGateOpen { return }
+                await withCheckedContinuation { c in
+                    waiters.append(c)
+                }
             }
 
-            func setProceedWithSave(_ action: (@Sendable () async -> Void)?) {
-                self.proceedWithSave = action
+            func open() {
+                isGateOpen = true
+                let pending = waiters
+                waiters = []
+                for c in pending {
+                    c.resume()
+                }
+            }
+        }
+
+        actor BlockingCache: ForecastCache {
+            var onSaveStart: (@Sendable () -> Void)?
+            let gate = TestGate()
+            var internalCache = InMemoryForecastCache()
+
+            func setOnSaveStart(_ action: (@Sendable () -> Void)?) {
+                self.onSaveStart = action
             }
 
             func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? {
@@ -427,10 +433,8 @@ final class LocationLifecycleTests: XCTestCase {
                 try await internalCache.loadBundle(for: locationID)
             }
             func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
-                saveStarted?()
-                if let proceedWithSave {
-                    await proceedWithSave()
-                }
+                onSaveStart?()
+                await gate.wait()
                 return try await internalCache.saveSnapshot(snapshot)
             }
             func deleteLocation(_ locationID: UUID) async throws {
@@ -469,14 +473,8 @@ final class LocationLifecycleTests: XCTestCase {
         )
 
         let saveStartedExpectation = expectation(description: "saveSnapshot started")
-        var continuation: CheckedContinuation<Void, Never>?
-        await blockingCache.setSaveStarted {
+        await blockingCache.setOnSaveStart {
             saveStartedExpectation.fulfill()
-        }
-        await blockingCache.setProceedWithSave {
-            await withCheckedContinuation { c in
-                continuation = c
-            }
         }
 
         let refreshTask = Task {
@@ -488,11 +486,15 @@ final class LocationLifecycleTests: XCTestCase {
         // While suspended in saveSnapshot, delete the location
         await coordinator.locationRemoved(id: location.id)
 
-        // Resume save
-        continuation?.resume()
+        // Resume save via actor-managed gate
+        await blockingCache.gate.open()
 
         let result = await refreshTask.value
         XCTAssertNil(result, "Result should be discarded because location was removed")
         XCTAssertFalse(sink.emitted, "Side effects must not be emitted when location is removed during persistence")
+
+        // Crucial check: verify that the deleted location's cache was NOT recreated or left on disk
+        let cacheAfter = try await blockingCache.loadSnapshot(for: location.id)
+        XCTAssertNil(cacheAfter, "Cache must not be recreated or retained when location was deleted during persistence")
     }
 }

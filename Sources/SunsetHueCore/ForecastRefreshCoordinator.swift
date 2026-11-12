@@ -498,8 +498,12 @@ public actor ForecastRefreshCoordinator {
             let result = try await forecastCache.saveSnapshot(candidate)
             switch result {
             case .committed(let snapshot):
-                // Re-verify that the location was not removed or edited while awaiting forecastCache.saveSnapshot
+                // Re-verify that the location was not removed or edited while awaiting forecastCache.saveSnapshot.
+                // If it was removed, undo the stale write by deleting the cache entry.
                 guard canPersist(locationID: location.id, generation: generation) else {
+                    if removedLocationIDs.contains(location.id) {
+                        try? await forecastCache.deleteLocation(location.id)
+                    }
                     return .discarded
                 }
                 await emitSideEffect(
@@ -511,6 +515,9 @@ public actor ForecastRefreshCoordinator {
                 return .committed(snapshot)
             case .rejectedStale(let authoritative):
                 guard canPersist(locationID: location.id, generation: generation) else {
+                    if removedLocationIDs.contains(location.id) {
+                        try? await forecastCache.deleteLocation(location.id)
+                    }
                     return .discarded
                 }
                 return .rejectedStale(authoritative)
