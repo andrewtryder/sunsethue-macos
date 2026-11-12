@@ -314,3 +314,4 @@ final class DailyNotificationReconcilerTests: XCTestCase {
         XCTAssertLessThan(tokyoFirst!.deliveryDate, laFirst!.deliveryDate)
     }
 }
+

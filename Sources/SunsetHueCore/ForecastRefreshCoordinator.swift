@@ -100,6 +100,16 @@ public actor ForecastRefreshCoordinator {
         await scheduleNextRefresh()
     }
 
+    /// Manual "Refresh All": fetches every location regardless of freshness. Active rate-limit
+    /// deadlines are still respected per location, and overlapping calls share in-flight requests.
+    public func refreshAllLocations(trigger: RefreshTrigger = .manual) async {
+        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        for location in state.locations {
+            _ = await refresh(locationID: location.id, force: true, trigger: trigger)
+        }
+        await scheduleNextRefresh()
+    }
+
     /// Force-refresh every location currently marked authentication-required (e.g. after saving a new API key).
     public func refreshAuthenticationRequiredLocations(trigger: RefreshTrigger = .apiKeyChanged) async {
         let state = (try? await settingsStore.load())?.value ?? SharedAppState()

@@ -274,4 +274,40 @@ final class LocationLifecycleTests: XCTestCase {
         let stored = try await cache.loadSnapshot(for: location.id)
         XCTAssertEqual(stored?.forecasts.count, 2)
     }
+
+    // MARK: - Manual refresh consistency
+
+    func testManualRefreshAllFetchesEvenWhenCacheIsFresh() async throws {
+        let location = makeLocation(forecastDays: 2, sunrise: false, sunset: true)
+        let body = try loadFixture("event_full")
+        let transport = MockHTTPTransport(stubs: [.init(statusCode: 200, body: body), .init(statusCode: 200, body: body)])
+        let (coordinator, _, cache) = makeCoordinator(location: location, transport: transport)
+
+        await coordinator.refreshAllLocations()
+        let first = try await cache.loadSnapshot(for: location.id)
+        XCTAssertEqual(first?.status, .current)
+        XCTAssertEqual(transport.requests.count, 2)
+
+        // Fresh cache: the scheduled path skips, the manual path fetches again.
+        await coordinator.refreshAllStaleLocations(trigger: .scheduled)
+        XCTAssertEqual(transport.requests.count, 2)
+        transport.enqueue(.init(statusCode: 200, body: body))
+        transport.enqueue(.init(statusCode: 200, body: body))
+        await coordinator.refreshAllLocations()
+        XCTAssertEqual(transport.requests.count, 4)
+    }
+
+    func testManualRefreshAllRespectsActiveRateLimitDeadline() async throws {
+        let location = makeLocation()
+        var limited = oldSnapshot(for: location)
+        limited.status = .rateLimited(retryAfter: Date().addingTimeInterval(1800))
+        let transport = MockHTTPTransport()
+        let cache = InMemoryForecastCache(snapshots: [location.id: limited])
+        let (coordinator, _, _) = makeCoordinator(location: location, transport: transport, cache: cache)
+
+        await coordinator.refreshAllLocations()
+        XCTAssertTrue(transport.requests.isEmpty, "Manual refresh must not bypass Retry-After")
+        let stored = try await cache.loadSnapshot(for: location.id)
+        XCTAssertEqual(stored?.status, limited.status)
+    }
 }
