@@ -1,24 +1,27 @@
 name: CI
 
+# Default CI is intentionally lightweight: one macOS job (package tests, project
+# drift, metadata) plus one cheap Linux job (secret scan). Expensive work
+# (universal build, DMG packaging, sanitizers) can be run locally. No signing identity, provisioning
+# profile, or notarization is required anywhere.
+
 on:
   push:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test-and-build:
-    if: false # Temporarily disabled to save macOS runner minutes
-    name: Test and Build (${{ matrix.purpose }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-26
-            purpose: current-runtime
-          - os: macos-15-intel
-            purpose: intel-runtime
+  package-tests:
+    name: Package tests and project checks
+    runs-on: macos-26
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -50,53 +53,19 @@ jobs:
       - name: Run package tests
         run: swift test --package-path .
 
-      - name: Build Release (universal, unsigned)
-        run: |
-          xcodebuild \
-            -scheme SunsetHue \
-            -destination 'platform=macOS' \
-            -derivedDataPath build/DerivedData \
-            -configuration Release \
-            ARCHS='arm64 x86_64' \
-            ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=- \
-            build
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
 
-      - name: Verify universal binaries
-        run: |
-          APP="build/DerivedData/Build/Products/Release/SunsetHue.app"
-          test -d "$APP"
-          ARCHS_APP="$(lipo -archs "$APP/Contents/MacOS/SunsetHue")"
-          test "$ARCHS_APP" = "x86_64 arm64" -o "$ARCHS_APP" = "arm64 x86_64"
-          WIDGET="$APP/Contents/PlugIns/SunsetHueWidget.appex/Contents/MacOS/SunsetHueWidget"
-          ARCHS_WIDGET="$(lipo -archs "$WIDGET")"
-          test "$ARCHS_WIDGET" = "x86_64 arm64" -o "$ARCHS_WIDGET" = "arm64 x86_64"
-          echo "App: $ARCHS_APP"
-          echo "Widget: $ARCHS_WIDGET"
-
-      - name: Smoke launch Release app
-        run: |
-          chmod +x scripts/smoke-launch.sh
-          ./scripts/smoke-launch.sh build/DerivedData/Build/Products/Release/SunsetHue.app
-
-      - name: Package unsigned DMG and assert widget stripped
-        run: |
-          chmod +x scripts/package-unsigned.sh
-          ./scripts/package-unsigned.sh
-          MOUNT="$(mktemp -d /tmp/sunsethue-dmg.XXXXXX)"
-          hdiutil attach -nobrowse -readonly -mountpoint "${MOUNT}" dist/SunsetHue-macos-unsigned.dmg
-          test -d "${MOUNT}/SunsetHue.app"
-          test ! -d "${MOUNT}/SunsetHue.app/Contents/PlugIns/SunsetHueWidget.appex"
-          hdiutil detach "${MOUNT}"
-          rmdir "${MOUNT}"
-          echo "Unsigned DMG has no widget appex"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Scan for accidental secrets
         run: |
           set -euo pipefail
-          brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
+          command -v rg >/dev/null 2>&1 || sudo apt-get install -y ripgrep
           if rg -n --hidden \
             -g '!**/Fixtures/**' -g '!**/.git/**' -g '!**/build/**' -g '!**/.build/**' -g '!**/DerivedData/**' \
             -e 'x-api-key:\s*[A-Za-z0-9_-]{20,}' \
@@ -107,47 +76,3 @@ jobs:
             exit 1
           fi
           echo "Secret scan passed"
-
-  thread-sanitizer:
-    if: false # Temporarily disabled to save macOS runner minutes
-    name: Package Tests (TSan)
-    runs-on: macos-26
-    timeout-minutes: 45
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: |
-          if [[ -d /Applications/Xcode.app ]]; then
-            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-          else
-            latest="$(find /Applications -maxdepth 1 -type d -name 'Xcode_*.app' | sort -V | tail -1)"
-            sudo xcode-select -s "${latest}/Contents/Developer"
-          fi
-
-      - name: Run package tests with Thread Sanitizer
-        run: swift test --package-path . --sanitize=thread
-
-  address-sanitizer:
-    if: false # Temporarily disabled to save macOS runner minutes
-    name: Package Tests (ASan)
-    runs-on: macos-26
-    timeout-minutes: 45
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: |
-          if [[ -d /Applications/Xcode.app ]]; then
-            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-          else
-            latest="$(find /Applications -maxdepth 1 -type d -name 'Xcode_*.app' | sort -V | tail -1)"
-            sudo xcode-select -s "${latest}/Contents/Developer"
-          fi
-
-      - name: Run package tests with Address Sanitizer
-        run: swift test --package-path . --sanitize=address

@@ -186,6 +186,15 @@ public struct SavedLocation: Codable, Hashable, Identifiable, Sendable {
         )
     }
 
+    /// True when cached forecasts for `previous` would be misleading for this definition:
+    /// coordinates, time zone, or enabled event types changed. Display name, forecast days,
+    /// refresh interval, and notification preferences do not affect cached forecast content.
+    public func invalidatesCachedForecasts(comparedTo previous: SavedLocation) -> Bool {
+        normalizedCoordinateKey != previous.normalizedCoordinateKey
+            || timeZoneIdentifier != previous.timeZoneIdentifier
+            || enabledEvents != previous.enabledEvents
+    }
+
     public func validated(againstExisting existing: [SavedLocation] = []) throws -> SavedLocation {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
@@ -271,6 +280,25 @@ public struct LocationForecastBundle: Codable, Hashable, Sendable {
         for event in location.enabledEvents {
             if forecast(dayOffset: 1, eventType: event, timeZone: timeZone, now: now) == nil {
                 return false
+            }
+        }
+        return true
+    }
+
+    /// Whether this bundle contains forecast coverage for every requested display day (0..<forecastDays)
+    /// for each enabled event.
+    public func hasDisplayCoverage(
+        for location: SavedLocation,
+        now: Date = Date()
+    ) -> Bool {
+        guard let timeZone = location.timeZone, !location.enabledEvents.isEmpty else {
+            return true
+        }
+        for dayOffset in 0..<max(1, location.forecastDays) {
+            for event in location.enabledEvents {
+                if forecast(dayOffset: dayOffset, eventType: event, timeZone: timeZone, now: now) == nil {
+                    return false
+                }
             }
         }
         return true
@@ -476,6 +504,16 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
     ) -> Bool {
         guard let bundle else { return false }
         return bundle.hasOperationalCoverage(for: location, now: now)
+    }
+
+    /// Determines whether this snapshot has sufficient forecast coverage for all configured
+    /// display days (0..<forecastDays) for each enabled event.
+    public func hasDisplayCoverage(
+        for location: SavedLocation,
+        now: Date = Date()
+    ) -> Bool {
+        guard let bundle else { return false }
+        return bundle.hasDisplayCoverage(for: location, now: now)
     }
 
     public static func fromSuccessful(bundle: LocationForecastBundle, attemptedAt: Date = Date()) -> CachedLocationSnapshot {

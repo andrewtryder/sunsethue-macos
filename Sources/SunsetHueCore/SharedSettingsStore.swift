@@ -87,14 +87,17 @@ public actor FileForecastCache: ForecastCache {
 
     public init(
         cacheDirectory: URL = AppSupportPaths.cacheDirectoryURL(),
-        legacyFileURL: URL = AppSupportPaths.legacyCacheURL()
+        legacyFileURL: URL = AppSupportPaths.legacyCacheURL(),
+        legacyMigrationRetryInterval: TimeInterval = 30
     ) {
+        self.legacyMigrationRetryInterval = legacyMigrationRetryInterval
         self.cacheDirectory = cacheDirectory
         self.legacyFileURL = legacyFileURL
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 
-    public init(rootDirectory: URL) {
+    public init(rootDirectory: URL, legacyMigrationRetryInterval: TimeInterval = 30) {
+        self.legacyMigrationRetryInterval = legacyMigrationRetryInterval
         self.cacheDirectory = rootDirectory.appendingPathComponent(
             AppSupportPaths.cacheDirectoryName,
             isDirectory: true
@@ -209,33 +212,113 @@ public actor FileForecastCache: ForecastCache {
         cacheDirectory.appendingPathComponent("\(locationID.uuidString).json")
     }
 
+    /// Outcome of the most recent legacy (`forecast-cache.json`) migration attempt, or nil if none
+    /// was needed/attempted. Lets callers and diagnostics detect incomplete migrations.
+    public struct LegacyMigrationReport: Equatable, Sendable {
+        public var migratedLocationIDs: [UUID] = []
+        public var skippedExistingLocationIDs: [UUID] = []
+        public var failedLocationIDs: [UUID] = []
+        /// The legacy file was unreadable/undecodable and was moved aside as `.corrupt-<stamp>`.
+        public var quarantinedCorruptSource = false
+        /// Reading the legacy file failed for a possibly transient reason; it was left in place.
+        public var sourceUnreadable = false
+        /// All entries are present in the new layout and the source was moved to `.migrated-<stamp>`.
+        public var completed = false
+
+        public var isClean: Bool { failedLocationIDs.isEmpty && !sourceUnreadable }
+    }
+
+    public private(set) var lastLegacyMigrationReport: LegacyMigrationReport?
+    private var lastLegacyMigrationAttempt: Date?
+    private let legacyMigrationRetryInterval: TimeInterval
+
+    /// Migrates the pre-per-location cache file. The source file is only moved aside after every
+    /// entry is confirmed present in the new layout, so any failure leaves it intact for a retry.
+    /// Existing valid destination files are never overwritten; damaged destinations are quarantined
+    /// and replaced from the legacy data.
     private func migrateLegacyIfNeeded() throws {
         guard !didMigrateLegacy else { return }
-        didMigrateLegacy = true
-        guard FileManager.default.fileExists(atPath: legacyFileURL.path) else { return }
-        guard let data = try? CoordinatedFileIO.readData(
-            from: legacyFileURL,
-            maxBytes: SunsetHueConstants.maxCacheFileBytes * 4
-        ) else {
+        if let last = lastLegacyMigrationAttempt,
+           Date().timeIntervalSince(last) < legacyMigrationRetryInterval {
+            return
+        }
+        guard FileManager.default.fileExists(atPath: legacyFileURL.path) else {
+            didMigrateLegacy = true
+            return
+        }
+        lastLegacyMigrationAttempt = Date()
+        var report = LegacyMigrationReport()
+
+        let data: Data?
+        do {
+            data = try CoordinatedFileIO.readData(
+                from: legacyFileURL,
+                maxBytes: SunsetHueConstants.maxCacheFileBytes * 4
+            )
+        } catch SunsetHueError.storageTooLarge {
             CoordinatedFileIO.quarantineCorruptFile(at: legacyFileURL)
+            report.quarantinedCorruptSource = true
+            lastLegacyMigrationReport = report
+            didMigrateLegacy = true
+            return
+        } catch {
+            // Possibly transient (permissions, coordination). Keep the source and retry later.
+            report.sourceUnreadable = true
+            lastLegacyMigrationReport = report
+            return
+        }
+        guard let data else {
+            didMigrateLegacy = true
             return
         }
         guard let store = try? decoder.decode(CachedForecastStore.self, from: data) else {
             CoordinatedFileIO.quarantineCorruptFile(at: legacyFileURL)
+            report.quarantinedCorruptSource = true
+            lastLegacyMigrationReport = report
+            didMigrateLegacy = true
             return
         }
-        for (id, bundle) in store.bundles {
+
+        for (id, bundle) in store.bundles.sorted(by: { $0.key.uuidString < $1.key.uuidString }) {
             let dest = fileURL(for: id)
-            if FileManager.default.fileExists(atPath: dest.path) { continue }
-            let snapshot = CachedLocationSnapshot.fromSuccessful(bundle: bundle)
-            if let encoded = try? encoder.encode(snapshot) {
-                try? CoordinatedFileIO.writeAtomically(encoded, to: dest)
+            if FileManager.default.fileExists(atPath: dest.path) {
+                if destinationIsValid(dest) {
+                    report.skippedExistingLocationIDs.append(id)
+                    continue
+                }
+                CoordinatedFileIO.quarantineCorruptFile(at: dest)
+            }
+            do {
+                let encoded = try encoder.encode(CachedLocationSnapshot.fromSuccessful(bundle: bundle))
+                try CoordinatedFileIO.writeAtomically(encoded, to: dest)
+                report.migratedLocationIDs.append(id)
+            } catch {
+                report.failedLocationIDs.append(id)
             }
         }
-        let stamp = Int(Date().timeIntervalSince1970)
-        let aside = legacyFileURL.deletingLastPathComponent()
-            .appendingPathComponent("\(legacyFileURL.lastPathComponent).migrated-\(stamp)")
-        try? FileManager.default.moveItem(at: legacyFileURL, to: aside)
+
+        if report.failedLocationIDs.isEmpty {
+            let stamp = Int(Date().timeIntervalSince1970)
+            let aside = legacyFileURL.deletingLastPathComponent()
+                .appendingPathComponent("\(legacyFileURL.lastPathComponent).migrated-\(stamp)")
+            do {
+                try FileManager.default.moveItem(at: legacyFileURL, to: aside)
+                report.completed = true
+                didMigrateLegacy = true
+            } catch {
+                // Data is migrated but the source could not be renamed. Entries are skipped as
+                // already-present on the next attempt, so retrying is harmless.
+            }
+        }
+        lastLegacyMigrationReport = report
+    }
+
+    private func destinationIsValid(_ url: URL) -> Bool {
+        guard let data = try? CoordinatedFileIO.readData(from: url, maxBytes: SunsetHueConstants.maxCacheFileBytes),
+              let snapshot = try? decoder.decode(CachedLocationSnapshot.self, from: data) else {
+            return false
+        }
+        return snapshot.schemaVersion <= SunsetHueConstants.currentCacheSchemaVersion
     }
 }
 

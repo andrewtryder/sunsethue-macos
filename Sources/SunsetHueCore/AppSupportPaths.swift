@@ -114,11 +114,34 @@ public enum AppSupportPaths: Sendable {
         public var copiedSettings: Bool
         public var copiedLegacyCache: Bool
         public var copiedCacheFileCount: Int
+        /// File names that could not be copied. Sources are never deleted, so the next launch retries them.
+        public var failedItems: [String]
 
-        public init(copiedSettings: Bool, copiedLegacyCache: Bool, copiedCacheFileCount: Int) {
+        public var isComplete: Bool { failedItems.isEmpty }
+
+        public init(
+            copiedSettings: Bool,
+            copiedLegacyCache: Bool,
+            copiedCacheFileCount: Int,
+            failedItems: [String] = []
+        ) {
             self.copiedSettings = copiedSettings
             self.copiedLegacyCache = copiedLegacyCache
             self.copiedCacheFileCount = copiedCacheFileCount
+            self.failedItems = failedItems
+        }
+
+        /// Copies via a temporary sibling then renames, so an interrupted copy never leaves a
+        /// truncated file that a later run would mistake for an already-migrated item.
+        fileprivate static func safeCopy(_ source: URL, to dest: URL, fileManager: FileManager) throws {
+            let temp = dest.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).migrating")
+            do {
+                try fileManager.copyItem(at: source, to: temp)
+                try fileManager.moveItem(at: temp, to: dest)
+            } catch {
+                try? fileManager.removeItem(at: temp)
+                throw error
+            }
         }
     }
 
@@ -143,15 +166,18 @@ public enum AppSupportPaths: Sendable {
         var copiedSettings = false
         var copiedLegacyCache = false
         var copiedCacheCount = 0
+        var failedItems: [String] = []
 
         // 1. Settings file: app-state.json
         let sourceSettings = sourceURL.appendingPathComponent(settingsFileName)
         let targetSettings = targetURL.appendingPathComponent(settingsFileName)
         if fileManager.fileExists(atPath: sourceSettings.path) && !fileManager.fileExists(atPath: targetSettings.path) {
             do {
-                try fileManager.copyItem(at: sourceSettings, to: targetSettings)
+                try StorageMigrationResult.safeCopy(sourceSettings, to: targetSettings, fileManager: fileManager)
                 copiedSettings = true
-            } catch {}
+            } catch {
+                failedItems.append(settingsFileName)
+            }
         }
 
         // 2. Legacy cache: forecast-cache.json
@@ -159,9 +185,11 @@ public enum AppSupportPaths: Sendable {
         let targetLegacyCache = targetURL.appendingPathComponent(legacyCacheFileName)
         if fileManager.fileExists(atPath: sourceLegacyCache.path) && !fileManager.fileExists(atPath: targetLegacyCache.path) {
             do {
-                try fileManager.copyItem(at: sourceLegacyCache, to: targetLegacyCache)
+                try StorageMigrationResult.safeCopy(sourceLegacyCache, to: targetLegacyCache, fileManager: fileManager)
                 copiedLegacyCache = true
-            } catch {}
+            } catch {
+                failedItems.append(legacyCacheFileName)
+            }
         }
 
         // 3. Per-location cache directory: forecast-cache/
@@ -177,9 +205,11 @@ public enum AppSupportPaths: Sendable {
                     let dest = targetCacheDir.appendingPathComponent(file.lastPathComponent)
                     if !fileManager.fileExists(atPath: dest.path) {
                         do {
-                            try fileManager.copyItem(at: file, to: dest)
+                            try StorageMigrationResult.safeCopy(file, to: dest, fileManager: fileManager)
                             copiedCacheCount += 1
-                        } catch {}
+                        } catch {
+                            failedItems.append("\(cacheDirectoryName)/\(file.lastPathComponent)")
+                        }
                     }
                 }
             }
@@ -188,7 +218,8 @@ public enum AppSupportPaths: Sendable {
         return StorageMigrationResult(
             copiedSettings: copiedSettings,
             copiedLegacyCache: copiedLegacyCache,
-            copiedCacheFileCount: copiedCacheCount
+            copiedCacheFileCount: copiedCacheCount,
+            failedItems: failedItems
         )
     }
 }

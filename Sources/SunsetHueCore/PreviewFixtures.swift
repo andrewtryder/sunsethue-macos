@@ -51,7 +51,9 @@ public enum PreviewFixtures {
     }
 
     public static func missingModelQuality(on day: Date = Date()) -> EventForecast {
-        EventForecast(
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = sampleTimeZone
+        return EventForecast(
             responseTime: Date(),
             location: sampleCoordinates,
             gridLocation: Coordinates(latitude: 41.0, longitude: -74.0),
@@ -64,7 +66,7 @@ public enum PreviewFixtures {
             direction: 256.7,
             blueHour: MagicHourWindow(start: nil, end: nil),
             goldenHour: nil,
-            forecastDate: Calendar(identifier: .gregorian).startOfDay(for: day)
+            forecastDate: cal.startOfDay(for: day)
         )
     }
 
@@ -177,6 +179,8 @@ public enum PreviewFixtures {
         let goldenEnd = eventTime.addingTimeInterval(eventType == .sunset ? 5 * 60 : 27 * 60)
         let blueStart = eventTime.addingTimeInterval(eventType == .sunset ? 13 * 60 : -20 * 60)
         let blueEnd = eventTime.addingTimeInterval(eventType == .sunset ? 26 * 60 : -5 * 60)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = sampleTimeZone
         return EventForecast(
             responseTime: Date(),
             location: sampleCoordinates,
@@ -190,7 +194,7 @@ public enum PreviewFixtures {
             direction: direction,
             blueHour: MagicHourWindow(start: blueStart, end: blueEnd),
             goldenHour: MagicHourWindow(start: goldenStart, end: goldenEnd),
-            forecastDate: Calendar(identifier: .gregorian).startOfDay(for: day)
+            forecastDate: cal.startOfDay(for: day)
         )
     }
 

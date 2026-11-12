@@ -40,6 +40,11 @@ This document tracks runtime invariants, platform integration boundaries, and ve
 
 ---
 
+## Continuous Integration
+
+- `ci.yml` (pull requests and `main`): one macOS job (`swift test`, XcodeGen drift check, release metadata) plus a Linux secret scan.
+- No workflow requires a signing identity, provisioning profile, or notarization. Release binaries are still built locally with `scripts/release-local.sh`.
+
 ## Verification Commands
 
 Execute the following test suite and release validation commands before any release:
@@ -62,5 +67,5 @@ git diff --exit-code -- SunsetHue.xcodeproj
 python3 scripts/verify_release_metadata.py
 
 # 6. Local release dry-run validation
-./scripts/release-local.sh --dry-run v1.2.0
+./scripts/release-local.sh --dry-run vX.Y.Z   # use the version from project.yml
 ```

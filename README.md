@@ -75,7 +75,13 @@ For standard unsigned macOS development and testing:
 ./scripts/run-debug.sh
 ```
 
-This builds the unsigned Debug app, strips any widget extension, copies the app to `/Applications/SunsetHue.app`, and launches it.
+This builds the unsigned Debug app, strips any widget extension, and launches it directly from `build/DerivedData-debug-unsigned/`. Your installed `/Applications/SunsetHue.app` is **not** touched, and your saved locations, settings, and Keychain API key are never modified.
+
+To test notifications from a stable `/Applications` location, opt in explicitly (you will be asked to confirm before anything is replaced):
+
+```bash
+./scripts/run-debug.sh --install
+```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflows, test commands, and project architecture.
 
@@ -84,10 +90,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflows, test commands,
 Public release binaries are built and packaged locally on macOS rather than cloud runners:
 
 ```bash
-./scripts/release-local.sh v1.2.0
+./scripts/release-local.sh vX.Y.Z   # e.g. the version in project.yml
 ```
 
-Release Please creates the version tag and release entry on GitHub; `release-local.sh` builds, tests, packages, checksums, and uploads the universal unsigned DMG.
+`release-local.sh` never signs with a Developer ID and never notarizes; it never tags or publishes unless you explicitly run the upload step. Use `./scripts/release-local.sh --dry-run vX.Y.Z` to validate without publishing. Release Please creates the version tag and release entry on GitHub; `release-local.sh` builds, tests, packages, checksums, and uploads the universal unsigned DMG.
 
 ## Desktop widget status
 

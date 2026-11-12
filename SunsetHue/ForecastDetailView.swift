@@ -28,14 +28,15 @@ struct ForecastDetailView: View {
                         .sunsetHueMuted()
                         .accessibilityLabel("Last successful update")
                         .accessibilityValue(bundle.fetchedAt.formatted())
-                } else if appModel.isRefreshing {
+                } else if appModel.isRefreshing(locationID: location.id) {
                     ProgressView("Loading forecast…")
                         .frame(maxWidth: .infinity, minHeight: 200)
                 } else {
+                    let freshness = appModel.freshness(for: location)
                     ContentUnavailableView(
-                        "No Forecast Yet",
-                        systemImage: "cloud.sun",
-                        description: Text("Refresh to fetch sunrise and sunset quality for this location.")
+                        freshness.kind == .noData ? "No Forecast Yet" : freshness.headline,
+                        systemImage: freshness.symbolName,
+                        description: Text(freshness.detail ?? "Refresh to fetch sunrise and sunset quality for this location.")
                     )
                 }
             }
@@ -50,7 +51,7 @@ struct ForecastDetailView: View {
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
-                .disabled(appModel.isRefreshing)
+                .disabled(appModel.isRefreshing(locationID: location.id))
             }
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit") { appModel.beginEditLocation(location) }
@@ -65,12 +66,7 @@ struct ForecastDetailView: View {
             Text("\(location.latitude), \(location.longitude) · \(location.timeZoneIdentifier)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            if let message = appModel.lastErrorMessage {
-                Label(message, systemImage: appModel.lastErrorIsAuthentication ? "key.slash" : "wifi.exclamationmark")
-                    .font(.callout)
-                    .foregroundStyle(.orange)
-                    .accessibilityLabel(message)
-            }
+            ForecastFreshnessStatusView(location: location)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -431,4 +427,49 @@ struct AtmosphereBackground: View {
     return ForecastDetailView(location: PreviewFixtures.sampleLocation)
         .environmentObject(model)
         .frame(width: 900, height: 700)
+}
+
+/// Compact status: current forecasts get one muted line; stale or failed states get a clear
+/// headline, the age of cached data, and the next planned attempt. Re-evaluated each minute so
+/// ages never go stale on screen (no other polling).
+struct ForecastFreshnessStatusView: View {
+    @EnvironmentObject private var appModel: AppModel
+    let location: SavedLocation
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let freshness = appModel.freshness(for: location, now: context.date)
+            VStack(alignment: .leading, spacing: 4) {
+                if freshness.needsAttention || freshness.kind == .cachedAwaitingRefresh || freshness.kind == .modelUnavailable {
+                    Label(freshness.headline, systemImage: freshness.symbolName)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(freshness.needsAttention ? Color.orange : Color.secondary)
+                    if let detail = freshness.detail {
+                        Text(detail)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                HStack(spacing: 6) {
+                    if freshness.isRefreshing {
+                        ProgressView().controlSize(.small)
+                        Text("Refreshing…")
+                    } else if let age = freshness.ageText {
+                        Text(age)
+                    }
+                    if !freshness.isRefreshing, let next = freshness.nextRefreshText {
+                        Text("·")
+                        Text(next)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(
+                [freshness.headline, freshness.detail, freshness.ageText, freshness.nextRefreshText]
+                    .compactMap { $0 }.joined(separator: ". ")
+            )
+        }
+    }
 }

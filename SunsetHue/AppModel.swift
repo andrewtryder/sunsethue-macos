@@ -28,6 +28,9 @@ final class AppModel: ObservableObject {
     @Published var notificationTestResult: NotificationTestResult?
     @Published var isNotificationTestRunning = false
     @Published private(set) var refreshingLocationIDs: Set<UUID> = []
+    /// Reference counts so overlapping operations (menu bar row, window, "Refresh All") never
+    /// clear each other's indicators.
+    private var refreshCounts: [UUID: Int] = [:]
     @Published var lastNotificationDiagnostics: NotificationDiagnosticsSnapshot?
 
     let settingsStore: any SharedSettingsStore
@@ -146,10 +149,36 @@ final class AppModel: ObservableObject {
         )
     }
 
+    private func beginRefreshIndicator(_ ids: [UUID]) {
+        for id in ids { refreshCounts[id, default: 0] += 1 }
+        syncRefreshIndicators()
+    }
+
+    private func endRefreshIndicator(_ ids: [UUID]) {
+        for id in ids {
+            let remaining = (refreshCounts[id] ?? 1) - 1
+            if remaining <= 0 { refreshCounts.removeValue(forKey: id) } else { refreshCounts[id] = remaining }
+        }
+        syncRefreshIndicators()
+    }
+
+    private func syncRefreshIndicators() {
+        let ids = Set(refreshCounts.keys)
+        if ids != refreshingLocationIDs { refreshingLocationIDs = ids }
+        let busy = !ids.isEmpty
+        if busy != isRefreshing { isRefreshing = busy }
+    }
+
+    func isRefreshing(locationID: UUID) -> Bool {
+        refreshingLocationIDs.contains(locationID)
+    }
+
     func refreshLocationFromMenuBar(id: UUID) {
+        // Repeated clicks while a refresh for this location is running are ignored.
+        guard !isRefreshing(locationID: id) else { return }
         Task {
-            refreshingLocationIDs.insert(id)
-            defer { refreshingLocationIDs.remove(id) }
+            beginRefreshIndicator([id])
+            defer { endRefreshIndicator([id]) }
             _ = await refreshCoordinator.refreshLocation(id: id, force: true, trigger: .manual)
             await reloadSelectedSnapshot()
         }
@@ -180,16 +209,13 @@ final class AppModel: ObservableObject {
 
     func refreshAllFromCommand() {
         guard !isRefreshing else { return }
-        isRefreshing = true
-        for loc in state.locations {
-            refreshingLocationIDs.insert(loc.id)
-        }
+        let ids = state.locations.map(\.id)
+        guard !ids.isEmpty else { return }
+        beginRefreshIndicator(ids)
         Task {
-            defer {
-                isRefreshing = false
-                refreshingLocationIDs.removeAll()
-            }
-            await refreshCoordinator.refreshAllStaleLocations(trigger: .manual)
+            defer { endRefreshIndicator(ids) }
+            // Manual refresh fetches every location (rate-limit deadlines still apply).
+            await refreshCoordinator.refreshAllLocations(trigger: .manual)
             await reloadSelectedSnapshot()
         }
     }
@@ -268,10 +294,12 @@ final class AppModel: ObservableObject {
         prefs.removeRule(for: location.id)
         notificationPreferences = prefs
         Task {
-            try? await forecastCache.deleteLocation(location.id)
+            // Persist the removal first so no new refresh can load the location, then tell the
+            // coordinator: it drops any in-flight result and deletes the cache file.
+            await persistState()
+            await refreshCoordinator.locationRemoved(id: location.id)
             await notificationCoordinator.removeNotifications(for: location.id)
             await reloadSelectedSnapshot()
-            await persistState()
             WidgetReload.timelines()
             await refreshCoordinator.scheduleNextRefresh()
             await rescheduleNotifications()
@@ -281,7 +309,10 @@ final class AppModel: ObservableObject {
     func saveEditor() async {
         do {
             let location = try editorDraft.makeLocation().validated(againstExisting: state.locations)
+            // nil for a brand-new location.
+            var previousDefinition: SavedLocation?
             if let index = state.locations.firstIndex(where: { $0.id == location.id }) {
+                previousDefinition = state.locations[index]
                 state.locations[index] = location
             } else {
                 state.locations.append(location)
@@ -290,9 +321,23 @@ final class AppModel: ObservableObject {
             state.selectedLocationID = location.id
             await persistState()
             isPresentingEditor = false
-            await refreshCoordinator.refreshLocation(id: location.id, force: true)
+            if let previousDefinition {
+                if location.invalidatesCachedForecasts(comparedTo: previousDefinition) {
+                    // Coordinates, time zone, or enabled events changed: cached forecasts belong to
+                    // the old definition. Discard them (and any in-flight result) and refetch.
+                    await refreshCoordinator.locationForecastIdentityChanged(id: location.id)
+                    await refreshCoordinator.refreshLocation(id: location.id, force: true)
+                } else {
+                    // Display-only edit (name, forecast days, interval): keep the cache and only
+                    // fetch if the new settings need data the cache lacks.
+                    await refreshCoordinator.refreshLocation(id: location.id, force: false)
+                }
+            } else {
+                await refreshCoordinator.refreshLocation(id: location.id, force: true)
+            }
             await reloadSelectedSnapshot()
             await refreshCoordinator.scheduleNextRefresh()
+            await rescheduleNotifications()
         } catch let error as SunsetHueError {
             bannerMessage = error.userMessage
         } catch {
@@ -343,12 +388,9 @@ final class AppModel: ObservableObject {
 
     func refreshSelected(force: Bool) async {
         guard let location = selectedLocation else { return }
-        isRefreshing = true
-        refreshingLocationIDs.insert(location.id)
-        defer {
-            isRefreshing = false
-            refreshingLocationIDs.remove(location.id)
-        }
+        guard !isRefreshing(locationID: location.id) else { return }
+        beginRefreshIndicator([location.id])
+        defer { endRefreshIndicator([location.id]) }
         _ = await refreshCoordinator.refreshLocation(id: location.id, force: force, trigger: .manual)
         await reloadSelectedSnapshot()
         await refreshCoordinator.scheduleNextRefresh()
@@ -561,6 +603,17 @@ final class AppModel: ObservableObject {
         } catch {
             return "Unable to test connection."
         }
+    }
+
+    /// Freshness description for a location, based on the latest loaded snapshot.
+    func freshness(for location: SavedLocation, now: Date = Date()) -> ForecastFreshness {
+        ForecastFreshnessPresenter.describe(
+            snapshot: snapshotsByLocationID[location.id],
+            location: location,
+            credentialState: credentialState,
+            isRefreshing: isRefreshing(locationID: location.id),
+            now: now
+        )
     }
 
     private func reloadSelectedSnapshot() async {

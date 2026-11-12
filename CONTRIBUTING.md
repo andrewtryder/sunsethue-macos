@@ -24,13 +24,26 @@ SunsetHue is developed and distributed primarily as an **unsigned macOS applicat
 - Regenerate the Xcode project with `xcodegen` if available.
 - Build the `SunsetHue` scheme in `Debug` configuration with code signing disabled.
 - Strip any WidgetKit extension from the bundle so it behaves identically to the unsigned public release.
-- Terminate any running SunsetHue instance and install to `/Applications/SunsetHue.app`.
-- Launch the newly built app.
+- Stop only a previous instance launched from the development output directory.
+- Launch the app directly from `build/DerivedData-debug-unsigned/` (your production install is left alone).
 
-To skip `/Applications` installation during debug runs:
+macOS attributes notifications to an app in a stable location, so to test notifications you can opt in to installing the debug build into `/Applications`:
 ```bash
-INSTALL_TO_APPLICATIONS=0 ./scripts/run-debug.sh
+./scripts/run-debug.sh --install        # prompts before replacing /Applications/SunsetHue.app
+./scripts/run-debug.sh --install --yes  # non-interactive
 ```
+User data (`~/Library/Application Support/SunsetHue/`) and the Keychain API key are never modified by the script.
+
+### Signing options
+
+| Scenario | Support |
+|----------|---------|
+| Unsigned (`CODE_SIGNING_ALLOWED=NO`) | Default for development, CI, and public DMG releases |
+| Ad-hoc (`CODE_SIGN_IDENTITY=-`) | Used by the scripts; satisfies Apple Silicon's requirement for signed code |
+| Local self-signed certificate | Works for local builds; not required |
+| Developer ID / notarization | **Not required and not used** |
+
+Do not recommend disabling Gatekeeper globally; users approve the app once via right-click → Open or System Settings → Privacy & Security → Open Anyway.
 
 ---
 
@@ -42,6 +55,8 @@ Run the test suite before submitting pull requests:
 # Standard unit tests (mocked networking, no live API required)
 swift test --package-path .
 
+# Sanitizers are not run on every pull request to conserve runner minutes.
+# Run them locally for concurrency/memory changes:
 # Concurrency and thread safety verification
 swift test --package-path . --sanitize=thread
 
@@ -65,7 +80,7 @@ python3 scripts/verify_release_metadata.py
 | `SunsetHue` | Main macOS SwiftUI application and Menu Bar Extra |
 | `SunsetHueWidget` | Shelved WidgetKit + App Intents extension (experimental) |
 | `scripts/lib/app-tools.sh` | Shared shell utilities for stripping widgets and verifying binaries |
-| `scripts/run-debug.sh` | Canonical unsigned Debug build, install, and launch script |
+| `scripts/run-debug.sh` | Unsigned Debug build and launch script (`--install` opts in to `/Applications`) |
 | `scripts/package-unsigned.sh` | Canonical unsigned universal DMG packaging script |
 | `scripts/release-local.sh` | Local release build, test, package, checksum, and upload script |
 | `scripts/run-widget-debug.sh` | Experimental Personal Team signed widget runner |
