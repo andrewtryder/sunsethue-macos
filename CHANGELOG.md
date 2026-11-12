@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/andrewtryder/sunsethue-macos/compare/v1.3.1...v1.3.2) (2026-11-12)
+
+
+### Bug Fixes
+
+* close persistence deletion race and add repo hygiene ([#9](https://github.com/andrewtryder/sunsethue-macos/issues/9)) ([efd3673](https://github.com/andrewtryder/sunsethue-macos/commit/efd36739f139353349382cbbbf09516a6097fb29))
+
 ## [1.3.1](https://github.com/andrewtryder/sunsethue-macos/compare/v1.3.0...v1.3.1) (2026-11-12)
 
 
