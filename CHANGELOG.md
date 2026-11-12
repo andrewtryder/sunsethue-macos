@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/andrewtryder/sunsethue-macos/compare/v1.3.0...v1.3.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* maintenance, reliability, and usability improvements ([#7](https://github.com/andrewtryder/sunsethue-macos/issues/7)) ([35767d1](https://github.com/andrewtryder/sunsethue-macos/commit/35767d12abbf6d78165191d7f176ee8e4d26f549))
+
 ## [1.3.0](https://github.com/andrewtryder/sunsethue-macos/compare/v1.2.0...v1.3.0) (2026-08-21)
 
 
