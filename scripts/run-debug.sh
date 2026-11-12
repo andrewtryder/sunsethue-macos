@@ -19,13 +19,15 @@ DERIVED="${ROOT}/build/DerivedData-debug-unsigned"
 APP_NAME="SunsetHue"
 APP="${DERIVED}/Build/Products/Debug/${APP_NAME}.app"
 INSTALL_TO_APPLICATIONS="${INSTALL_TO_APPLICATIONS:-0}"
+ALLOW_CONCURRENT="${ALLOW_CONCURRENT:-0}"
 ASSUME_YES=0
 
 for arg in "$@"; do
   case "${arg}" in
     --install) INSTALL_TO_APPLICATIONS=1 ;;
+    --allow-concurrent) ALLOW_CONCURRENT=1 ;;
     --yes|-y) ASSUME_YES=1 ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "Unknown option: ${arg}" >&2; exit 2 ;;
   esac
 done
@@ -59,6 +61,26 @@ fi
 unregister_sunsethue_app "${APP}"
 strip_widget_extension "${APP}"
 verify_widget_absent "${APP}"
+
+# Check if an installed copy is already running. Both copies share the same
+# Application Support and Keychain items; concurrent execution can cause write races.
+TARGET_APP="/Applications/${APP_NAME}.app"
+installed_pids=""
+for pid in $(pgrep -x "${APP_NAME}" 2>/dev/null || true); do
+  if ps -p "${pid}" -o command= 2>/dev/null | grep -q "${TARGET_APP}"; then
+    installed_pids="${installed_pids} ${pid}"
+  fi
+done
+
+if [[ -n "${installed_pids}" && "${INSTALL_TO_APPLICATIONS}" != "1" && "${ALLOW_CONCURRENT}" != "1" ]]; then
+  echo "⚠️  An installed instance of ${APP_NAME} (${TARGET_APP}) is currently running (PID:${installed_pids})." >&2
+  echo "Running both simultaneously can cause storage and scheduling conflicts." >&2
+  echo "Options:" >&2
+  echo "  1) Quit the installed app and re-run this script" >&2
+  echo "  2) Run with --allow-concurrent to bypass this check" >&2
+  echo "  3) Run with --install to replace the installed app" >&2
+  exit 1
+fi
 
 # Stop only a previous instance launched from the development output directory.
 stop_dev_instance() {
