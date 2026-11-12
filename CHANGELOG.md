@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/andrewtryder/sunsethue-macos/compare/v1.3.2...v1.4.0) (2026-11-12)
+
+
+### Features
+
+* add generation-aware cache cleanup on location identity edits ([#15](https://github.com/andrewtryder/sunsethue-macos/issues/15)) ([710574c](https://github.com/andrewtryder/sunsethue-macos/commit/710574c37c2492e789cfa2fb3ada34e78b4c9106))
+
 ## [1.3.2](https://github.com/andrewtryder/sunsethue-macos/compare/v1.3.1...v1.3.2) (2026-11-12)
 
 
