@@ -18,6 +18,11 @@ public actor ForecastRefreshCoordinator {
     private var scheduledTask: Task<Void, Never>?
     private var isRefreshingAll = false
     private var inFlightRefreshes: [UUID: Task<RefreshExecutionResult, Never>] = [:]
+    /// Bumped whenever a location is removed or its forecast identity (coordinates, time zone,
+    /// enabled events) changes. Refreshes capture the value at start and may only persist if it is unchanged.
+    private var locationGenerations: [UUID: Int] = [:]
+    /// Locations deleted during this process lifetime. Location IDs are never reused.
+    private var removedLocationIDs: Set<UUID> = []
 
     public init(
         settingsStore: any SharedSettingsStore = SharedStorageFactory.makeSettingsStore(),
@@ -35,10 +40,48 @@ public actor ForecastRefreshCoordinator {
         self.activityRecorder = activityRecorder
     }
 
+    @discardableResult
     public func refreshLocation(id: UUID, force: Bool, trigger: RefreshTrigger = .manual) async -> CachedLocationSnapshot? {
-        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
-        guard let location = state.locations.first(where: { $0.id == id }) else { return nil }
-        return await refresh(location: location, force: force, trigger: trigger)
+        await refresh(locationID: id, force: force, trigger: trigger)
+    }
+
+    /// Call after a location has been removed from settings. Drops any in-flight refresh result and
+    /// deletes the cached snapshot; a refresh that was already running can no longer recreate it.
+    public func locationRemoved(id: UUID) async {
+        removedLocationIDs.insert(id)
+        invalidateInFlightRefresh(for: id)
+        do {
+            try await forecastCache.deleteLocation(id)
+        } catch {
+            logger.error("Failed to delete cache for removed location: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Call after a location was edited such that cached forecasts no longer apply
+    /// (see `SavedLocation.invalidatesCachedForecasts(comparedTo:)`). The settings store must already
+    /// contain the edited location. Discards the cache and any in-flight result for the old definition.
+    public func locationForecastIdentityChanged(id: UUID) async {
+        invalidateInFlightRefresh(for: id)
+        do {
+            try await forecastCache.deleteLocation(id)
+        } catch {
+            logger.error("Failed to invalidate cache for edited location: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func invalidateInFlightRefresh(for id: UUID) {
+        locationGenerations[id, default: 0] += 1
+        // Detach (do not cancel): the old task finishes harmlessly and its result is discarded
+        // by the generation check, while new refreshes start fresh instead of joining it.
+        inFlightRefreshes.removeValue(forKey: id)
+    }
+
+    private func generation(for id: UUID) -> Int { locationGenerations[id, default: 0] }
+
+    private func canPersist(locationID: UUID, generation: Int?) -> Bool {
+        if removedLocationIDs.contains(locationID) { return false }
+        if let generation, generation != self.generation(for: locationID) { return false }
+        return true
     }
 
     public func refreshAllStaleLocations(trigger: RefreshTrigger = .scheduled) async {
@@ -51,7 +94,7 @@ public actor ForecastRefreshCoordinator {
             let existing = try? await forecastCache.loadSnapshot(for: location.id)
             let needsRefresh = forceNeeded(existing: existing, location: location, force: false)
             if needsRefresh {
-                _ = await refresh(location: location, force: false, trigger: trigger)
+                _ = await refresh(locationID: location.id, force: false, trigger: trigger)
             }
         }
         await scheduleNextRefresh()
@@ -63,7 +106,7 @@ public actor ForecastRefreshCoordinator {
         for location in state.locations {
             let existing = try? await forecastCache.loadSnapshot(for: location.id)
             guard existing?.status == .authenticationRequired else { continue }
-            _ = await refresh(location: location, force: true, trigger: trigger)
+            _ = await refresh(locationID: location.id, force: true, trigger: trigger)
         }
         await scheduleNextRefresh()
     }
@@ -159,8 +202,19 @@ public actor ForecastRefreshCoordinator {
         }
     }
 
-    private func refresh(location: SavedLocation, force: Bool, trigger: RefreshTrigger) async -> CachedLocationSnapshot? {
-        let locationID = location.id
+    private func refresh(locationID: UUID, force: Bool, trigger: RefreshTrigger) async -> CachedLocationSnapshot? {
+        guard !removedLocationIDs.contains(locationID) else { return nil }
+
+        // Capture the generation BEFORE loading the location so that any edit/removal that lands
+        // in between causes this refresh's result to be discarded rather than persisted.
+        var generation = 0
+        var loaded: SavedLocation?
+        repeat {
+            generation = self.generation(for: locationID)
+            let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+            loaded = state.locations.first(where: { $0.id == locationID })
+        } while generation != self.generation(for: locationID)
+        guard let location = loaded, !removedLocationIDs.contains(locationID) else { return nil }
 
         if let existingTask = inFlightRefreshes[locationID] {
             let joinedResult = await existingTask.value
@@ -173,8 +227,9 @@ public actor ForecastRefreshCoordinator {
             }
         }
 
+        let capturedGeneration = generation
         let task = Task<RefreshExecutionResult, Never> {
-            await self.performRefresh(location: location, force: force, trigger: trigger)
+            await self.performRefresh(location: location, generation: capturedGeneration, force: force, trigger: trigger)
         }
         inFlightRefreshes[locationID] = task
         defer {
@@ -186,7 +241,7 @@ public actor ForecastRefreshCoordinator {
         return result.snapshot
     }
 
-    private func performRefresh(location: SavedLocation, force: Bool, trigger: RefreshTrigger) async -> RefreshExecutionResult {
+    private func performRefresh(location: SavedLocation, generation: Int, force: Bool, trigger: RefreshTrigger) async -> RefreshExecutionResult {
         let previous = try? await forecastCache.loadSnapshot(for: location.id)
         let now = Date()
 
@@ -229,6 +284,7 @@ public actor ForecastRefreshCoordinator {
                     location: location,
                     previous: previous,
                     candidate: snapshot,
+                    generation: generation,
                     wasSuccessfulNetworkRefresh: false
                 )
                 let savedSnapshot: CachedLocationSnapshot?
@@ -242,6 +298,8 @@ public actor ForecastRefreshCoordinator {
                         result: .authenticationRequired,
                         details: "API key not configured"
                     )
+                case .discarded:
+                    savedSnapshot = nil
                 case .failed(let fallback):
                     savedSnapshot = fallback
                     await activityRecorder.record(
@@ -266,6 +324,7 @@ public actor ForecastRefreshCoordinator {
                 location: location,
                 previous: previous,
                 candidate: snapshot,
+                generation: generation,
                 wasSuccessfulNetworkRefresh: false
             )
             let savedSnapshot: CachedLocationSnapshot?
@@ -279,6 +338,8 @@ public actor ForecastRefreshCoordinator {
                     result: .authenticationRequired,
                     details: "Keychain credentials unavailable"
                 )
+            case .discarded:
+                savedSnapshot = nil
             case .failed(let fallback):
                 savedSnapshot = fallback
                 await activityRecorder.record(
@@ -343,11 +404,15 @@ public actor ForecastRefreshCoordinator {
             location: location,
             previous: previous,
             candidate: snapshot,
+            generation: generation,
             wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
         )
 
         let savedSnapshot: CachedLocationSnapshot?
         switch persistenceOutcome {
+        case .discarded:
+            // Location was removed or edited while the request was in flight.
+            return RefreshExecutionResult(snapshot: nil, performedNetworkRefresh: true)
         case .failed(let fallback):
             savedSnapshot = fallback
             await activityRecorder.record(
@@ -402,14 +467,22 @@ public actor ForecastRefreshCoordinator {
         case committed(CachedLocationSnapshot)
         case rejectedStale(CachedLocationSnapshot)
         case failed(fallback: CachedLocationSnapshot?)
+        /// Location removed or its forecast identity changed mid-refresh; nothing was written.
+        case discarded
     }
 
     private func persistAndEmitSideEffects(
         location: SavedLocation,
         previous: CachedLocationSnapshot?,
         candidate: CachedLocationSnapshot,
+        generation: Int? = nil,
         wasSuccessfulNetworkRefresh: Bool
     ) async -> PersistenceOutcome {
+        // No suspension point between this check and the enqueue of the save below, so a later
+        // locationRemoved/IdentityChanged delete is always ordered after this write.
+        guard canPersist(locationID: location.id, generation: generation) else {
+            return .discarded
+        }
         do {
             let result = try await forecastCache.saveSnapshot(candidate)
             switch result {

@@ -268,10 +268,12 @@ final class AppModel: ObservableObject {
         prefs.removeRule(for: location.id)
         notificationPreferences = prefs
         Task {
-            try? await forecastCache.deleteLocation(location.id)
+            // Persist the removal first so no new refresh can load the location, then tell the
+            // coordinator: it drops any in-flight result and deletes the cache file.
+            await persistState()
+            await refreshCoordinator.locationRemoved(id: location.id)
             await notificationCoordinator.removeNotifications(for: location.id)
             await reloadSelectedSnapshot()
-            await persistState()
             WidgetReload.timelines()
             await refreshCoordinator.scheduleNextRefresh()
             await rescheduleNotifications()
@@ -281,7 +283,10 @@ final class AppModel: ObservableObject {
     func saveEditor() async {
         do {
             let location = try editorDraft.makeLocation().validated(againstExisting: state.locations)
+            // nil for a brand-new location.
+            var previousDefinition: SavedLocation?
             if let index = state.locations.firstIndex(where: { $0.id == location.id }) {
+                previousDefinition = state.locations[index]
                 state.locations[index] = location
             } else {
                 state.locations.append(location)
@@ -290,7 +295,20 @@ final class AppModel: ObservableObject {
             state.selectedLocationID = location.id
             await persistState()
             isPresentingEditor = false
-            await refreshCoordinator.refreshLocation(id: location.id, force: true)
+            if let previousDefinition {
+                if location.invalidatesCachedForecasts(comparedTo: previousDefinition) {
+                    // Coordinates, time zone, or enabled events changed: cached forecasts belong to
+                    // the old definition. Discard them (and any in-flight result) and refetch.
+                    await refreshCoordinator.locationForecastIdentityChanged(id: location.id)
+                    await refreshCoordinator.refreshLocation(id: location.id, force: true)
+                } else {
+                    // Display-only edit (name, forecast days, interval): keep the cache and only
+                    // fetch if the new settings need data the cache lacks.
+                    await refreshCoordinator.refreshLocation(id: location.id, force: false)
+                }
+            } else {
+                await refreshCoordinator.refreshLocation(id: location.id, force: true)
+            }
             await reloadSelectedSnapshot()
             await refreshCoordinator.scheduleNextRefresh()
         } catch let error as SunsetHueError {

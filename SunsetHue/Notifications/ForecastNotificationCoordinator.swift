@@ -22,6 +22,7 @@ actor ForecastNotificationCoordinator {
     private let unCenter: UNUserNotificationCenter
     private let preferencesStore: any NotificationPreferencesStoring
     private let ledgerStore: NotificationDeliveryLedgerStore
+    private let dailyScheduler: DailyNotificationScheduler
     private let logger = Logger(subsystem: "com.andrewtryder.SunsetHue", category: "NotificationCoordinator")
 
     private(set) var authorizationState: AuthorizationState = .notDetermined
@@ -36,6 +37,7 @@ actor ForecastNotificationCoordinator {
         self.unCenter = unCenter
         self.preferencesStore = preferencesStore
         self.ledgerStore = ledgerStore
+        self.dailyScheduler = DailyNotificationScheduler(scheduling: UNDailyNotificationScheduling(center: unCenter))
     }
 
     func refreshAuthorizationStatus() async {
@@ -77,69 +79,24 @@ actor ForecastNotificationCoordinator {
         preferencesStore.save(preferences)
     }
 
+    /// Reconciles pending daily-summary notifications with the desired set. Unchanged requests are
+    /// left in place, changed ones are replaced atomically, stale ones removed, and overlapping
+    /// calls are serialized by `DailyNotificationScheduler` (latest request wins).
     func rescheduleDailyNotifications(
         state: SharedAppState,
         snapshots: [UUID: CachedLocationSnapshot]
     ) async {
         await refreshAuthorizationStatus()
         let preferences = preferencesStore.load()
-        await removePendingDailyRequests()
-
-        guard preferences.notificationsEnabled,
-              authorizationState == .authorized || authorizationState == .provisional else {
-            return
-        }
-
-        for location in state.locations {
-            let rule = preferences.rule(for: location.id).dailySummary
-            guard rule.enabled,
-                  let snapshot = snapshots[location.id],
-                  let bundle = snapshot.bundle,
-                  let timeZone = location.timeZone else {
-                continue
-            }
-
-            let plans = DailyNotificationSchedulePlanner.plans(
-                location: location,
-                rule: rule,
-                now: Date(),
-                dayCount: max(2, location.forecastDays)
-            )
-
-            for plan in plans {
-                guard let contentDraft = DailySummaryContentBuilder.content(
-                    location: location,
-                    bundle: bundle,
-                    deliveryDate: plan.deliveryDate
-                ) else { continue }
-
-                let content = UNMutableNotificationContent()
-                content.title = contentDraft.title
-                content.body = contentDraft.body
-                content.userInfo = [
-                    "locationID": location.id.uuidString,
-                    "kind": "dailySummary",
-                ]
-                if preferences.playSound {
-                    content.sound = .default
-                }
-
-                let components = DailyNotificationSchedulePlanner.dateComponents(
-                    for: plan,
-                    timeZone: timeZone
-                )
-                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-                let request = UNNotificationRequest(
-                    identifier: plan.identifier,
-                    content: content,
-                    trigger: trigger
-                )
-                do {
-                    try await unCenter.add(request)
-                } catch {
-                    logger.error("Failed to schedule daily summary notification: \(error.localizedDescription, privacy: .public)")
-                }
-            }
+        let desired = DailyNotificationDescriptorBuilder.descriptors(
+            state: state,
+            snapshots: snapshots,
+            preferences: preferences,
+            isAuthorized: authorizationState == .authorized || authorizationState == .provisional
+        )
+        let result = await dailyScheduler.apply(desired: desired)
+        if !result.failedIdentifiers.isEmpty {
+            logger.error("Failed to schedule \(result.failedIdentifiers.count) daily summary notification(s); existing ones were kept")
         }
     }
 
@@ -255,14 +212,6 @@ actor ForecastNotificationCoordinator {
         }
     }
 
-    private func removePendingDailyRequests() async {
-        let pending = await unCenter.pendingNotificationRequests()
-        let identifiers = pending
-            .map(\.identifier)
-            .filter(DailyNotificationSchedulePlanner.isDailyIdentifier)
-        unCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
-    }
-
     private func map(_ status: NotificationSettingsSnapshot.AuthorizationStatus) -> AuthorizationState {
         switch status {
         case .notDetermined: return .notDetermined
@@ -272,5 +221,61 @@ actor ForecastNotificationCoordinator {
         case .ephemeral: return .ephemeral
         case .unknown: return .notDetermined
         }
+    }
+}
+
+/// `UNUserNotificationCenter` adapter for daily summaries.
+struct UNDailyNotificationScheduling: DailyNotificationScheduling, @unchecked Sendable {
+    let center: UNUserNotificationCenter
+
+    func pendingDailyDescriptors() async -> [DailyNotificationDescriptor] {
+        await center.pendingNotificationRequests()
+            .filter { DailyNotificationSchedulePlanner.isDailyIdentifier($0.identifier) }
+            .map { request in
+                let components = (request.trigger as? UNCalendarNotificationTrigger)?.dateComponents
+                let locationID = (request.content.userInfo["locationID"] as? String).flatMap(UUID.init(uuidString:))
+                    ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+                return DailyNotificationDescriptor(
+                    identifier: request.identifier,
+                    locationID: locationID,
+                    title: request.content.title,
+                    body: request.content.body,
+                    playSound: request.content.sound != nil,
+                    year: components?.year ?? 0,
+                    month: components?.month ?? 0,
+                    day: components?.day ?? 0,
+                    hour: components?.hour ?? 0,
+                    minute: components?.minute ?? 0,
+                    timeZoneIdentifier: components?.timeZone?.identifier ?? ""
+                )
+            }
+    }
+
+    func schedule(_ descriptor: DailyNotificationDescriptor) async throws {
+        let content = UNMutableNotificationContent()
+        content.title = descriptor.title
+        content.body = descriptor.body
+        content.userInfo = [
+            "locationID": descriptor.locationID.uuidString,
+            "kind": "dailySummary",
+        ]
+        if descriptor.playSound { content.sound = .default }
+
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = TimeZone(identifier: descriptor.timeZoneIdentifier)
+        components.year = descriptor.year
+        components.month = descriptor.month
+        components.day = descriptor.day
+        components.hour = descriptor.hour
+        components.minute = descriptor.minute
+        components.second = 0
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        // Same identifier replaces the existing pending request in place.
+        try await center.add(UNNotificationRequest(identifier: descriptor.identifier, content: content, trigger: trigger))
+    }
+
+    func removePending(identifiers: [String]) async {
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 }

@@ -186,6 +186,15 @@ public struct SavedLocation: Codable, Hashable, Identifiable, Sendable {
         )
     }
 
+    /// True when cached forecasts for `previous` would be misleading for this definition:
+    /// coordinates, time zone, or enabled event types changed. Display name, forecast days,
+    /// refresh interval, and notification preferences do not affect cached forecast content.
+    public func invalidatesCachedForecasts(comparedTo previous: SavedLocation) -> Bool {
+        normalizedCoordinateKey != previous.normalizedCoordinateKey
+            || timeZoneIdentifier != previous.timeZoneIdentifier
+            || enabledEvents != previous.enabledEvents
+    }
+
     public func validated(againstExisting existing: [SavedLocation] = []) throws -> SavedLocation {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
