@@ -55,8 +55,8 @@ Run the test suite before submitting pull requests:
 # Standard unit tests (mocked networking, no live API required)
 swift test --package-path .
 
-# Sanitizers are not run on every pull request (see .github/workflows/ci-extended.yml,
-# which runs weekly and on demand). Run them locally for concurrency/memory changes:
+# Sanitizers are not run on every pull request to conserve runner minutes.
+# Run them locally for concurrency/memory changes:
 # Concurrency and thread safety verification
 swift test --package-path . --sanitize=thread
 

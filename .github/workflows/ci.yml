@@ -2,8 +2,7 @@ name: CI
 
 # Default CI is intentionally lightweight: one macOS job (package tests, project
 # drift, metadata) plus one cheap Linux job (secret scan). Expensive work
-# (universal build, DMG packaging, Intel runtime, sanitizers) lives in
-# ci-extended.yml and runs manually or weekly. No signing identity, provisioning
+# (universal build, DMG packaging, sanitizers) can be run locally. No signing identity, provisioning
 # profile, or notarization is required anywhere.
 
 on:

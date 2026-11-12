@@ -43,7 +43,6 @@ This document tracks runtime invariants, platform integration boundaries, and ve
 ## Continuous Integration
 
 - `ci.yml` (pull requests and `main`): one macOS job (`swift test`, XcodeGen drift check, release metadata) plus a Linux secret scan.
-- `ci-extended.yml` (manual `workflow_dispatch` and weekly): unsigned universal Release build, Intel runtime, DMG widget-absence check, Thread Sanitizer, Address Sanitizer.
 - No workflow requires a signing identity, provisioning profile, or notarization. Release binaries are still built locally with `scripts/release-local.sh`.
 
 ## Verification Commands
