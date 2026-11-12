@@ -153,11 +153,46 @@ final class LocationLifecycleTests: XCTestCase {
     // MARK: - Cache preservation / invalidation
 
     func testRenameKeepsCacheAndTriggersNoNetworkRequest() async throws {
-        let location = makeLocation()
-        var snapshot = oldSnapshot(for: location)
-        snapshot.fetchedAt = Date()
-        snapshot.lastAttemptAt = Date()
-        // Two days of coverage so a non-forced refresh has nothing to do.
+        let location = makeLocation(forecastDays: 2, sunrise: true, sunset: true)
+        let now = Date()
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = location.timeZone!
+        let today = cal.startOfDay(for: now)
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+
+        func makeEvent(_ type: EventType, on day: Date) -> EventForecast {
+            EventForecast(
+                responseTime: now,
+                location: location.coordinates,
+                gridLocation: location.coordinates,
+                eventType: type,
+                modelData: true,
+                quality: 0.85,
+                qualityText: "Great",
+                cloudCover: 0.1,
+                eventTime: day.addingTimeInterval(3600 * 12),
+                direction: 180,
+                blueHour: nil,
+                goldenHour: nil,
+                forecastDate: day
+            )
+        }
+
+        let fullForecasts = [
+            makeEvent(.sunrise, on: today),
+            makeEvent(.sunset, on: today),
+            makeEvent(.sunrise, on: tomorrow),
+            makeEvent(.sunset, on: tomorrow),
+        ]
+
+        let snapshot = CachedLocationSnapshot(
+            locationID: location.id,
+            fetchedAt: now,
+            lastAttemptAt: now,
+            forecasts: fullForecasts,
+            status: .current
+        )
+
         let transport = MockHTTPTransport()
         let cache = InMemoryForecastCache(snapshots: [location.id: snapshot])
         let (coordinator, settings, _) = makeCoordinator(location: location, transport: transport, cache: cache)
@@ -166,11 +201,13 @@ final class LocationLifecycleTests: XCTestCase {
         renamed.name = "Renamed"
         try await settings.save(SharedAppState(locations: [renamed]))
         XCTAssertFalse(renamed.invalidatesCachedForecasts(comparedTo: location))
+
         // AppModel calls refreshLocation(force: false) for non-meaningful edits.
         _ = await coordinator.refreshLocation(id: location.id, force: false)
 
+        XCTAssertTrue(transport.requests.isEmpty, "No network request should be triggered for a fresh cache with complete coverage")
         let kept = try await cache.loadSnapshot(for: location.id)
-        XCTAssertEqual(kept?.forecasts.count, 1, "Cache must survive a display-name change")
+        XCTAssertEqual(kept?.forecasts.count, 4, "Cache must survive a display-name change")
         XCTAssertEqual(kept?.forecasts.first?.location, location.coordinates)
     }
 
@@ -309,5 +346,153 @@ final class LocationLifecycleTests: XCTestCase {
         XCTAssertTrue(transport.requests.isEmpty, "Manual refresh must not bypass Retry-After")
         let stored = try await cache.loadSnapshot(for: location.id)
         XCTAssertEqual(stored?.status, limited.status)
+    }
+    func testIncreasingForecastDaysTriggersRefreshWhenMissingDisplayCoverage() async throws {
+        let location = makeLocation(forecastDays: 2, sunrise: false, sunset: true)
+        let now = Date()
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = location.timeZone!
+        let today = cal.startOfDay(for: now)
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+
+        func makeEvent(_ type: EventType, on day: Date) -> EventForecast {
+            EventForecast(
+                responseTime: now,
+                location: location.coordinates,
+                gridLocation: location.coordinates,
+                eventType: type,
+                modelData: true,
+                quality: 0.85,
+                qualityText: "Great",
+                cloudCover: 0.1,
+                eventTime: day.addingTimeInterval(3600 * 18),
+                direction: 270,
+                blueHour: nil,
+                goldenHour: nil,
+                forecastDate: day
+            )
+        }
+
+        let twoDayForecasts = [
+            makeEvent(.sunset, on: today),
+            makeEvent(.sunset, on: tomorrow),
+        ]
+
+        let snapshot = CachedLocationSnapshot(
+            locationID: location.id,
+            fetchedAt: now,
+            lastAttemptAt: now,
+            forecasts: twoDayForecasts,
+            status: .current
+        )
+
+        let body = try loadFixture("event_full")
+        let transport = MockHTTPTransport(stubs: [
+            .init(statusCode: 200, body: body),
+            .init(statusCode: 200, body: body),
+            .init(statusCode: 200, body: body),
+        ])
+        let cache = InMemoryForecastCache(snapshots: [location.id: snapshot])
+        let (coordinator, settings, _) = makeCoordinator(location: location, transport: transport, cache: cache)
+
+        // Increase forecastDays to 3
+        var expanded = location
+        expanded.forecastDays = 3
+        try await settings.save(SharedAppState(locations: [expanded]))
+
+        // Non-forced refresh should detect missing day 2 (third day) and refresh
+        let updated = await coordinator.refreshLocation(id: location.id, force: false)
+        XCTAssertEqual(transport.requests.count, 3, "Should fetch all 3 days because day 2 was missing")
+        XCTAssertNotNil(updated)
+    }
+
+    func testEditOrDeleteDuringPersistenceDiscardsSideEffects() async throws {
+        actor BlockingCache: ForecastCache {
+            var saveStarted: (@Sendable () -> Void)?
+            var proceedWithSave: (@Sendable () async -> Void)?
+            var internalCache = InMemoryForecastCache()
+
+            func setSaveStarted(_ action: (@Sendable () -> Void)?) {
+                self.saveStarted = action
+            }
+
+            func setProceedWithSave(_ action: (@Sendable () async -> Void)?) {
+                self.proceedWithSave = action
+            }
+
+            func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? {
+                try await internalCache.loadSnapshot(for: locationID)
+            }
+            func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? {
+                try await internalCache.loadBundle(for: locationID)
+            }
+            func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
+                saveStarted?()
+                if let proceedWithSave {
+                    await proceedWithSave()
+                }
+                return try await internalCache.saveSnapshot(snapshot)
+            }
+            func deleteLocation(_ locationID: UUID) async throws {
+                try await internalCache.deleteLocation(locationID)
+            }
+        }
+
+        final class SpySideEffectSink: ForecastRefreshSideEffectSink, @unchecked Sendable {
+            var emitted = false
+            func didPersistSnapshot(
+                location: SavedLocation,
+                previous: CachedLocationSnapshot?,
+                current: CachedLocationSnapshot,
+                wasSuccessfulNetworkRefresh: Bool
+            ) async {
+                emitted = true
+            }
+        }
+
+        let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
+        let body = try loadFixture("event_full")
+        let transport = MockHTTPTransport(stubs: [
+            .init(statusCode: 200, body: body),
+            .init(statusCode: 200, body: body),
+        ])
+        let blockingCache = BlockingCache()
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [location]))
+        let sink = SpySideEffectSink()
+
+        let coordinator = ForecastRefreshCoordinator(
+            settingsStore: settings,
+            forecastCache: blockingCache,
+            credentialStore: InMemoryCredentialStore(apiKey: "test-key"),
+            forecastService: ForecastService(transport: transport),
+            sideEffectSink: sink
+        )
+
+        let saveStartedExpectation = expectation(description: "saveSnapshot started")
+        var continuation: CheckedContinuation<Void, Never>?
+        await blockingCache.setSaveStarted {
+            saveStartedExpectation.fulfill()
+        }
+        await blockingCache.setProceedWithSave {
+            await withCheckedContinuation { c in
+                continuation = c
+            }
+        }
+
+        let refreshTask = Task {
+            await coordinator.refreshLocation(id: location.id, force: true)
+        }
+
+        await fulfillment(of: [saveStartedExpectation], timeout: 5)
+
+        // While suspended in saveSnapshot, delete the location
+        await coordinator.locationRemoved(id: location.id)
+
+        // Resume save
+        continuation?.resume()
+
+        let result = await refreshTask.value
+        XCTAssertNil(result, "Result should be discarded because location was removed")
+        XCTAssertFalse(sink.emitted, "Side effects must not be emitted when location is removed during persistence")
     }
 }

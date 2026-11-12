@@ -153,7 +153,7 @@ public actor ForecastRefreshCoordinator {
         for location in state.locations {
             let snapshot = try? await forecastCache.loadSnapshot(for: location.id)
             if let snapshot {
-                if snapshot.status == .current && !snapshot.hasOperationalCoverage(for: location, now: now) {
+                if snapshot.status == .current && (!snapshot.hasOperationalCoverage(for: location, now: now) || !snapshot.hasDisplayCoverage(for: location, now: now)) {
                     nextDates.append(now)
                 } else if let next = snapshot.nextScheduledRefresh(
                     refreshIntervalHours: location.refreshIntervalHours,
@@ -202,7 +202,8 @@ public actor ForecastRefreshCoordinator {
         case .current:
             let isFresh = existing.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now)
             let hasCoverage = existing.hasOperationalCoverage(for: location, now: now)
-            return !isFresh || !hasCoverage
+            let hasDisplay = existing.hasDisplayCoverage(for: location, now: now)
+            return !isFresh || !hasCoverage || !hasDisplay
         case .stale:
             if let next = existing.nextAttemptAt, next > now { return false }
             return true
@@ -497,6 +498,10 @@ public actor ForecastRefreshCoordinator {
             let result = try await forecastCache.saveSnapshot(candidate)
             switch result {
             case .committed(let snapshot):
+                // Re-verify that the location was not removed or edited while awaiting forecastCache.saveSnapshot
+                guard canPersist(locationID: location.id, generation: generation) else {
+                    return .discarded
+                }
                 await emitSideEffect(
                     location: location,
                     previous: previous,
@@ -505,6 +510,9 @@ public actor ForecastRefreshCoordinator {
                 )
                 return .committed(snapshot)
             case .rejectedStale(let authoritative):
+                guard canPersist(locationID: location.id, generation: generation) else {
+                    return .discarded
+                }
                 return .rejectedStale(authoritative)
             }
         } catch {

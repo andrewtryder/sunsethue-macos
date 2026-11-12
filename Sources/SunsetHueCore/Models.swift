@@ -284,6 +284,25 @@ public struct LocationForecastBundle: Codable, Hashable, Sendable {
         }
         return true
     }
+
+    /// Whether this bundle contains forecast coverage for every requested display day (0..<forecastDays)
+    /// for each enabled event.
+    public func hasDisplayCoverage(
+        for location: SavedLocation,
+        now: Date = Date()
+    ) -> Bool {
+        guard let timeZone = location.timeZone, !location.enabledEvents.isEmpty else {
+            return true
+        }
+        for dayOffset in 0..<max(1, location.forecastDays) {
+            for event in location.enabledEvents {
+                if forecast(dayOffset: dayOffset, eventType: event, timeZone: timeZone, now: now) == nil {
+                    return false
+                }
+            }
+        }
+        return true
+    }
 }
 
 public struct RefreshOutcome: Sendable {
@@ -485,6 +504,16 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
     ) -> Bool {
         guard let bundle else { return false }
         return bundle.hasOperationalCoverage(for: location, now: now)
+    }
+
+    /// Determines whether this snapshot has sufficient forecast coverage for all configured
+    /// display days (0..<forecastDays) for each enabled event.
+    public func hasDisplayCoverage(
+        for location: SavedLocation,
+        now: Date = Date()
+    ) -> Bool {
+        guard let bundle else { return false }
+        return bundle.hasDisplayCoverage(for: location, now: now)
     }
 
     public static func fromSuccessful(bundle: LocationForecastBundle, attemptedAt: Date = Date()) -> CachedLocationSnapshot {

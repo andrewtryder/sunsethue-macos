@@ -337,6 +337,7 @@ final class AppModel: ObservableObject {
             }
             await reloadSelectedSnapshot()
             await refreshCoordinator.scheduleNextRefresh()
+            await rescheduleNotifications()
         } catch let error as SunsetHueError {
             bannerMessage = error.userMessage
         } catch {
