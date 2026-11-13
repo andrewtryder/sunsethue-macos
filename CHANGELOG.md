@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/andrewtryder/sunsethue-macos/compare/v1.4.0...v1.4.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* update CI dependencies, Node runtime, and build number ([#17](https://github.com/andrewtryder/sunsethue-macos/issues/17)) ([458b969](https://github.com/andrewtryder/sunsethue-macos/commit/458b96943b51cd006ca44bffc85cbcc8d2a9f54e))
+
 ## [1.4.0](https://github.com/andrewtryder/sunsethue-macos/compare/v1.3.2...v1.4.0) (2026-11-12)
 
 
