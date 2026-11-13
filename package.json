@@ -2,13 +2,13 @@
   "name": "sunsethue-macos-tooling",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "commitlint": "commitlint"
   },
   "devDependencies": {
-    "@commitlint/cli": "19.8.1",
-    "@commitlint/config-conventional": "19.8.1"
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4"
   }
 }
