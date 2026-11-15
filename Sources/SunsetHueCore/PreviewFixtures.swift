@@ -1,5 +1,8 @@
 import Foundation
 
+// Preview/sample data only; force unwraps are intentional and crash-safe in previews.
+// swiftlint:disable force_unwrapping
+
 /// Public preview/sample data. Uses well-known public coordinates only. Never includes API keys.
 public enum PreviewFixtures {
     public static let sampleLocationID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!

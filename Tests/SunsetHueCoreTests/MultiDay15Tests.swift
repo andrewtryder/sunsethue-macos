@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class MultiDay15Tests: XCTestCase {
     func testBuildSectionsMatchesConfiguredForecastDays() {
@@ -159,7 +159,7 @@ final class MultiDay15Tests: XCTestCase {
         XCTAssertNil(best)
     }
 
-    func testSingleDayDisplayHorizonDoesNotExposeTomorrowInOpportunityBanner() {
+    func testSingleDayDisplayHorizonDoesNotExposeTomorrowInOpportunityBanner() throws {
         let loc = SavedLocation(
             id: UUID(),
             name: "Single Day Place",
@@ -172,10 +172,10 @@ final class MultiDay15Tests: XCTestCase {
         )
 
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/New_York")!
-        let now = cal.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 14, minute: 0))!
-        let todaySunset = cal.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 19, minute: 30))!
-        let tomorrowSunset = cal.date(from: DateComponents(year: 2026, month: 8, day: 22, hour: 19, minute: 30))!
+        cal.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let now = try XCTUnwrap(cal.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 14, minute: 0)))
+        let todaySunset = try XCTUnwrap(cal.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 19, minute: 30)))
+        let tomorrowSunset = try XCTUnwrap(cal.date(from: DateComponents(year: 2026, month: 8, day: 22, hour: 19, minute: 30)))
 
         let fToday = EventForecast(
             responseTime: now,
@@ -263,9 +263,9 @@ final class MultiDay15Tests: XCTestCase {
         XCTAssertEqual(sections[0].sunsetState, .available(sunsetOnly))
     }
 
-    func testRelativeDayLabelFormatting() {
-        let tz = TimeZone(identifier: "America/New_York")!
-        let ref = Date(timeIntervalSince1970: 1700000000)
+    func testRelativeDayLabelFormatting() throws {
+        let tz = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let ref = Date(timeIntervalSince1970: 1_700_000_000)
 
         XCTAssertEqual(PresentationFormatting.relativeDayLabel(dayOffset: 0, reference: ref, timeZone: tz), "Today")
         XCTAssertEqual(PresentationFormatting.relativeDayLabel(dayOffset: 1, reference: ref, timeZone: tz), "Tomorrow")

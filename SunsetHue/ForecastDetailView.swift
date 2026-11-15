@@ -1,5 +1,5 @@
-import SwiftUI
 import SunsetHueCore
+import SwiftUI
 
 struct ForecastDetailView: View {
     @EnvironmentObject private var appModel: AppModel
@@ -149,18 +149,18 @@ struct DayForecastSection: View {
 
             HStack(alignment: .top, spacing: 16) {
                 switch section.sunriseState {
-                case .available(let forecast):
+                case let .available(forecast):
                     EventForecastCard(forecast: forecast, timeZone: timeZone)
-                case .unavailable(let type):
+                case let .unavailable(type):
                     UnavailableEventCard(eventType: type)
                 case .disabled:
                     EmptyView()
                 }
 
                 switch section.sunsetState {
-                case .available(let forecast):
+                case let .available(forecast):
                     EventForecastCard(forecast: forecast, timeZone: timeZone)
-                case .unavailable(let type):
+                case let .unavailable(type):
                     UnavailableEventCard(eventType: type)
                 case .disabled:
                     EmptyView()
@@ -337,7 +337,9 @@ struct EventForecastCard: View {
         guard let window else { return "—" }
         let start = PresentationFormatting.timeString(window.start, timeZone: timeZone) ?? "—"
         let end = PresentationFormatting.timeString(window.end, timeZone: timeZone) ?? "—"
-        if window.start == nil && window.end == nil { return "Unavailable" }
+        if window.start == nil, window.end == nil {
+            return "Unavailable"
+        }
         return "\(start) – \(end)"
     }
 }

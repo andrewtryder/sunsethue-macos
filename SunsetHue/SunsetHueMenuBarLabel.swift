@@ -1,5 +1,5 @@
-import SwiftUI
 import SunsetHueCore
+import SwiftUI
 
 /// Compact, monochrome, system-rendered menu-bar status item label.
 struct SunsetHueMenuBarLabel: View {

@@ -36,7 +36,7 @@ public enum DailyNotificationSchedulePlanner: Sendable {
         }
 
         var plans: [DailyNotificationSlotPlan] = []
-        for dayOffset in 0..<max(0, dayCount) {
+        for dayOffset in 0 ..< max(0, dayCount) {
             guard let dayStart = calendar.date(byAdding: .day, value: dayOffset, to: startOfToday) else { continue }
             let ymd = dayKey(dayStart, calendar: calendar)
             for (slot, minutes) in minutesSlots {

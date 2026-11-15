@@ -30,19 +30,19 @@ enum ResponseParser {
             throw SunsetHueError.invalidResponse("event_type_mismatch")
         }
         let modelData = try requiredBool(data, key: "model_data")
-        return EventForecast(
-            responseTime: try parseDateTime(try requiredString(payload, key: "time")),
-            location: try parseCoordinates(try requiredObject(payload, key: "location")),
-            gridLocation: try parseCoordinates(try requiredObject(payload, key: "grid_location")),
+        return try EventForecast(
+            responseTime: parseDateTime(requiredString(payload, key: "time")),
+            location: parseCoordinates(requiredObject(payload, key: "location")),
+            gridLocation: parseCoordinates(requiredObject(payload, key: "grid_location")),
             eventType: eventType,
             modelData: modelData,
-            quality: try optionalBoundedNumber(data, key: "quality", minimum: 0, maximum: 1),
-            qualityText: try optionalString(data, key: "quality_text"),
-            cloudCover: try optionalBoundedNumber(data, key: "cloud_cover", minimum: 0, maximum: 1),
-            eventTime: try optionalDateTime(data, key: "time"),
-            direction: try parseDirection(data),
-            blueHour: try optionalMagicWindow(data, name: "blue_hour"),
-            goldenHour: try optionalMagicWindow(data, name: "golden_hour")
+            quality: optionalBoundedNumber(data, key: "quality", minimum: 0, maximum: 1),
+            qualityText: optionalString(data, key: "quality_text"),
+            cloudCover: optionalBoundedNumber(data, key: "cloud_cover", minimum: 0, maximum: 1),
+            eventTime: optionalDateTime(data, key: "time"),
+            direction: parseDirection(data),
+            blueHour: optionalMagicWindow(data, name: "blue_hour"),
+            goldenHour: optionalMagicWindow(data, name: "golden_hour")
         )
     }
 
@@ -143,15 +143,17 @@ enum ResponseParser {
     }
 
     private static func parseCoordinates(_ value: [String: Any]) throws -> Coordinates {
-        Coordinates(
-            latitude: try requiredBoundedNumber(value, key: "latitude", minimum: -90, maximum: 90),
-            longitude: try requiredBoundedNumber(value, key: "longitude", minimum: -180, maximum: 180)
+        try Coordinates(
+            latitude: requiredBoundedNumber(value, key: "latitude", minimum: -90, maximum: 90),
+            longitude: requiredBoundedNumber(value, key: "longitude", minimum: -180, maximum: 180)
         )
     }
 
     private static func parseDirection(_ data: [String: Any]) throws -> Double? {
         let direction = try optionalBoundedNumber(data, key: "direction", minimum: 0, maximum: 360)
-        if direction == 360 { return 0 }
+        if direction == 360 {
+            return 0
+        }
         return direction
     }
 
@@ -184,7 +186,9 @@ enum ResponseParser {
     }
 
     private static func hasTimeZoneDesignator(_ value: String) -> Bool {
-        if value.hasSuffix("Z") || value.hasSuffix("z") { return true }
+        if value.hasSuffix("Z") || value.hasSuffix("z") {
+            return true
+        }
         // Offset after the time component, e.g. ...T12:00:00+00:00 or ...T12:00:00-05:00
         guard let tIndex = value.firstIndex(of: "T") else { return false }
         let afterT = value[tIndex...]
@@ -206,7 +210,9 @@ enum ResponseParser {
     }
 
     private static func parseMagicElement(_ value: Any, name: String) throws -> Date? {
-        if value is NSNull { return nil }
+        if value is NSNull {
+            return nil
+        }
         guard let string = value as? String else {
             throw SunsetHueError.invalidResponse("invalid_\(name)")
         }

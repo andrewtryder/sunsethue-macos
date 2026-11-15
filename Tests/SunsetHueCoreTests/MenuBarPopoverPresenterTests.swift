@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class MenuBarPopoverPresenterTests: XCTestCase {
     private let timeZone = PreviewFixtures.sampleTimeZone
@@ -40,7 +40,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         )
     }
 
-    // 1. One row is generated per configured location.
+    /// 1. One row is generated per configured location.
     func testOneRowPerConfiguredLocation() {
         let loc1 = makeLocation(name: "New York")
         let loc2 = makeLocation(name: "Los Angeles")
@@ -66,7 +66,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertEqual(rows.count, 3)
     }
 
-    // 2. Configured location order is preserved.
+    /// 2. Configured location order is preserved.
     func testConfiguredLocationOrderIsPreserved() {
         let loc1 = makeLocation(name: "First")
         let loc2 = makeLocation(name: "Second")
@@ -86,10 +86,10 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertEqual(rows.map(\.name), ["First", "Second", "Third"])
     }
 
-    // 3. nextEvent independently resolves sunrise/sunset for each location.
-    func testNextEventIndependentlyResolvesForLocations() {
+    /// 3. nextEvent independently resolves sunrise/sunset for each location.
+    func testNextEventIndependentlyResolvesForLocations() throws {
         let today = calendar.startOfDay(for: Date())
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
 
         let locA = makeLocation(name: "Location A")
         let locB = makeLocation(name: "Location B")
@@ -121,7 +121,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         _ = sunriseTimeB
     }
 
-    // 4. Today event formatting does not unnecessarily prefix "Today".
+    /// 4. Today event formatting does not unnecessarily prefix "Today".
     func testTodayEventFormattingDoesNotPrefixToday() {
         let today = calendar.startOfDay(for: Date())
         let sunset = PreviewFixtures.excellentSunset(on: today)
@@ -145,11 +145,11 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertEqual(dayTimeLabel, expectedTime)
     }
 
-    // 5. Tomorrow/future events are clearly identified.
-    func testTomorrowAndFutureEventsAreClearlyIdentified() {
+    /// 5. Tomorrow/future events are clearly identified.
+    func testTomorrowAndFutureEventsAreClearlyIdentified() throws {
         let today = calendar.startOfDay(for: Date())
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
-        let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: today)!
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
+        let dayAfterTomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 2, to: today))
 
         let sunriseTomorrow = PreviewFixtures.averageSunrise(on: tomorrow).withForecastDate(tomorrow)
         let sunsetDayAfter = PreviewFixtures.excellentSunset(on: dayAfterTomorrow).withForecastDate(dayAfterTomorrow)
@@ -190,7 +190,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         _ = timeTomorrow
     }
 
-    // 6. Long/unavailable/error states produce concise fallback presentation data.
+    /// 6. Long/unavailable/error states produce concise fallback presentation data.
     func testUnavailableAndErrorStatesProduceConciseFallbackData() {
         let loc = makeLocation(name: "City")
         let prefs = MenuBarPreferences()
@@ -240,7 +240,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertEqual(disabledRow.statusSymbolName, "slash.circle")
     }
 
-    // 7. Selected location is identified correctly.
+    /// 7. Selected location is identified correctly.
     func testSelectedLocationIsIdentifiedCorrectly() {
         let loc1 = makeLocation(name: "A")
         let loc2 = makeLocation(name: "B")
@@ -268,7 +268,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertFalse(rows2[1].isSelected)
     }
 
-    // 8. Quality values format consistently.
+    /// 8. Quality values format consistently.
     func testQualityValuesFormatConsistently() {
         XCTAssertEqual(MenuBarStatusFormatting.compactPercentage(fromNormalized: 0.82), "82%")
         XCTAssertEqual(MenuBarStatusFormatting.compactPercentage(fromNormalized: 0.91), "91%")
@@ -278,7 +278,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertEqual(MenuBarStatusFormatting.compactPercentage(fromNormalized: nil), "—")
     }
 
-    // 9. Permanent menu-bar label resolves the selected location correctly.
+    /// 9. Permanent menu-bar label resolves the selected location correctly.
     func testPermanentMenuBarLabelResolvesSelectedLocation() {
         let loc1 = makeLocation(name: "A")
         let loc2 = makeLocation(name: "B")
@@ -294,7 +294,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertEqual(selected?.id, loc2.id)
     }
 
-    // 10. Single location produces exactly one row.
+    /// 10. Single location produces exactly one row.
     func testSingleConfiguredLocationProducesExactlyOneRow() {
         let loc = makeLocation(name: "Single Location")
         let prefs = MenuBarPreferences()
@@ -312,7 +312,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertTrue(rows.first?.isSelected == true)
     }
 
-    // 11. Five configured locations produce exactly five rows.
+    /// 11. Five configured locations produce exactly five rows.
     func testFiveConfiguredLocationsProduceFiveRows() {
         let names = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]
         let locations = names.map { makeLocation(name: $0) }
@@ -332,7 +332,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertEqual(rows.first(where: \.isSelected)?.name, "Chicago")
     }
 
-    // 12. Extremely long location names remain intact in the presentation model.
+    /// 12. Extremely long location names remain intact in the presentation model.
     func testLongLocationNamePreservedInModel() {
         let longName = "Washington, District of Columbia, United States of America"
         let loc = makeLocation(name: longName)
@@ -349,7 +349,7 @@ final class MenuBarPopoverPresenterTests: XCTestCase {
         XCTAssertEqual(rows.first?.name, longName)
     }
 
-    // 13. Every presenter row is defensive and never logically blank.
+    /// 13. Every presenter row is defensive and never logically blank.
     func testPresenterNeverGeneratesLogicallyBlankRow() {
         let today = calendar.startOfDay(for: Date())
         let sunset = PreviewFixtures.excellentSunset(on: today)

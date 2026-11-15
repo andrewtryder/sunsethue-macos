@@ -45,12 +45,10 @@ struct SectionCard<Content: View>: View {
 
 extension View {
     func sunsetHueMuted() -> some View {
-        self
-            .font(.caption)
+        font(.caption)
             .foregroundStyle(.secondary)
     }
 
-    @ViewBuilder
     func sunsetHueDisabledDim(_ disabled: Bool) -> some View {
         self
             .disabled(disabled)

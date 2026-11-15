@@ -1,8 +1,8 @@
 import AppKit
 import Foundation
-import SwiftUI
-import SunsetHueCore
 import os
+import SunsetHueCore
+import SwiftUI
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -53,7 +53,7 @@ final class AppModel: ObservableObject {
         self.settingsStore = settingsStore
         self.forecastCache = forecastCache
         self.credentialStore = credentialStore
-        self.notificationCoordinator = ForecastNotificationCoordinator()
+        notificationCoordinator = ForecastNotificationCoordinator()
         let coordinator = ForecastRefreshCoordinator(
             settingsStore: settingsStore,
             forecastCache: forecastCache,
@@ -61,9 +61,9 @@ final class AppModel: ObservableObject {
             forecastService: forecastService,
             sideEffectSink: sideEffectBox
         )
-        self.refreshCoordinator = coordinator
-        self.backgroundRefreshController = BackgroundRefreshController(refreshCoordinator: coordinator)
-        self.state = SharedAppState()
+        refreshCoordinator = coordinator
+        backgroundRefreshController = BackgroundRefreshController(refreshCoordinator: coordinator)
+        state = SharedAppState()
         sideEffectBox.impl = AppForecastRefreshSideEffects(
             notificationCoordinator: notificationCoordinator,
             settingsStore: settingsStore,
@@ -132,7 +132,7 @@ final class AppModel: ObservableObject {
         return state.locations.first(where: { $0.id == selectedLocationID })
     }
 
-    public typealias MenuBarPopoverRow = SunsetHueCore.MenuBarPopoverRow
+    typealias MenuBarPopoverRow = SunsetHueCore.MenuBarPopoverRow
 
     /// Compact rows per configured location for the menu-bar window popup.
     func menuBarPopoverRows(
@@ -150,23 +150,33 @@ final class AppModel: ObservableObject {
     }
 
     private func beginRefreshIndicator(_ ids: [UUID]) {
-        for id in ids { refreshCounts[id, default: 0] += 1 }
+        for id in ids {
+            refreshCounts[id, default: 0] += 1
+        }
         syncRefreshIndicators()
     }
 
     private func endRefreshIndicator(_ ids: [UUID]) {
         for id in ids {
             let remaining = (refreshCounts[id] ?? 1) - 1
-            if remaining <= 0 { refreshCounts.removeValue(forKey: id) } else { refreshCounts[id] = remaining }
+            if remaining <= 0 {
+                refreshCounts.removeValue(forKey: id)
+            } else {
+                refreshCounts[id] = remaining
+            }
         }
         syncRefreshIndicators()
     }
 
     private func syncRefreshIndicators() {
         let ids = Set(refreshCounts.keys)
-        if ids != refreshingLocationIDs { refreshingLocationIDs = ids }
+        if ids != refreshingLocationIDs {
+            refreshingLocationIDs = ids
+        }
         let busy = !ids.isEmpty
-        if busy != isRefreshing { isRefreshing = busy }
+        if busy != isRefreshing {
+            isRefreshing = busy
+        }
     }
 
     func isRefreshing(locationID: UUID) -> Bool {
@@ -262,7 +272,7 @@ final class AppModel: ObservableObject {
     func handle(url: URL) {
         guard let link = DeepLink.parse(url) else { return }
         switch link {
-        case .location(let id):
+        case let .location(id):
             if state.locations.contains(where: { $0.id == id }) {
                 selectLocation(id: id)
             }
@@ -387,8 +397,7 @@ final class AppModel: ObservableObject {
     }
 
     func refreshSelected(force: Bool) async {
-        guard let location = selectedLocation else { return }
-        guard !isRefreshing(locationID: location.id) else { return }
+        guard let location = selectedLocation, !isRefreshing(locationID: location.id) else { return }
         beginRefreshIndicator([location.id])
         defer { endRefreshIndicator([location.id]) }
         _ = await refreshCoordinator.refreshLocation(id: location.id, force: force, trigger: .manual)
@@ -420,7 +429,8 @@ final class AppModel: ObservableObject {
 
         // Only bump revision if threshold or event mode changed on THIS specific rule
         if rule.qualityAlert.threshold != previousRule.qualityAlert.threshold
-            || rule.qualityAlert.eventMode != previousRule.qualityAlert.eventMode {
+            || rule.qualityAlert.eventMode != previousRule.qualityAlert.eventMode
+        {
             rule.qualityAlert.revision += 1
         }
 
@@ -428,7 +438,7 @@ final class AppModel: ObservableObject {
         await updateNotificationPreferences(next)
     }
 
-    func updateNotificationMaster(enabled: Bool) async {
+    func updateNotificationsEnabled(_ enabled: Bool) async {
         var next = notificationPreferences
         next.notificationsEnabled = enabled
         await updateNotificationPreferences(next)
@@ -445,10 +455,10 @@ final class AppModel: ObservableObject {
         let previous = notificationPreferences
         let enablingNotifications =
             (next.notificationsEnabled && !previous.notificationsEnabled)
-            || (next.hasAnyDeliveryRuleEnabled && !previous.hasAnyDeliveryRuleEnabled)
+                || (next.hasAnyDeliveryRuleEnabled && !previous.hasAnyDeliveryRuleEnabled)
 
         if next.notificationsEnabled || next.hasAnyDeliveryRuleEnabled {
-            let result = (try? await notificationCoordinator.ensureAuthorization()) ?? .unavailable
+            let result = await (try? notificationCoordinator.ensureAuthorization()) ?? .unavailable
             await notificationCoordinator.refreshAuthorizationStatus()
             notificationAuthorization = await notificationCoordinator.authorizationState
             if enablingNotifications, result == .denied {
@@ -494,11 +504,10 @@ final class AppModel: ObservableObject {
     }
 
     func copyNotificationDiagnosticsToPasteboard() async {
-        let snapshot: NotificationDiagnosticsSnapshot
-        if let existing = lastNotificationDiagnostics {
-            snapshot = existing
+        let snapshot: NotificationDiagnosticsSnapshot = if let existing = lastNotificationDiagnostics {
+            existing
         } else {
-            snapshot = await buildNotificationDiagnostics(for: notificationTestResult)
+            await buildNotificationDiagnostics(for: notificationTestResult)
         }
         lastNotificationDiagnostics = snapshot
         NSPasteboard.general.clearContents()
@@ -643,7 +652,7 @@ final class AppModel: ObservableObject {
             } else {
                 lastErrorMessage = SunsetHueError.missingCredentials.userMessage
             }
-        case .rateLimited(let retryAfter):
+        case let .rateLimited(retryAfter):
             lastErrorIsAuthentication = false
             if let retryAfter {
                 lastErrorMessage = "Rate limited until \(retryAfter.formatted(date: .omitted, time: .shortened))."
@@ -674,7 +683,7 @@ final class AppModel: ObservableObject {
         let appGroupID: String?
         let isAppGroupAvailable: Bool
         switch mode {
-        case .teamAppGroup(let id):
+        case let .teamAppGroup(id):
             modeName = "Personal Team App Group"
             appGroupID = id
             isAppGroupAvailable = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) != nil
@@ -729,15 +738,13 @@ final class AppModel: ObservableObject {
         let recent = await recentActivities()
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? SunsetHueConstants.marketingVersion
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
-        let authDesc: String = {
-            switch notificationAuthorization {
-            case .authorized: return "Authorized"
-            case .denied: return "Denied"
-            case .notDetermined: return "Not Determined"
-            case .provisional: return "Provisional"
-            case .ephemeral: return "Ephemeral"
-            }
-        }()
+        let authDesc = switch notificationAuthorization {
+        case .authorized: "Authorized"
+        case .denied: "Denied"
+        case .notDetermined: "Not Determined"
+        case .provisional: "Provisional"
+        case .ephemeral: "Ephemeral"
+        }
 
         do {
             let text = try exporter.makePlainTextDiagnostics(
@@ -794,7 +801,9 @@ struct AppPreferenceDefaults {
 
     var defaultIncludeSunrise: Bool {
         get {
-            if defaults.object(forKey: "defaultIncludeSunrise") == nil { return true }
+            if defaults.object(forKey: "defaultIncludeSunrise") == nil {
+                return true
+            }
             return defaults.bool(forKey: "defaultIncludeSunrise")
         }
         nonmutating set { defaults.set(newValue, forKey: "defaultIncludeSunrise") }
@@ -802,7 +811,9 @@ struct AppPreferenceDefaults {
 
     var defaultIncludeSunset: Bool {
         get {
-            if defaults.object(forKey: "defaultIncludeSunset") == nil { return true }
+            if defaults.object(forKey: "defaultIncludeSunset") == nil {
+                return true
+            }
             return defaults.bool(forKey: "defaultIncludeSunset")
         }
         nonmutating set { defaults.set(newValue, forKey: "defaultIncludeSunset") }
@@ -810,7 +821,9 @@ struct AppPreferenceDefaults {
 
     var openMainWindowOnLaunch: Bool {
         get {
-            if defaults.object(forKey: "openMainWindowOnLaunch") == nil { return true }
+            if defaults.object(forKey: "openMainWindowOnLaunch") == nil {
+                return true
+            }
             return defaults.bool(forKey: "openMainWindowOnLaunch")
         }
         nonmutating set { defaults.set(newValue, forKey: "openMainWindowOnLaunch") }
@@ -849,15 +862,15 @@ struct LocationEditorDraft: Equatable {
     }
 
     init(location: SavedLocation) {
-        self.id = location.id
-        self.name = location.name
-        self.latitude = String(location.latitude)
-        self.longitude = String(location.longitude)
-        self.timeZoneIdentifier = location.timeZoneIdentifier
-        self.forecastDays = location.forecastDays
-        self.includeSunrise = location.includeSunrise
-        self.includeSunset = location.includeSunset
-        self.refreshIntervalHours = location.refreshIntervalHours
+        id = location.id
+        name = location.name
+        latitude = String(location.latitude)
+        longitude = String(location.longitude)
+        timeZoneIdentifier = location.timeZoneIdentifier
+        forecastDays = location.forecastDays
+        includeSunrise = location.includeSunrise
+        includeSunset = location.includeSunset
+        refreshIntervalHours = location.refreshIntervalHours
     }
 
     init(
@@ -884,7 +897,8 @@ struct LocationEditorDraft: Equatable {
 
     func makeLocation() throws -> SavedLocation {
         guard let lat = Double(latitude.trimmingCharacters(in: .whitespacesAndNewlines)),
-              let lon = Double(longitude.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+              let lon = Double(longitude.trimmingCharacters(in: .whitespacesAndNewlines))
+        else {
             throw SunsetHueError.invalidCoordinates
         }
         return SavedLocation(

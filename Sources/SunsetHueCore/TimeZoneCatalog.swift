@@ -67,7 +67,7 @@ public enum TimeZoneCatalog: Sendable {
     public static func searchableText(
         for identifier: String,
         now: Date = Date(),
-        locale: Locale = .autoupdatingCurrent
+        locale _: Locale = .autoupdatingCurrent
     ) -> String {
         guard let zone = TimeZone(identifier: identifier) else { return identifier }
         let abbreviation = zone.abbreviation(for: now) ?? ""

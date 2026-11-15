@@ -8,6 +8,10 @@ public struct DiagnosticsExportOptions: Sendable {
     }
 }
 
+// The diagnostics report intentionally nests its Codable payload structs inside
+// `DiagnosticsReport` to mirror the exported JSON schema (one namespace per
+// export section). Top-level types would pollute the module namespace.
+// swiftlint:disable nesting
 public struct DiagnosticsReport: Codable, Equatable, Sendable {
     public struct Application: Codable, Equatable, Sendable {
         public var version: String
@@ -166,7 +170,7 @@ public struct DiagnosticsExporter: Sendable {
             ),
             sandbox: .init(
                 appGroupAvailable: {
-                    if case .teamAppGroup(let id) = AppSupportPaths.currentStorageMode() {
+                    if case let .teamAppGroup(id) = AppSupportPaths.currentStorageMode() {
                         return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) != nil
                     }
                     return false
@@ -346,11 +350,13 @@ public struct DiagnosticsExporter: Sendable {
 
     private func architecture() -> String {
         #if arch(arm64)
-        return "arm64"
+            "arm64"
         #elseif arch(x86_64)
-        return "x86_64"
+            "x86_64"
         #else
-        return "unknown"
+            "unknown"
         #endif
     }
 }
+
+// swiftlint:enable nesting

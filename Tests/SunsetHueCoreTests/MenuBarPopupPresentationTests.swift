@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 /// Regression coverage for the menu bar popup lifecycle logic that can be exercised
 /// without a GUI session.
@@ -44,14 +44,14 @@ final class MenuBarPopupPresentationTests: XCTestCase {
         )
         XCTAssertEqual(rows1.count, 1)
 
-        let several = (1...5).map { makeLocation(name: "Loc \($0)") }
+        let several = (1 ... 5).map { makeLocation(name: "Loc \($0)") }
         let rows5 = MenuBarPopoverPresenter.buildRows(
             locations: several, snapshots: [:], preferences: prefs, selectedLocationID: several[2].id, now: now
         )
         XCTAssertEqual(rows5.count, 5)
 
         // More than maxVisibleRows (7): still one row per location; the view scrolls.
-        let many = (1...11).map { makeLocation(name: "Loc \($0)") }
+        let many = (1 ... 11).map { makeLocation(name: "Loc \($0)") }
         let rows11 = MenuBarPopoverPresenter.buildRows(
             locations: many, snapshots: [:], preferences: prefs, selectedLocationID: many[0].id, now: now
         )
@@ -80,7 +80,7 @@ final class MenuBarPopupPresentationTests: XCTestCase {
 
     /// Rotation mode with several locations always yields a finite wake in the future.
     func testNextWakeDateIsFiniteInRotationMode() {
-        let locations = (1...3).map { makeLocation(name: "Rot \($0)") }
+        let locations = (1 ... 3).map { makeLocation(name: "Rot \($0)") }
         let prefs = MenuBarPreferences(locationMode: .rotateLocations, rotationIntervalSeconds: 5)
         let now = Date()
 

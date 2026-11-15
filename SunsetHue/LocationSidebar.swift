@@ -6,7 +6,11 @@ struct LocationSidebar: View {
     var body: some View {
         List(selection: Binding(
             get: { appModel.selectedLocationID },
-            set: { if let id = $0 { appModel.selectLocation(id: id) } }
+            set: {
+                if let id = $0 {
+                    appModel.selectLocation(id: id)
+                }
+            }
         )) {
             Section("Locations") {
                 ForEach(appModel.state.locations) { location in

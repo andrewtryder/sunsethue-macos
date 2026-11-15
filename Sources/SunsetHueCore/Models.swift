@@ -23,13 +23,13 @@ public struct Coordinates: Codable, Hashable, Sendable {
     }
 
     public static func validateLatitude(_ value: Double) throws {
-        guard (-90...90).contains(value), value.isFinite else {
+        guard (-90 ... 90).contains(value), value.isFinite else {
             throw SunsetHueError.invalidCoordinates
         }
     }
 
     public static func validateLongitude(_ value: Double) throws {
-        guard (-180...180).contains(value), value.isFinite else {
+        guard (-180 ... 180).contains(value), value.isFinite else {
             throw SunsetHueError.invalidCoordinates
         }
     }
@@ -172,8 +172,12 @@ public struct SavedLocation: Codable, Hashable, Identifiable, Sendable {
 
     public var enabledEvents: [EventType] {
         var events: [EventType] = []
-        if includeSunrise { events.append(.sunrise) }
-        if includeSunset { events.append(.sunset) }
+        if includeSunrise {
+            events.append(.sunrise)
+        }
+        if includeSunset {
+            events.append(.sunset)
+        }
         return events
     }
 
@@ -204,7 +208,7 @@ public struct SavedLocation: Codable, Hashable, Identifiable, Sendable {
         guard TimeZone(identifier: timeZoneIdentifier) != nil else {
             throw SunsetHueError.invalidLocation("Time zone identifier is invalid.")
         }
-        guard (1...SunsetHueConstants.maxForecastDays).contains(forecastDays) else {
+        guard (1 ... SunsetHueConstants.maxForecastDays).contains(forecastDays) else {
             throw SunsetHueError.invalidLocation("Forecast days must be between 1 and 3.")
         }
         guard includeSunrise || includeSunset else {
@@ -248,8 +252,10 @@ public struct LocationForecastBundle: Codable, Hashable, Sendable {
     public init(locationID: UUID, fetchedAt: Date, keyedForecasts: [ForecastKey: EventForecast]) {
         self.locationID = locationID
         self.fetchedAt = fetchedAt
-        self.forecasts = keyedForecasts.keys.sorted { lhs, rhs in
-            if lhs.dayOffset != rhs.dayOffset { return lhs.dayOffset < rhs.dayOffset }
+        forecasts = keyedForecasts.keys.sorted { lhs, rhs in
+            if lhs.dayOffset != rhs.dayOffset {
+                return lhs.dayOffset < rhs.dayOffset
+            }
             return lhs.eventType.rawValue < rhs.eventType.rawValue
         }.compactMap { keyedForecasts[$0] }
     }
@@ -277,10 +283,8 @@ public struct LocationForecastBundle: Codable, Hashable, Sendable {
         guard let timeZone = location.timeZone, !location.enabledEvents.isEmpty else {
             return true
         }
-        for event in location.enabledEvents {
-            if forecast(dayOffset: 1, eventType: event, timeZone: timeZone, now: now) == nil {
-                return false
-            }
+        for event in location.enabledEvents where forecast(dayOffset: 1, eventType: event, timeZone: timeZone, now: now) == nil {
+            return false
         }
         return true
     }
@@ -294,11 +298,11 @@ public struct LocationForecastBundle: Codable, Hashable, Sendable {
         guard let timeZone = location.timeZone, !location.enabledEvents.isEmpty else {
             return true
         }
-        for dayOffset in 0..<max(1, location.forecastDays) {
-            for event in location.enabledEvents {
-                if forecast(dayOffset: dayOffset, eventType: event, timeZone: timeZone, now: now) == nil {
-                    return false
-                }
+        for dayOffset in 0 ..< max(1, location.forecastDays) {
+            for event in location.enabledEvents
+                where forecast(dayOffset: dayOffset, eventType: event, timeZone: timeZone, now: now) == nil
+            {
+                return false
             }
         }
         return true
@@ -436,7 +440,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let status = try container.decodeIfPresent(RefreshStatus.self, forKey: .status),
-           container.contains(.forecasts) {
+           container.contains(.forecasts)
+        {
             schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
                 ?? SunsetHueConstants.currentCacheSchemaVersion
             locationID = try container.decode(UUID.self, forKey: .locationID)
@@ -537,7 +542,7 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         switch status {
         case .authenticationRequired, .invalidRequest:
             return nil
-        case .rateLimited(let retryAfter):
+        case let .rateLimited(retryAfter):
             let base = retryAfter ?? nextAttemptAt ?? now
             let jitter = TimeInterval(SunsetHueConstants.rateLimitJitterSeconds(for: locationID))
             return max(now, base.addingTimeInterval(jitter))

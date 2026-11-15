@@ -98,11 +98,11 @@ public actor FileForecastCache: ForecastCache {
 
     public init(rootDirectory: URL, legacyMigrationRetryInterval: TimeInterval = 30) {
         self.legacyMigrationRetryInterval = legacyMigrationRetryInterval
-        self.cacheDirectory = rootDirectory.appendingPathComponent(
+        cacheDirectory = rootDirectory.appendingPathComponent(
             AppSupportPaths.cacheDirectoryName,
             isDirectory: true
         )
-        self.legacyFileURL = rootDirectory.appendingPathComponent(AppSupportPaths.legacyCacheFileName)
+        legacyFileURL = rootDirectory.appendingPathComponent(AppSupportPaths.legacyCacheFileName)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 
@@ -164,7 +164,7 @@ public actor FileForecastCache: ForecastCache {
         var saveResult: CacheSaveResult = .committed(normalized)
 
         let coordinator = NSFileCoordinator()
-        let decoder = self.decoder
+        let decoder = decoder
         coordinator.coordinate(
             writingItemAt: url,
             options: [.forReplacing],
@@ -174,7 +174,8 @@ public actor FileForecastCache: ForecastCache {
                 if FileManager.default.fileExists(atPath: writeURL.path),
                    let existingData = try? Data(contentsOf: writeURL),
                    existingData.count <= SunsetHueConstants.maxCacheFileBytes,
-                   let existing = try? decoder.decode(CachedLocationSnapshot.self, from: existingData) {
+                   let existing = try? decoder.decode(CachedLocationSnapshot.self, from: existingData)
+                {
                     if normalized.fetchedAt < existing.fetchedAt, normalized.status == .current, existing.status == .current {
                         saveResult = .rejectedStale(authoritative: existing)
                         return
@@ -198,8 +199,12 @@ public actor FileForecastCache: ForecastCache {
                 writeError = error
             }
         }
-        if let coordinatorError { throw coordinatorError }
-        if let writeError { throw writeError }
+        if let coordinatorError {
+            throw coordinatorError
+        }
+        if let writeError {
+            throw writeError
+        }
         return saveResult
     }
 
@@ -225,7 +230,9 @@ public actor FileForecastCache: ForecastCache {
         /// All entries are present in the new layout and the source was moved to `.migrated-<stamp>`.
         public var completed = false
 
-        public var isClean: Bool { failedLocationIDs.isEmpty && !sourceUnreadable }
+        public var isClean: Bool {
+            failedLocationIDs.isEmpty && !sourceUnreadable
+        }
     }
 
     public private(set) var lastLegacyMigrationReport: LegacyMigrationReport?
@@ -239,7 +246,8 @@ public actor FileForecastCache: ForecastCache {
     private func migrateLegacyIfNeeded() throws {
         guard !didMigrateLegacy else { return }
         if let last = lastLegacyMigrationAttempt,
-           Date().timeIntervalSince(last) < legacyMigrationRetryInterval {
+           Date().timeIntervalSince(last) < legacyMigrationRetryInterval
+        {
             return
         }
         guard FileManager.default.fileExists(atPath: legacyFileURL.path) else {
@@ -315,7 +323,8 @@ public actor FileForecastCache: ForecastCache {
 
     private func destinationIsValid(_ url: URL) -> Bool {
         guard let data = try? CoordinatedFileIO.readData(from: url, maxBytes: SunsetHueConstants.maxCacheFileBytes),
-              let snapshot = try? decoder.decode(CachedLocationSnapshot.self, from: data) else {
+              let snapshot = try? decoder.decode(CachedLocationSnapshot.self, from: data)
+        else {
             return false
         }
         return snapshot.schemaVersion <= SunsetHueConstants.currentCacheSchemaVersion

@@ -9,7 +9,7 @@ final class MenuBarPreferencesStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.preferences = Self.load(from: defaults)
+        preferences = Self.load(from: defaults)
     }
 
     func update(_ mutate: (inout MenuBarPreferences) -> Void) {
@@ -38,7 +38,8 @@ final class MenuBarPreferencesStore: ObservableObject {
 
     private static func load(from defaults: UserDefaults) -> MenuBarPreferences {
         if let data = defaults.data(forKey: MenuBarPreferences.storageKey),
-           let decoded = try? JSONDecoder().decode(MenuBarPreferences.self, from: data) {
+           let decoded = try? JSONDecoder().decode(MenuBarPreferences.self, from: data)
+        {
             var prefs = decoded
             prefs.rotationIntervalSeconds = MenuBarPreferences.clampRotationInterval(prefs.rotationIntervalSeconds)
             prefs.schemaVersion = MenuBarPreferences.currentSchemaVersion
@@ -47,7 +48,8 @@ final class MenuBarPreferencesStore: ObservableObject {
 
         var prefs = MenuBarPreferences()
         if let legacy = defaults.string(forKey: MenuBarPreferences.legacyDisplayStyleKey),
-           let style = MenuBarPreferences.migratedDisplayStyle(fromLegacyRaw: legacy) {
+           let style = MenuBarPreferences.migratedDisplayStyle(fromLegacyRaw: legacy)
+        {
             prefs.displayStyle = style
         }
         return prefs

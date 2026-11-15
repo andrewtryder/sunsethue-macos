@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import SunsetHueCore
+import SwiftUI
 
 @main
 struct SunsetHueApp: App {
@@ -49,7 +49,7 @@ struct SunsetHueApp: App {
         .defaultLaunchBehavior(
             AppPreferenceDefaults.shared.openMainWindowOnLaunch ? .presented : .suppressed
         )
-        .handlesExternalEvents(matching: Set(arrayLiteral: "*"))
+        .handlesExternalEvents(matching: ["*"])
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Add Location…") {

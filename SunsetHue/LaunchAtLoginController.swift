@@ -10,25 +10,27 @@ enum LaunchAtLoginStatus: Equatable, Sendable {
     static func current() -> LaunchAtLoginStatus {
         switch SMAppService.mainApp.status {
         case .enabled:
-            return .enabled
+            .enabled
         case .requiresApproval:
-            return .requiresApproval
+            .requiresApproval
         case .notFound:
-            return .unavailable
+            .unavailable
         case .notRegistered:
-            return .notRegistered
+            .notRegistered
         @unknown default:
-            return .unavailable
+            .unavailable
         }
     }
 }
 
 @MainActor
 final class LaunchAtLoginController: ObservableObject {
-    @Published private(set) var status: LaunchAtLoginStatus = LaunchAtLoginStatus.current()
+    @Published private(set) var status: LaunchAtLoginStatus = .current()
     @Published var errorMessage: String?
 
-    var isEnabled: Bool { status == .enabled }
+    var isEnabled: Bool {
+        status == .enabled
+    }
 
     static var isEnabled: Bool {
         LaunchAtLoginStatus.current() == .enabled

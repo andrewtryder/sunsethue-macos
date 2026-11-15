@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 import SunsetHueCore
 
 struct MenuBarLabelContent: Equatable, Sendable {
@@ -126,18 +126,19 @@ final class MenuBarLabelController: ObservableObject {
     private func restartSchedule() {
         scheduleTask?.cancel()
         scheduleTask = nil
-        guard !isPopupPresented else { return }
-        guard let appModel, let preferencesStore else { return }
+        guard !isPopupPresented, let appModel, let preferencesStore else { return }
 
         scheduleTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self, let appModel = self.appModel, let preferencesStore = self.preferencesStore else {
                     return
                 }
-                if self.isPopupPresented { return }
+                if isPopupPresented {
+                    return
+                }
 
                 let now = Date()
-                self.refreshNow(at: now)
+                refreshNow(at: now)
 
                 let wake = MenuBarRotationLogic.nextWakeDate(
                     locations: appModel.state.locations,
@@ -145,7 +146,7 @@ final class MenuBarLabelController: ObservableObject {
                     preferences: preferencesStore.preferences,
                     selectedLocationID: appModel.selectedLocationID,
                     now: now,
-                    epoch: self.epoch
+                    epoch: epoch
                 )
                 let delay = max(0.5, wake.timeIntervalSince(now))
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))

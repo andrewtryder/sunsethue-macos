@@ -1,6 +1,6 @@
-import WidgetKit
-import SwiftUI
 import SunsetHueCore
+import SwiftUI
+import WidgetKit
 
 private enum WidgetPreviewData {
     static func entry(
@@ -77,7 +77,7 @@ private enum WidgetPreviewData {
                     quality: quality,
                     qualityText: qualityText,
                     eventType: .sunset
-                )
+                ),
             ]
         )
     }

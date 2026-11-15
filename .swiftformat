@@ -1,0 +1,21 @@
+# SwiftFormat owns formatting; SwiftLint (.swiftlint.yml) owns code-quality rules.
+# Minimum rules between the two are kept non-overlapping: SwiftFormat is the only
+# tool that rewrites whitespace/line-wrapping; SwiftLint disables its style rules
+# that SwiftFormat also enforces.
+#
+# Repo language mode: Swift 5 (SWIFT_VERSION=5.0 / swiftLanguageMode(.v5)),
+# compiled with the Swift 6 toolchain.
+
+--swift-version 5.10
+
+# Keep imports tidy project-wide (sortImports is enabled by default; pinned here
+# for clarity). It sorts import lines without touching semantics.
+--enable sortImports
+
+# Rules intentionally left off:
+# - nilInitialization: repository convention allows `var x: T? = nil` for clarity.
+# - blankLinesAtStartOfScope/blankLinesAtEndOfScope: existing code uses leading
+#   blank lines in some scopes for readability; churn not worth it.
+
+# Never touch these directories.
+--exclude .build,.git,.swiftpm,build,dist,DerivedData,node_modules,SunsetHue.xcodeproj,Tests/SunsetHueCoreTests/Fixtures

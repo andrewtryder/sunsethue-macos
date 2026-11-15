@@ -22,7 +22,7 @@ public enum QualityAlertEvaluator: Sendable {
         preferences: NotificationPreferences,
         ledger: [NotificationLedgerEntry],
         wasSuccessfulNetworkRefresh: Bool,
-        now: Date = Date(),
+        now _: Date = Date(),
         locale: Locale = .autoupdatingCurrent
     ) -> [QualityAlertCandidate] {
         let rule = preferences.rule(for: location.id).qualityAlert
@@ -30,7 +30,8 @@ public enum QualityAlertEvaluator: Sendable {
               rule.enabled,
               wasSuccessfulNetworkRefresh,
               snapshot.status == .current,
-              let timeZone = location.timeZone else {
+              let timeZone = location.timeZone
+        else {
             return []
         }
 
@@ -40,10 +41,8 @@ public enum QualityAlertEvaluator: Sendable {
         for forecast in snapshot.forecasts {
             guard allowed.contains(forecast.eventType),
                   let quality = forecast.quality,
-                  quality >= rule.threshold else {
-                continue
-            }
-            guard let forecastDate = forecast.forecastDate else { continue }
+                  quality >= rule.threshold,
+                  let forecastDate = forecast.forecastDate else { continue }
             let dateKey = localDateKey(forecastDate, timeZone: timeZone)
             let key = NotificationOccurrenceKey(
                 ruleID: rule.id,

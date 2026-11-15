@@ -89,23 +89,27 @@ public enum ForecastFreshnessPresenter: Sendable {
             let action = credentialState == .unavailable
                 ? "Unlock your Mac so the Keychain is available, then refresh."
                 : credentialState == .missing
-                    ? "Add your API key in Settings → Account."
-                    : "SunsetHue rejected the API key. Check or replace it in Settings → Account."
+                ? "Add your API key in Settings → Account."
+                : "SunsetHue rejected the API key. Check or replace it in Settings → Account."
             let detail = [action, savedPhrase].compactMap { $0 }.joined(separator: " ")
             return make(.authenticationRequired, "API key needs attention", detail, updated, nil,
                         isRefreshing, hasForecasts, true, "key.slash")
 
-        case .rateLimited(let retryAfter):
+        case let .rateLimited(retryAfter):
             var detail = "SunsetHue asked the app to slow down."
             if let retryAfter, retryAfter > now {
                 detail += " Next attempt after \(timeString(retryAfter, locale: locale, zone: displayTimeZone))."
             }
-            if let savedPhrase { detail += " \(savedPhrase)" }
+            if let savedPhrase {
+                detail += " \(savedPhrase)"
+            }
             return make(.rateLimited, "Rate limited", detail, updated, next, isRefreshing, hasForecasts, true, "hourglass")
 
         case .temporarilyUnavailable:
             var detail = hasForecasts ? (savedPhrase ?? "") : "No saved forecast is available yet."
-            if next != nil { detail += " Retrying automatically." }
+            if next != nil {
+                detail += " Retrying automatically."
+            }
             return make(.networkFailure, "Can't reach SunsetHue",
                         detail.trimmingCharacters(in: .whitespaces), updated, next,
                         isRefreshing, hasForecasts, true, "wifi.exclamationmark")
@@ -117,7 +121,9 @@ public enum ForecastFreshnessPresenter: Sendable {
 
         case .invalidResponse:
             var detail = "SunsetHue returned an unexpected response."
-            if let savedPhrase { detail += " \(savedPhrase)" }
+            if let savedPhrase {
+                detail += " \(savedPhrase)"
+            }
             return make(.rejected, "Unexpected response", detail, updated, next,
                         isRefreshing, hasForecasts, true, "exclamationmark.triangle")
         }
@@ -129,10 +135,10 @@ public enum ForecastFreshnessPresenter: Sendable {
         switch seconds {
         case ..<60: return "just now"
         case ..<3600: return "\(Int(seconds / 60)) min ago"
-        case ..<86_400:
+        case ..<86400:
             return "\(Int(seconds / 3600)) hr ago"
         default:
-            let days = Int(seconds / 86_400)
+            let days = Int(seconds / 86400)
             return days == 1 ? "1 day ago" : "\(days) days ago"
         }
     }
@@ -150,7 +156,9 @@ public enum ForecastFreshnessPresenter: Sendable {
             timeZone: location?.timeZone,
             now: now
         ) else { return nil }
-        if next <= now.addingTimeInterval(60) { return "Next refresh: soon" }
+        if next <= now.addingTimeInterval(60) {
+            return "Next refresh: soon"
+        }
         return "Next refresh around \(timeString(next, locale: locale, zone: zone, now: now))"
     }
 
@@ -192,4 +200,3 @@ public enum ForecastFreshnessPresenter: Sendable {
         )
     }
 }
-

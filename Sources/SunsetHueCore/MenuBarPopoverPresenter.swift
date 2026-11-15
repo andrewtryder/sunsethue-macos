@@ -61,7 +61,8 @@ public enum MenuBarPopoverPresenter: Sendable {
             now: now
         )
 
-        let isStale = (snapshot?.status == .stale) || (snapshot != nil && !snapshot!.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now))
+        let isStale = (snapshot?.status == .stale)
+            || !(snapshot?.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now) ?? true)
 
         if let item {
             let dayTime = MenuBarStatusFormatting.compactDayTimeLabel(

@@ -15,9 +15,9 @@ public struct NoOpForecastRefreshSideEffectSink: ForecastRefreshSideEffectSink {
     public init() {}
 
     public func didPersistSnapshot(
-        location: SavedLocation,
-        previous: CachedLocationSnapshot?,
-        current: CachedLocationSnapshot,
-        wasSuccessfulNetworkRefresh: Bool
+        location _: SavedLocation,
+        previous _: CachedLocationSnapshot?,
+        current _: CachedLocationSnapshot,
+        wasSuccessfulNetworkRefresh _: Bool
     ) async {}
 }

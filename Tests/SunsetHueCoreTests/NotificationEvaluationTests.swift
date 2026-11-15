@@ -1,5 +1,8 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
+
+// Test code: static-identifier fixtures and setUp-established state are safe to unwrap.
+// swiftlint:disable force_unwrapping
 
 final class NotificationEvaluationTests: XCTestCase {
     private let timeZone = PreviewFixtures.sampleTimeZone
@@ -40,11 +43,11 @@ final class NotificationEvaluationTests: XCTestCase {
         XCTAssertTrue(body.contains("sunset"), body)
     }
 
-    func testDailyPlannerOneAndTwoSlots() {
+    func testDailyPlannerOneAndTwoSlots() throws {
         let location = PreviewFixtures.sampleLocation
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        let now = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: Date())!
+        let now = try XCTUnwrap(calendar.date(bySettingHour: 7, minute: 0, second: 0, of: Date()))
 
         let one = DailyNotificationSchedulePlanner.plans(
             location: location,
@@ -70,7 +73,7 @@ final class NotificationEvaluationTests: XCTestCase {
         XCTAssertEqual(two.map(\.slotNumber), [1, 2])
     }
 
-    func testDailyPlannerUsesLocationTimeZoneNotHost() {
+    func testDailyPlannerUsesLocationTimeZoneNotHost() throws {
         let tokyo = SavedLocation(
             id: PreviewFixtures.sampleLocationID,
             name: "Tokyo",
@@ -83,9 +86,9 @@ final class NotificationEvaluationTests: XCTestCase {
             refreshIntervalHours: 6
         )
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
         // Local 07:00 in Tokyo
-        let now = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: Date())!
+        let now = try XCTUnwrap(calendar.date(bySettingHour: 7, minute: 0, second: 0, of: Date()))
         let plans = DailyNotificationSchedulePlanner.plans(
             location: tokyo,
             rule: DailySummaryRule(enabled: true, firstTimeMinutes: 8 * 60),
@@ -93,16 +96,16 @@ final class NotificationEvaluationTests: XCTestCase {
             dayCount: 1
         )
         XCTAssertEqual(plans.count, 1)
-        let components = DailyNotificationSchedulePlanner.dateComponents(
+        let components = try DailyNotificationSchedulePlanner.dateComponents(
             for: plans[0],
-            timeZone: tokyo.timeZone!
+            timeZone: XCTUnwrap(tokyo.timeZone)
         )
         XCTAssertEqual(components.timeZone?.identifier, "Asia/Tokyo")
         XCTAssertEqual(components.hour, 8)
         XCTAssertEqual(components.minute, 0)
     }
 
-    func testDailyPlannerAcrossDSTSpringForward() {
+    func testDailyPlannerAcrossDSTSpringForward() throws {
         let location = PreviewFixtures.sampleLocation
         var components = DateComponents()
         components.year = 2026
@@ -111,7 +114,7 @@ final class NotificationEvaluationTests: XCTestCase {
         components.hour = 7
         components.minute = 0
         components.timeZone = timeZone
-        let now = Calendar(identifier: .gregorian).date(from: components)!
+        let now = try XCTUnwrap(Calendar(identifier: .gregorian).date(from: components))
         let plans = DailyNotificationSchedulePlanner.plans(
             location: location,
             rule: DailySummaryRule(enabled: true, firstTimeMinutes: 8 * 60, secondTimeEnabled: false),
@@ -232,7 +235,7 @@ final class NotificationEvaluationTests: XCTestCase {
         )
     }
 
-    func testOccurrenceNotifiedOnlyOnceAndDifferentDateAllowed() {
+    func testOccurrenceNotifiedOnlyOnceAndDifferentDateAllowed() throws {
         let location = PreviewFixtures.sampleLocation
         let rule = QualityAlertRule(enabled: true, eventMode: .sunset, threshold: 0.5)
         let prefs = NotificationPreferences(
@@ -262,7 +265,7 @@ final class NotificationEvaluationTests: XCTestCase {
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())))
         let nextDay = CachedLocationSnapshot.fromSuccessful(
             bundle: LocationForecastBundle(
                 locationID: location.id,
@@ -273,7 +276,7 @@ final class NotificationEvaluationTests: XCTestCase {
                         qualityText: "Excellent",
                         eventType: .sunset,
                         on: tomorrow
-                    ).withForecastDate(tomorrow)
+                    ).withForecastDate(tomorrow),
                 ]
             )
         )
@@ -325,11 +328,11 @@ final class NotificationEvaluationTests: XCTestCase {
         XCTAssertEqual(again[0].key.revision, 2)
     }
 
-    func testDailyIdentifiersAreStableAndLocationScoped() {
+    func testDailyIdentifiersAreStableAndLocationScoped() throws {
         let location = PreviewFixtures.sampleLocation
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        let now = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: Date())!
+        let now = try XCTUnwrap(calendar.date(bySettingHour: 7, minute: 0, second: 0, of: Date()))
         let plans = DailyNotificationSchedulePlanner.plans(
             location: location,
             rule: DailySummaryRule(enabled: true, firstTimeMinutes: 8 * 60),
@@ -362,7 +365,7 @@ final class NotificationEvaluationTests: XCTestCase {
         )
         let old = NotificationLedgerEntry(
             key: key,
-            recordedAt: Date().addingTimeInterval(-10 * 86_400)
+            recordedAt: Date().addingTimeInterval(-10 * 86400)
         )
         let recent = NotificationLedgerEntry(key: key, recordedAt: Date())
         let pruned = NotificationDeliveryLedgerMath.prune([old, recent])
@@ -392,7 +395,7 @@ final class NotificationEvaluationTests: XCTestCase {
                         quality: quality,
                         qualityText: quality >= 0.75 ? "Excellent" : "Good",
                         eventType: eventType
-                    )
+                    ),
                 ]
             )
         )

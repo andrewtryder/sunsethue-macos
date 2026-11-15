@@ -1,6 +1,6 @@
 import Foundation
-import SunsetHueCore
 import os
+import SunsetHueCore
 
 /// Manages an opportunistic macOS NSBackgroundActivityScheduler for periodic forecast updates.
 @MainActor
@@ -39,7 +39,7 @@ final class BackgroundRefreshController: ObservableObject {
             }
 
             if activity.shouldDefer {
-                self.logger.info("Background forecast refresh deferred by system energy management")
+                logger.info("Background forecast refresh deferred by system energy management")
                 Task { @MainActor in
                     self.lastActivityAt = Date()
                     self.lastDisposition = "deferred"
@@ -48,7 +48,7 @@ final class BackgroundRefreshController: ObservableObject {
                 return
             }
 
-            self.logger.info("Starting background forecast refresh")
+            logger.info("Starting background forecast refresh")
             Task {
                 await self.refreshCoordinator.refreshAllStaleLocations(trigger: .backgroundActivity)
                 await MainActor.run {

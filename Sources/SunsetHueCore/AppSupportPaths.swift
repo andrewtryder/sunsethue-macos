@@ -24,7 +24,10 @@ public struct StorageEnvironment: Sendable {
         teamIdentifier: { SunsetHueConstants.teamIdentifier },
         groupContainerURL: { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) },
         applicationSupportURL: {
-            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            // `urls(for:in:)` always returns at least one URL for standard directories.
+            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+                .appendingPathComponent("Library/Application Support", isDirectory: true)
             return support.appendingPathComponent("SunsetHue", isDirectory: true)
         }
     )
@@ -39,7 +42,8 @@ public struct StoragePathResolver: Sendable {
 
     public func resolveContainerURL() -> (mode: StorageMode, url: URL) {
         guard let rawTeamID = environment.teamIdentifier()?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !rawTeamID.isEmpty else {
+              !rawTeamID.isEmpty
+        else {
             let local = environment.applicationSupportURL()
             try? FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
             return (.localApplicationSupport, local)
@@ -117,7 +121,9 @@ public enum AppSupportPaths: Sendable {
         /// File names that could not be copied. Sources are never deleted, so the next launch retries them.
         public var failedItems: [String]
 
-        public var isComplete: Bool { failedItems.isEmpty }
+        public var isComplete: Bool {
+            failedItems.isEmpty
+        }
 
         public init(
             copiedSettings: Bool,
@@ -152,8 +158,9 @@ public enum AppSupportPaths: Sendable {
         fileManager: FileManager = .default,
         resolver: StoragePathResolver = StoragePathResolver()
     ) -> StorageMigrationResult {
-        guard case .teamAppGroup(let groupID) = resolver.resolveStorageMode(),
-              let targetURL = resolver.environment.groupContainerURL(groupID) else {
+        guard case let .teamAppGroup(groupID) = resolver.resolveStorageMode(),
+              let targetURL = resolver.environment.groupContainerURL(groupID)
+        else {
             return StorageMigrationResult(copiedSettings: false, copiedLegacyCache: false, copiedCacheFileCount: 0)
         }
         let sourceURL = resolver.environment.applicationSupportURL()
@@ -171,7 +178,7 @@ public enum AppSupportPaths: Sendable {
         // 1. Settings file: app-state.json
         let sourceSettings = sourceURL.appendingPathComponent(settingsFileName)
         let targetSettings = targetURL.appendingPathComponent(settingsFileName)
-        if fileManager.fileExists(atPath: sourceSettings.path) && !fileManager.fileExists(atPath: targetSettings.path) {
+        if fileManager.fileExists(atPath: sourceSettings.path), !fileManager.fileExists(atPath: targetSettings.path) {
             do {
                 try StorageMigrationResult.safeCopy(sourceSettings, to: targetSettings, fileManager: fileManager)
                 copiedSettings = true
@@ -183,7 +190,7 @@ public enum AppSupportPaths: Sendable {
         // 2. Legacy cache: forecast-cache.json
         let sourceLegacyCache = sourceURL.appendingPathComponent(legacyCacheFileName)
         let targetLegacyCache = targetURL.appendingPathComponent(legacyCacheFileName)
-        if fileManager.fileExists(atPath: sourceLegacyCache.path) && !fileManager.fileExists(atPath: targetLegacyCache.path) {
+        if fileManager.fileExists(atPath: sourceLegacyCache.path), !fileManager.fileExists(atPath: targetLegacyCache.path) {
             do {
                 try StorageMigrationResult.safeCopy(sourceLegacyCache, to: targetLegacyCache, fileManager: fileManager)
                 copiedLegacyCache = true

@@ -42,7 +42,7 @@ public struct ForecastService: Sendable {
         )
 
         var keys: [ForecastKey] = []
-        for (offset, _) in dates.enumerated() {
+        for offset in dates.indices {
             for event in events {
                 keys.append(ForecastKey(dayOffset: offset, eventType: event))
             }

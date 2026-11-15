@@ -1,18 +1,18 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class Diagnostics13Tests: XCTestCase {
     func testRefreshActivityRecorderBoundedCapacity() async {
         let recorder = RefreshActivityRecorder(maxEntries: 50)
         let locationID = UUID()
 
-        for i in 1...60 {
+        for index in 1 ... 60 {
             await recorder.record(
                 locationID: locationID,
-                locationName: "Location \(i)",
+                locationName: "Location \(index)",
                 trigger: .scheduled,
                 result: .refreshedSuccessfully,
-                details: "Run \(i)"
+                details: "Run \(index)"
             )
         }
 
@@ -124,17 +124,17 @@ final class Diagnostics13Tests: XCTestCase {
         XCTAssertFalse(text.contains("\(location.longitude)"))
     }
 
-    func testWidgetReloadStateTracker() {
+    func testWidgetReloadStateTracker() throws {
         let tracker = WidgetReloadStateTracker.shared
         let beforeRequest = Date()
         tracker.recordReloadRequest()
         XCTAssertNotNil(tracker.lastReloadRequested)
-        XCTAssertGreaterThanOrEqual(tracker.lastReloadRequested!, beforeRequest)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(tracker.lastReloadRequested), beforeRequest)
 
         let beforeCommit = Date()
         tracker.recordCacheCommit()
         XCTAssertNotNil(tracker.lastCacheCommit)
-        XCTAssertGreaterThanOrEqual(tracker.lastCacheCommit!, beforeCommit)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(tracker.lastCacheCommit), beforeCommit)
     }
 
     func testCoordinatorRecordsRefreshActivity() async throws {
@@ -233,12 +233,19 @@ final class Diagnostics13Tests: XCTestCase {
     }
 
     private actor FailingForecastCache: ForecastCache {
-        func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? { nil }
-        func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? { nil }
-        func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
+        func loadSnapshot(for _: UUID) async throws -> CachedLocationSnapshot? {
+            nil
+        }
+
+        func loadBundle(for _: UUID) async throws -> LocationForecastBundle? {
+            nil
+        }
+
+        func saveSnapshot(_: CachedLocationSnapshot) async throws -> CacheSaveResult {
             throw SunsetHueError.invalidResponse("Disk IO Failure")
         }
-        func deleteLocation(_ locationID: UUID) async throws {}
+
+        func deleteLocation(_: UUID) async throws {}
     }
 
     func testPersistenceFailureRecordsFailureAndNeverRecordsSuccess() async throws {

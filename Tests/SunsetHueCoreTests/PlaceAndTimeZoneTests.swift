@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class PlaceAndTimeZoneTests: XCTestCase {
     func testApplyResolvedPlaceFillsNameCoordinatesAndTimeZone() {
@@ -60,7 +60,8 @@ final class PlaceAndTimeZoneTests: XCTestCase {
 
     func testCatalogFiltersUnknownCandidates() {
         for identifier in TimeZoneCatalog.unitedStatesCandidates + TimeZoneCatalog.europeCandidates
-            where TimeZone(identifier: identifier) == nil {
+            where TimeZone(identifier: identifier) == nil
+        {
             XCTAssertFalse(TimeZoneCatalog.unitedStates.contains(identifier))
             XCTAssertFalse(TimeZoneCatalog.europe.contains(identifier))
         }
@@ -83,7 +84,8 @@ final class PlaceAndTimeZoneTests: XCTestCase {
         XCTAssertTrue(edtMatches.contains("America/New_York") || edtMatches.contains("Europe/London") == false)
         // America/New_York is on EDT around this date.
         if let abbreviation = TimeZone(identifier: "America/New_York")?.abbreviation(for: now),
-           abbreviation.localizedCaseInsensitiveContains("EDT") {
+           abbreviation.localizedCaseInsensitiveContains("EDT")
+        {
             XCTAssertEqual(edtMatches, ["America/New_York"])
         }
 

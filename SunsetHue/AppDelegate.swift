@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
-import UserNotifications
 import SunsetHueCore
+import UserNotifications
 
 /// Keeps widget deep links from spawning a second SunsetHue process when one
 /// is already running (common when both Xcode DerivedData and /Applications exist).
@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private var isSecondaryInstance = false
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         // The menu bar popup (.menuBarExtraStyle(.window)) is often the only open window.
         // Returning true (the AppKit default) makes dismissing the popup quit the entire
         // app — the status item disappears and the user must relaunch. SunsetHue is a
@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         false
     }
 
-    func applicationWillFinishLaunching(_ notification: Notification) {
+    func applicationWillFinishLaunching(_: Notification) {
         UNUserNotificationCenter.current().delegate = self
 
         DistributedNotificationCenter.default().addObserver(
@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         isSecondaryInstance = !others.isEmpty
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         let menuBarOnly = UserDefaults.standard.bool(forKey: "menuBarOnlyMode")
         AppPresentationModeController.apply(menuBarOnly: menuBarOnly)
 
@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NSApp.terminate(nil)
     }
 
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
             NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
         }
@@ -58,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// Posted when the Dock icon is clicked and no windows are visible.
     static let reopenMainWindowNotification = Notification.Name("com.andrewtryder.SunsetHue.reopenMainWindow")
 
-    func application(_ application: NSApplication, open urls: [URL]) {
+    func application(_: NSApplication, open urls: [URL]) {
         if isSecondaryInstance {
             for url in urls {
                 DistributedNotificationCenter.default().postNotificationName(
@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
+        _: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         let identifier = notification.request.identifier
@@ -97,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
+        _: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
         // Test notifications (and any request without a location) must not deep-link.

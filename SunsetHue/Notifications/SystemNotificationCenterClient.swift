@@ -1,6 +1,6 @@
 import Foundation
-import UserNotifications
 import SunsetHueCore
+import UserNotifications
 
 struct SystemNotificationCenterClient: NotificationCenterClienting {
     private let center: UNUserNotificationCenter
@@ -32,11 +32,10 @@ struct SystemNotificationCenterClient: NotificationCenterClienting {
         if request.playSound {
             content.sound = .default
         }
-        let trigger: UNNotificationTrigger?
-        if request.delaySeconds > 0 {
-            trigger = UNTimeIntervalNotificationTrigger(timeInterval: request.delaySeconds, repeats: false)
+        let trigger: UNNotificationTrigger? = if request.delaySeconds > 0 {
+            UNTimeIntervalNotificationTrigger(timeInterval: request.delaySeconds, repeats: false)
         } else {
-            trigger = nil
+            nil
         }
         let unRequest = UNNotificationRequest(
             identifier: request.identifier,
@@ -64,21 +63,21 @@ struct SystemNotificationCenterClient: NotificationCenterClienting {
 
     private func mapAuth(_ status: UNAuthorizationStatus) -> NotificationSettingsSnapshot.AuthorizationStatus {
         switch status {
-        case .notDetermined: return .notDetermined
-        case .denied: return .denied
-        case .authorized: return .authorized
-        case .provisional: return .provisional
-        case .ephemeral: return .ephemeral
-        @unknown default: return .unknown
+        case .notDetermined: .notDetermined
+        case .denied: .denied
+        case .authorized: .authorized
+        case .provisional: .provisional
+        case .ephemeral: .ephemeral
+        @unknown default: .unknown
         }
     }
 
     private func mapSetting(_ setting: UNNotificationSetting) -> NotificationSettingsSnapshot.Setting {
         switch setting {
-        case .enabled: return .enabled
-        case .disabled: return .disabled
-        case .notSupported: return .notSupported
-        @unknown default: return .unknown
+        case .enabled: .enabled
+        case .disabled: .disabled
+        case .notSupported: .notSupported
+        @unknown default: .unknown
         }
     }
 }

@@ -5,10 +5,14 @@ public enum DeepLink: Equatable, Sendable {
     case openApp
 
     public static func locationURL(id: UUID) -> URL {
+        // Static scheme + UUID string: literal is always a valid URL.
+        // swiftlint:disable:next force_unwrapping
         URL(string: "\(SunsetHueConstants.urlScheme)://location/\(id.uuidString)")!
     }
 
     public static func openAppURL() -> URL {
+        // Static scheme literal: always a valid URL.
+        // swiftlint:disable:next force_unwrapping
         URL(string: "\(SunsetHueConstants.urlScheme)://")!
     }
 
@@ -24,10 +28,11 @@ public enum DeepLink: Equatable, Sendable {
             return .openApp
         }
         // Support path-style sunsethue:///location/<id>
-        if (host == nil || host?.isEmpty == true),
+        if host == nil || host?.isEmpty == true,
            pathParts.count >= 2,
            pathParts[0].lowercased() == "location",
-           let id = UUID(uuidString: pathParts[1]) {
+           let id = UUID(uuidString: pathParts[1])
+        {
             return .location(id)
         }
         return .openApp

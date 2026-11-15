@@ -28,7 +28,9 @@ public struct MenuBarPreferences: Codable, Equatable, Sendable {
     }
 
     public static func clampRotationInterval(_ value: Int) -> Int {
-        if allowedRotationIntervals.contains(value) { return value }
+        if allowedRotationIntervals.contains(value) {
+            return value
+        }
         return 10
     }
 
@@ -59,13 +61,13 @@ public enum MenuBarDisplayStyle: String, Codable, CaseIterable, Sendable {
     public var settingsLabel: String {
         switch self {
         case .iconOnly:
-            return "Icon only"
+            "Icon only"
         case .eventQuality:
-            return "Event and quality"
+            "Event and quality"
         case .locationEventQuality:
-            return "Location, event, and quality"
+            "Location, event, and quality"
         case .locationEventQualityTime:
-            return "Location, event, quality, and time"
+            "Location, event, quality, and time"
         }
     }
 }
@@ -78,19 +80,19 @@ public enum MenuBarEventSelection: String, Codable, CaseIterable, Sendable {
     public var settingsLabel: String {
         switch self {
         case .nextEvent:
-            return "Next sunrise or sunset"
+            "Next sunrise or sunset"
         case .nextSunset:
-            return "Next sunset"
+            "Next sunset"
         case .nextSunrise:
-            return "Next sunrise"
+            "Next sunrise"
         }
     }
 
     public var requiredEventType: EventType? {
         switch self {
-        case .nextEvent: return nil
-        case .nextSunset: return .sunset
-        case .nextSunrise: return .sunrise
+        case .nextEvent: nil
+        case .nextSunset: .sunset
+        case .nextSunrise: .sunrise
         }
     }
 }
@@ -102,9 +104,9 @@ public enum MenuBarLocationMode: String, Codable, CaseIterable, Sendable {
     public var settingsLabel: String {
         switch self {
         case .selectedLocation:
-            return "Selected location"
+            "Selected location"
         case .rotateLocations:
-            return "Rotate through all configured locations"
+            "Rotate through all configured locations"
         }
     }
 }

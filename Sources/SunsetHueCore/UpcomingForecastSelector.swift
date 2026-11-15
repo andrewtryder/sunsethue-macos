@@ -14,7 +14,8 @@ public enum UpcomingForecastSelector: Sendable {
             bundle.forecasts
                 .filter { forecast in
                     guard allowedTypes.contains(forecast.eventType),
-                          let eventTime = forecast.eventTime else {
+                          let eventTime = forecast.eventTime
+                    else {
                         return false
                     }
                     // Strictly future so the widget advances at sunrise/sunset instant.

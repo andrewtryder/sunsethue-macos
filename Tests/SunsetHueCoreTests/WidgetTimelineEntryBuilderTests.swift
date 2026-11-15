@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class WidgetTimelineEntryBuilderTests: XCTestCase {
     func testMissingCacheNeverUsesPreviewFixtures() {

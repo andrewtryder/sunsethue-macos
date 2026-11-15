@@ -25,8 +25,8 @@ struct MagicHourView: View {
             }
 
             ForEach(Array(selectedHourLines.enumerated()), id: \.offset) { _, line in
-                if line.systemImage != nil {
-                    Label(line.text, systemImage: line.systemImage!)
+                if let systemImage = line.systemImage {
+                    Label(line.text, systemImage: systemImage)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -61,8 +61,12 @@ struct MagicHourView: View {
 
         switch preferred {
         case .both:
-            if let golden { lines.append(golden) }
-            if let blue { lines.append(blue) }
+            if let golden {
+                lines.append(golden)
+            }
+            if let blue {
+                lines.append(blue)
+            }
         case .preferGolden:
             if let golden {
                 lines.append(golden)

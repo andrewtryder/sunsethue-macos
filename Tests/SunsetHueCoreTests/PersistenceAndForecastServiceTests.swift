@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class PersistenceAndForecastServiceTests: XCTestCase {
     func testInMemoryCredentialStoreRoundTrip() throws {
@@ -161,8 +161,8 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         XCTAssertEqual(outcome.error, .timeout)
     }
 
-    func testAtomicFailureDiscardsPartialResults() async {
-        let body = try! loadFixture("event_full")
+    func testAtomicFailureDiscardsPartialResults() async throws {
+        let body = try loadFixture("event_full")
         let location = SavedLocation(
             name: "Sample Harbor",
             latitude: 40.7128,
@@ -209,13 +209,13 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         XCTAssertEqual(PresentationFormatting.percentageValue(fromNormalized: 0.456), 45.6)
     }
 
-    func testPresentationTimeStringRespectsTwelveHourLocale() {
+    func testPresentationTimeStringRespectsTwelveHourLocale() throws {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let date = calendar.date(from: DateComponents(year: 2026, month: 8, day: 2, hour: 20, minute: 6))!
-        let formatted = PresentationFormatting.timeString(
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 2, hour: 20, minute: 6)))
+        let formatted = try PresentationFormatting.timeString(
             date,
-            timeZone: TimeZone(identifier: "America/New_York")!,
+            timeZone: XCTUnwrap(TimeZone(identifier: "America/New_York")),
             locale: Locale(identifier: "en_US")
         )
         XCTAssertNotNil(formatted)
@@ -370,7 +370,7 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         XCTAssertLessThanOrEqual(stats.maxActive, 1)
     }
 
-    func testPersistenceFailurePreventsSideEffect() async throws {
+    func testPersistenceFailurePreventsSideEffect() async {
         let failingCache = FailingForecastCache()
         let spySink = SpySideEffectSink()
         let location = PreviewFixtures.sampleLocation
@@ -439,7 +439,7 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
         )
 
         await withTaskGroup(of: CachedLocationSnapshot?.self) { group in
-            for _ in 0..<10 {
+            for _ in 0 ..< 10 {
                 group.addTask {
                     await coordinator.refreshLocation(id: location.id, force: true)
                 }
@@ -452,12 +452,19 @@ final class PersistenceAndForecastServiceTests: XCTestCase {
 }
 
 private actor FailingForecastCache: ForecastCache {
-    func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? { nil }
-    func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? { nil }
-    func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
+    func loadSnapshot(for _: UUID) async throws -> CachedLocationSnapshot? {
+        nil
+    }
+
+    func loadBundle(for _: UUID) async throws -> LocationForecastBundle? {
+        nil
+    }
+
+    func saveSnapshot(_: CachedLocationSnapshot) async throws -> CacheSaveResult {
         throw SunsetHueError.storageCorrupt
     }
-    func deleteLocation(_ locationID: UUID) async throws {}
+
+    func deleteLocation(_: UUID) async throws {}
 }
 
 private actor GatedForecastCache: ForecastCache {
@@ -472,7 +479,9 @@ private actor GatedForecastCache: ForecastCache {
     }
 
     func waitForArrival() async {
-        if isArrived { return }
+        if isArrived {
+            return
+        }
         await withCheckedContinuation { continuation in
             arrivalContinuations.append(continuation)
         }
@@ -522,7 +531,7 @@ private actor TrackingHTTPTransport: HTTPTransport {
         self.stub = stub
     }
 
-    func perform(_ request: URLRequest) async throws -> HTTPResponse {
+    func perform(_: URLRequest) async throws -> HTTPResponse {
         activeRequests += 1
         totalRequests += 1
         if activeRequests > maxActiveRequests {
@@ -531,7 +540,9 @@ private actor TrackingHTTPTransport: HTTPTransport {
         defer {
             activeRequests -= 1
         }
-        if let error = stub.error { throw error }
+        if let error = stub.error {
+            throw error
+        }
         return HTTPResponse(statusCode: stub.statusCode, headers: stub.headers, body: stub.body)
     }
 
@@ -545,9 +556,9 @@ private actor SpySideEffectSink: ForecastRefreshSideEffectSink {
 
     func didPersistSnapshot(
         location: SavedLocation,
-        previous: CachedLocationSnapshot?,
+        previous _: CachedLocationSnapshot?,
         current: CachedLocationSnapshot,
-        wasSuccessfulNetworkRefresh: Bool
+        wasSuccessfulNetworkRefresh _: Bool
     ) async {
         calls.append((location, current))
     }

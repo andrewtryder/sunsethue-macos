@@ -23,12 +23,12 @@ public enum SunsetHueError: Error, Equatable, Sendable {
     public var isTransient: Bool {
         switch self {
         case .networkUnavailable, .timeout, .serviceUnavailable, .rateLimited, .unexpectedStatus:
-            return true
+            true
         case .authentication, .invalidRequest, .oversizedResponse, .invalidJSON,
              .invalidResponse, .missingCredentials, .keychainUnavailable,
              .keychainEntitlementMisconfigured, .invalidCoordinates,
              .invalidLocation, .duplicateLocation, .storageCorrupt, .storageTooLarge:
-            return false
+            false
         }
     }
 
@@ -40,59 +40,59 @@ public enum SunsetHueError: Error, Equatable, Sendable {
     public var userMessage: String {
         switch self {
         case .authentication:
-            return "Authentication failed. Open SunsetHue to update your API key."
+            "Authentication failed. Open SunsetHue to update your API key."
         case .invalidRequest, .invalidCoordinates:
-            return "The request or coordinates were rejected. Check latitude and longitude."
+            "The request or coordinates were rejected. Check latitude and longitude."
         case .rateLimited:
-            return "Rate limited by SunsetHue. Try again later."
+            "Rate limited by SunsetHue. Try again later."
         case .networkUnavailable:
-            return "Network unavailable. Showing the last saved forecast if available."
+            "Network unavailable. Showing the last saved forecast if available."
         case .timeout:
-            return "The request timed out. Try again shortly."
+            "The request timed out. Try again shortly."
         case .serviceUnavailable, .unexpectedStatus:
-            return "SunsetHue is temporarily unavailable."
+            "SunsetHue is temporarily unavailable."
         case .oversizedResponse:
-            return "The server response was unexpectedly large."
+            "The server response was unexpectedly large."
         case .invalidJSON, .invalidResponse:
-            return "Received an invalid response from SunsetHue."
+            "Received an invalid response from SunsetHue."
         case .missingCredentials:
-            return "Add your SunsetHue API key in the app."
+            "Add your SunsetHue API key in the app."
         case .keychainUnavailable:
-            return "Keychain is unavailable. Unlock your Mac and try again."
+            "Keychain is unavailable. Unlock your Mac and try again."
         case .keychainEntitlementMisconfigured:
-            return "Secure storage could not use the Data Protection Keychain for this build."
-        case .invalidLocation(let message):
-            return message
+            "Secure storage could not use the Data Protection Keychain for this build."
+        case let .invalidLocation(message):
+            message
         case .duplicateLocation:
-            return "A location with these coordinates already exists."
+            "A location with these coordinates already exists."
         case .storageCorrupt:
-            return "Saved data was damaged and was reset."
+            "Saved data was damaged and was reset."
         case .storageTooLarge:
-            return "Saved data exceeded the allowed size and was ignored."
+            "Saved data exceeded the allowed size and was ignored."
         }
     }
 
     /// Technical diagnostics without secrets.
     public var diagnosticDescription: String {
         switch self {
-        case .authentication: return "auth_failed"
-        case .invalidRequest: return "invalid_request"
-        case .rateLimited(let retry): return "rate_limited retry_after=\(retry.map(String.init) ?? "nil")"
-        case .networkUnavailable: return "network_unavailable"
-        case .timeout: return "timeout"
-        case .serviceUnavailable: return "service_unavailable"
-        case .oversizedResponse: return "oversized_response"
-        case .invalidJSON: return "invalid_json"
-        case .invalidResponse(let detail): return "invalid_response:\(detail)"
-        case .missingCredentials: return "missing_credentials"
-        case .keychainUnavailable: return "keychain_unavailable"
-        case .keychainEntitlementMisconfigured: return "keychain_entitlement_misconfigured"
-        case .invalidCoordinates: return "invalid_coordinates"
-        case .invalidLocation(let detail): return "invalid_location:\(detail)"
-        case .duplicateLocation: return "duplicate_location"
-        case .unexpectedStatus(let code): return "unexpected_status:\(code)"
-        case .storageCorrupt: return "storage_corrupt"
-        case .storageTooLarge: return "storage_too_large"
+        case .authentication: "auth_failed"
+        case .invalidRequest: "invalid_request"
+        case let .rateLimited(retry): "rate_limited retry_after=\(retry.map(String.init) ?? "nil")"
+        case .networkUnavailable: "network_unavailable"
+        case .timeout: "timeout"
+        case .serviceUnavailable: "service_unavailable"
+        case .oversizedResponse: "oversized_response"
+        case .invalidJSON: "invalid_json"
+        case let .invalidResponse(detail): "invalid_response:\(detail)"
+        case .missingCredentials: "missing_credentials"
+        case .keychainUnavailable: "keychain_unavailable"
+        case .keychainEntitlementMisconfigured: "keychain_entitlement_misconfigured"
+        case .invalidCoordinates: "invalid_coordinates"
+        case let .invalidLocation(detail): "invalid_location:\(detail)"
+        case .duplicateLocation: "duplicate_location"
+        case let .unexpectedStatus(code): "unexpected_status:\(code)"
+        case .storageCorrupt: "storage_corrupt"
+        case .storageTooLarge: "storage_too_large"
         }
     }
 }

@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import SunsetHueCore
+import SwiftUI
 
 /// Expanded menu-bar popup (`.menuBarExtraStyle(.window)`).
 struct SunsetHueMenuBarPopoverView: View {
@@ -169,7 +169,8 @@ struct SunsetHueMenuBarPopoverView: View {
         if let eventType = row.eventType,
            let eventLabel = row.eventLabel,
            let dayTimeLabel = row.dayTimeLabel,
-           let qualityLabel = row.qualityLabel {
+           let qualityLabel = row.qualityLabel
+        {
             // Normal forecast row: EVENT | TIME | QUALITY
             HStack(spacing: 6) {
                 HStack(spacing: 3) {

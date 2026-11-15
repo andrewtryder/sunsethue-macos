@@ -55,7 +55,7 @@ final class AppForecastRefreshSideEffects: ForecastRefreshSideEffectSink, @unche
             wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
         )
 
-        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        let state = await (try? settingsStore.load())?.value ?? SharedAppState()
         var snapshots: [UUID: CachedLocationSnapshot] = [:]
         for loc in state.locations {
             if loc.id == location.id {

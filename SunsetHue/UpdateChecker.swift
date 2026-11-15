@@ -32,18 +32,17 @@ struct UpdateChecker: Sendable {
         request.setValue(SunsetHueConstants.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             throw SunsetHueError.serviceUnavailable
         }
         let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let tag = (payload?["tag_name"] as? String)?.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
         let htmlURL = (payload?["html_url"] as? String).flatMap(URL.init(string:)) ?? releasesPageURL
         let latest = tag
-        let available: Bool
-        if let latest {
-            available = compareVersions(latest, currentVersion) == .orderedDescending
+        let available: Bool = if let latest {
+            compareVersions(latest, currentVersion) == .orderedDescending
         } else {
-            available = false
+            false
         }
         return UpdateCheckResult(
             currentVersion: currentVersion,

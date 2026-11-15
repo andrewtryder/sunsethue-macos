@@ -1,6 +1,6 @@
-import WidgetKit
-import SwiftUI
 import SunsetHueCore
+import SwiftUI
+import WidgetKit
 
 struct SunsetHueWidget: Widget {
     let kind = "SunsetHueWidget"

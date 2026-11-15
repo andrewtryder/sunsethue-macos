@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 actor FakeNotificationCenterClient: NotificationCenterClienting {
     var settings: NotificationSettingsSnapshot
@@ -16,7 +16,9 @@ actor FakeNotificationCenterClient: NotificationCenterClienting {
         self.settings = settings
     }
 
-    func notificationSettings() async -> NotificationSettingsSnapshot { settings }
+    func notificationSettings() async -> NotificationSettingsSnapshot {
+        settings
+    }
 
     func requestAuthorization() async throws -> Bool {
         if grantAuthorization {
@@ -28,7 +30,9 @@ actor FakeNotificationCenterClient: NotificationCenterClienting {
     }
 
     func add(_ request: NotificationScheduleRequest) async throws {
-        if let addError { throw addError }
+        if let addError {
+            throw addError
+        }
         addedRequests.append(request)
         if clearPendingAfterAdd {
             return
@@ -36,8 +40,13 @@ actor FakeNotificationCenterClient: NotificationCenterClienting {
         pending.append(request.identifier)
     }
 
-    func pendingIdentifiers() async -> [String] { pending }
-    func deliveredIdentifiers() async -> [String] { delivered }
+    func pendingIdentifiers() async -> [String] {
+        pending
+    }
+
+    func deliveredIdentifiers() async -> [String] {
+        delivered
+    }
 
     func removePending(withIdentifiers identifiers: [String]) async {
         removedPending.append(identifiers)
@@ -54,26 +63,43 @@ actor FakeNotificationCenterClient: NotificationCenterClienting {
         addError: Error? = nil,
         pendingSeed: [String]? = nil
     ) {
-        if let clearPendingAfterAdd { self.clearPendingAfterAdd = clearPendingAfterAdd }
-        if let addError { self.addError = addError }
+        if let clearPendingAfterAdd {
+            self.clearPendingAfterAdd = clearPendingAfterAdd
+        }
+        if let addError {
+            self.addError = addError
+        }
         if addError == nil, clearPendingAfterAdd == nil {
             // allow explicit nil clear of error via separate call
         }
-        if addError == nil && clearPendingAfterAdd == nil && pendingSeed == nil {
+        if addError == nil, clearPendingAfterAdd == nil, pendingSeed == nil {
             // no-op
         }
-        if let pendingSeed { pending = pendingSeed }
+        if let pendingSeed {
+            pending = pendingSeed
+        }
         if clearPendingAfterAdd == nil, addError == nil {
             // keep
         }
     }
 
-    func setClearPendingAfterAdd(_ value: Bool) { clearPendingAfterAdd = value }
-    func setAddError(_ error: Error?) { addError = error }
-    func seedPending(_ ids: [String]) { pending = ids }
+    func setClearPendingAfterAdd(_ value: Bool) {
+        clearPendingAfterAdd = value
+    }
+
+    func setAddError(_ error: Error?) {
+        addError = error
+    }
+
+    func seedPending(_ ids: [String]) {
+        pending = ids
+    }
+
     func markDelivered(_ id: String) {
         pending.removeAll { $0 == id }
-        if !delivered.contains(id) { delivered.append(id) }
+        if !delivered.contains(id) {
+            delivered.append(id)
+        }
     }
 }
 
@@ -190,7 +216,9 @@ final class NotificationTestWorkflowTests: XCTestCase {
 
     func testAddFailureIsSurfaced() async {
         struct Boom: LocalizedError {
-            var errorDescription: String? { "add failed" }
+            var errorDescription: String? {
+                "add failed"
+            }
         }
         let center = FakeNotificationCenterClient(settings: authorizedSettings())
         await center.setAddError(Boom())

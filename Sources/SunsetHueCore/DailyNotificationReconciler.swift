@@ -61,7 +61,8 @@ public enum DailyNotificationDescriptorBuilder: Sendable {
             guard rule.enabled,
                   let snapshot = snapshots[location.id],
                   let bundle = snapshot.bundle,
-                  let timeZone = location.timeZone else {
+                  let timeZone = location.timeZone
+            else {
                 continue
             }
             let plans = DailyNotificationSchedulePlanner.plans(
@@ -115,11 +116,15 @@ public enum DailyNotificationReconciler: Sendable {
         var desiredByID: [String: DailyNotificationDescriptor] = [:]
         var order: [String] = []
         for descriptor in desired {
-            if desiredByID[descriptor.identifier] == nil { order.append(descriptor.identifier) }
+            if desiredByID[descriptor.identifier] == nil {
+                order.append(descriptor.identifier)
+            }
             desiredByID[descriptor.identifier] = descriptor
         }
         var pendingByID: [String: DailyNotificationDescriptor] = [:]
-        for descriptor in pending { pendingByID[descriptor.identifier] = descriptor }
+        for descriptor in pending {
+            pendingByID[descriptor.identifier] = descriptor
+        }
 
         let toAdd = order.compactMap { id -> DailyNotificationDescriptor? in
             guard let want = desiredByID[id] else { return nil }
@@ -214,4 +219,3 @@ public actor DailyNotificationScheduler {
         return result
     }
 }
-

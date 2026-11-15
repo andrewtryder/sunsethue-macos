@@ -60,15 +60,15 @@ public enum MenuBarForecastResolver: Sendable {
             allowedTypes = [.sunrise]
         }
 
-        guard !allowedTypes.isEmpty else { return nil }
-
-        guard let forecast = UpcomingForecastSelector.forecasts(
-            from: bundle,
-            allowedTypes: allowedTypes,
-            now: now,
-            limit: 1
-        ).first,
-              let eventTime = forecast.eventTime else {
+        guard !allowedTypes.isEmpty,
+              let forecast = UpcomingForecastSelector.forecasts(
+                  from: bundle,
+                  allowedTypes: allowedTypes,
+                  now: now,
+                  limit: 1
+              ).first,
+              let eventTime = forecast.eventTime
+        else {
             return nil
         }
 
@@ -98,11 +98,11 @@ public enum MenuBarForecastResolver: Sendable {
     ) -> Bool {
         switch selection {
         case .nextEvent:
-            return !location.enabledEvents.isEmpty
+            !location.enabledEvents.isEmpty
         case .nextSunset:
-            return location.includeSunset
+            location.includeSunset
         case .nextSunrise:
-            return location.includeSunrise
+            location.includeSunrise
         }
     }
 
@@ -111,11 +111,11 @@ public enum MenuBarForecastResolver: Sendable {
     ) -> String? {
         switch selection {
         case .nextEvent:
-            return "No sunrise or sunset events enabled for this location."
+            "No sunrise or sunset events enabled for this location."
         case .nextSunset:
-            return "Sunset is not enabled for this location."
+            "Sunset is not enabled for this location."
         case .nextSunrise:
-            return "Sunrise is not enabled for this location."
+            "Sunrise is not enabled for this location."
         }
     }
 }

@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class MenuBarStatusFormattingTests: XCTestCase {
     private let timeZone = PreviewFixtures.sampleTimeZone
@@ -140,14 +140,14 @@ final class MenuBarStatusFormattingTests: XCTestCase {
         XCTAssertEqual(MenuBarStatusFormatting.compactPercentage(fromNormalized: nil), "—")
     }
 
-    func testCompactDayTimeLabelFormatting() {
+    func testCompactDayTimeLabelFormatting() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = timeZone
         let today = cal.startOfDay(for: Date())
         let todayEvent = today.addingTimeInterval(3600 * 19 + 58 * 60) // 7:58 PM
-        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = try XCTUnwrap(cal.date(byAdding: .day, value: 1, to: today))
         let tomorrowEvent = tomorrow.addingTimeInterval(3600 * 5 + 42 * 60) // 5:42 AM
-        let futureDay = cal.date(byAdding: .day, value: 3, to: today)!
+        let futureDay = try XCTUnwrap(cal.date(byAdding: .day, value: 3, to: today))
         let futureEvent = futureDay.addingTimeInterval(3600 * 6 + 15 * 60)
 
         let todayText = MenuBarStatusFormatting.compactDayTimeLabel(eventTime: todayEvent, timeZone: timeZone, now: today.addingTimeInterval(3600 * 12))
@@ -165,4 +165,3 @@ final class MenuBarStatusFormattingTests: XCTestCase {
         XCTAssertTrue(futureText.hasPrefix("\(dayName) "))
     }
 }
-

@@ -1,6 +1,6 @@
+import CoreLocation
 import Foundation
 @preconcurrency import MapKit
-import CoreLocation
 import SunsetHueCore
 
 @MainActor
@@ -47,7 +47,7 @@ final class PlaceSearchController: NSObject, ObservableObject, MKLocalSearchComp
         errorMessage = nil
     }
 
-    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+    func completer(_: MKLocalSearchCompleter, didFailWithError _: Error) {
         if suppressNextCompleterUpdate {
             suppressNextCompleterUpdate = false
         }

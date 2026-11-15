@@ -67,20 +67,19 @@ public enum WidgetTimelineEntryBuilder {
                 statusMessage: nil
             )
         case .current, .stale, .rateLimited, .temporarilyUnavailable, .invalidRequest, .invalidResponse:
-            let message: String
-            if bundle == nil {
+            let message: String = if bundle == nil {
                 switch snapshot.status {
                 case .temporarilyUnavailable:
-                    message = "Forecast unavailable"
+                    "Forecast unavailable"
                 case .invalidRequest:
-                    message = "Coordinates were rejected. Check latitude and longitude."
+                    "Coordinates were rejected. Check latitude and longitude."
                 case .invalidResponse:
-                    message = "SunsetHue returned an incompatible response."
+                    "SunsetHue returned an incompatible response."
                 default:
-                    message = missingCacheMessage
+                    missingCacheMessage
                 }
             } else {
-                message = "Updated \(compactRelative(from: snapshot.fetchedAt, now: now))"
+                "Updated \(compactRelative(from: snapshot.fetchedAt, now: now))"
             }
             return WidgetTimelineEntryModel(
                 kind: bundle == nil ? .unavailable : .stale,
@@ -102,9 +101,15 @@ public enum WidgetTimelineEntryBuilder {
 
     private static func compactRelative(from date: Date, now: Date) -> String {
         let seconds = max(0, Int(now.timeIntervalSince(date)))
-        if seconds < 60 { return "just now" }
-        if seconds < 3600 { return "\(seconds / 60)m ago" }
-        if seconds < 86_400 { return "\(seconds / 3600)h ago" }
-        return "\(seconds / 86_400)d ago"
+        if seconds < 60 {
+            return "just now"
+        }
+        if seconds < 3600 {
+            return "\(seconds / 60)m ago"
+        }
+        if seconds < 86400 {
+            return "\(seconds / 3600)h ago"
+        }
+        return "\(seconds / 86400)d ago"
     }
 }

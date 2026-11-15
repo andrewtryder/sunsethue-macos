@@ -1,7 +1,7 @@
 import Foundation
-@preconcurrency import UserNotifications
 import os
 import SunsetHueCore
+@preconcurrency import UserNotifications
 
 actor ForecastNotificationCoordinator {
     enum AuthorizationState: Equatable, Sendable {
@@ -37,7 +37,7 @@ actor ForecastNotificationCoordinator {
         self.unCenter = unCenter
         self.preferencesStore = preferencesStore
         self.ledgerStore = ledgerStore
-        self.dailyScheduler = DailyNotificationScheduler(scheduling: UNDailyNotificationScheduling(center: unCenter))
+        dailyScheduler = DailyNotificationScheduler(scheduling: UNDailyNotificationScheduling(center: unCenter))
     }
 
     func refreshAuthorizationStatus() async {
@@ -102,14 +102,15 @@ actor ForecastNotificationCoordinator {
 
     func evaluateSuccessfulRefresh(
         location: SavedLocation,
-        previous: CachedLocationSnapshot?,
+        previous _: CachedLocationSnapshot?,
         current: CachedLocationSnapshot,
         wasSuccessfulNetworkRefresh: Bool
     ) async {
         await refreshAuthorizationStatus()
         let preferences = preferencesStore.load()
         guard preferences.notificationsEnabled,
-              authorizationState == .authorized || authorizationState == .provisional else {
+              authorizationState == .authorized || authorizationState == .provisional
+        else {
             return
         }
 
@@ -214,12 +215,12 @@ actor ForecastNotificationCoordinator {
 
     private func map(_ status: NotificationSettingsSnapshot.AuthorizationStatus) -> AuthorizationState {
         switch status {
-        case .notDetermined: return .notDetermined
-        case .denied: return .denied
-        case .authorized: return .authorized
-        case .provisional: return .provisional
-        case .ephemeral: return .ephemeral
-        case .unknown: return .notDetermined
+        case .notDetermined: .notDetermined
+        case .denied: .denied
+        case .authorized: .authorized
+        case .provisional: .provisional
+        case .ephemeral: .ephemeral
+        case .unknown: .notDetermined
         }
     }
 }
@@ -234,7 +235,7 @@ struct UNDailyNotificationScheduling: DailyNotificationScheduling, @unchecked Se
             .map { request in
                 let components = (request.trigger as? UNCalendarNotificationTrigger)?.dateComponents
                 let locationID = (request.content.userInfo["locationID"] as? String).flatMap(UUID.init(uuidString:))
-                    ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+                    ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000") ?? UUID()
                 return DailyNotificationDescriptor(
                     identifier: request.identifier,
                     locationID: locationID,
@@ -259,7 +260,9 @@ struct UNDailyNotificationScheduling: DailyNotificationScheduling, @unchecked Se
             "locationID": descriptor.locationID.uuidString,
             "kind": "dailySummary",
         ]
-        if descriptor.playSound { content.sound = .default }
+        if descriptor.playSound {
+            content.sound = .default
+        }
 
         var components = DateComponents()
         components.calendar = Calendar(identifier: .gregorian)

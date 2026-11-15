@@ -6,26 +6,38 @@ public enum EventDisplayState: Equatable, Sendable {
     case available(EventForecast)
 
     public var isAvailable: Bool {
-        if case .available = self { return true }
+        if case .available = self {
+            return true
+        }
         return false
     }
 
     public var forecast: EventForecast? {
-        if case .available(let f) = self { return f }
+        if case let .available(f) = self {
+            return f
+        }
         return nil
     }
 }
 
 public struct ForecastDaySectionData: Equatable, Sendable, Identifiable {
-    public var id: Int { dayOffset }
+    public var id: Int {
+        dayOffset
+    }
+
     public let dayOffset: Int
     public let dayLabel: String
     public let dateString: String?
     public let sunriseState: EventDisplayState
     public let sunsetState: EventDisplayState
 
-    public var sunrise: EventForecast? { sunriseState.forecast }
-    public var sunset: EventForecast? { sunsetState.forecast }
+    public var sunrise: EventForecast? {
+        sunriseState.forecast
+    }
+
+    public var sunset: EventForecast? {
+        sunsetState.forecast
+    }
 
     public init(
         dayOffset: Int,
@@ -53,25 +65,23 @@ public enum MultiDayForecastPresenter: Sendable {
         cal.timeZone = timeZone
         let startOfToday = cal.startOfDay(for: now)
 
-        return (0..<max(1, location.forecastDays)).map { dayOffset in
+        return (0 ..< max(1, location.forecastDays)).map { dayOffset in
             let label = PresentationFormatting.relativeDayLabel(dayOffset: dayOffset, reference: now, timeZone: timeZone)
 
-            let sunriseState: EventDisplayState
-            if !location.includeSunrise {
-                sunriseState = .disabled
+            let sunriseState: EventDisplayState = if !location.includeSunrise {
+                .disabled
             } else if let f = bundle.forecast(dayOffset: dayOffset, eventType: .sunrise, timeZone: timeZone, now: now) {
-                sunriseState = .available(f)
+                .available(f)
             } else {
-                sunriseState = .unavailable(.sunrise)
+                .unavailable(.sunrise)
             }
 
-            let sunsetState: EventDisplayState
-            if !location.includeSunset {
-                sunsetState = .disabled
+            let sunsetState: EventDisplayState = if !location.includeSunset {
+                .disabled
             } else if let f = bundle.forecast(dayOffset: dayOffset, eventType: .sunset, timeZone: timeZone, now: now) {
-                sunsetState = .available(f)
+                .available(f)
             } else {
-                sunsetState = .unavailable(.sunset)
+                .unavailable(.sunset)
             }
 
             let targetDay = cal.date(byAdding: .day, value: dayOffset, to: startOfToday)
@@ -103,8 +113,8 @@ public enum MultiDayForecastPresenter: Sendable {
         let allowed = Set(location.enabledEvents)
         let futureEvents = bundle.forecasts.filter {
             allowed.contains($0.eventType) &&
-            ($0.eventTime ?? Date.distantPast) > now &&
-            ($0.eventTime ?? Date.distantFuture) < horizonEnd
+                ($0.eventTime ?? Date.distantPast) > now &&
+                ($0.eventTime ?? Date.distantFuture) < horizonEnd
         }
         guard !futureEvents.isEmpty else { return nil }
 
