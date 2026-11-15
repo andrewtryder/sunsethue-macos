@@ -31,10 +31,19 @@ struct SunsetHueMenuBarPopoverView: View {
         }
         .padding(.vertical, 8)
         .frame(width: 360)
-        .onAppear { labelController.isPopupPresented = true }
-        .onDisappear { labelController.isPopupPresented = false }
+        .onAppear { setPopupPresented(true) }
+        .onDisappear { setPopupPresented(false) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("SunsetHue menu")
+    }
+
+    /// Records presentation transitions on the controller. Idempotent by design:
+    /// SwiftUI may fire `onAppear`/`onDisappear` more than once per transition, and
+    /// the controller ignores writes that do not change the value.
+    private func setPopupPresented(_ presented: Bool) {
+        if labelController.isPopupPresented != presented {
+            labelController.isPopupPresented = presented
+        }
     }
 
     private var popoverRows: [MenuBarPopoverRow] {
@@ -226,7 +235,6 @@ struct SunsetHueMenuBarPopoverView: View {
             }
             .disabled(appModel.isRefreshing)
             .controlSize(.small)
-            .disabled(appModel.isRefreshing)
             .keyboardShortcut("r", modifiers: [.command])
             .frame(maxWidth: .infinity, alignment: .leading)
 

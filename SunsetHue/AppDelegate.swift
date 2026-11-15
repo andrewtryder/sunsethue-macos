@@ -13,6 +13,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private var isSecondaryInstance = false
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // The menu bar popup (.menuBarExtraStyle(.window)) is often the only open window.
+        // Returning true (the AppKit default) makes dismissing the popup quit the entire
+        // app — the status item disappears and the user must relaunch. SunsetHue is a
+        // menu bar utility, so it must keep running with no windows open.
+        false
+    }
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
 
