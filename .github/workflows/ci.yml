@@ -41,9 +41,16 @@ jobs:
           swift --version
 
       - name: Install tooling
+        # SwiftFormat is version-pinned so local runs and CI agree on rule
+        # behavior: 0.64.x rule sets (andOperator, redundantParens) drift
+        # between patch releases and a drift silently breaks --lint gates.
         run: |
-          brew install xcodegen swiftformat swiftlint
-          swiftformat --version
+          brew install xcodegen swiftlint
+          brew install swiftformat
+          if [[ "$(swiftformat --version)" != "0.64.5" ]]; then
+            echo "Expected SwiftFormat 0.64.5, got $(swiftformat --version). Update the pin and re-verify locally." >&2
+            exit 1
+          fi
           swiftlint version
 
       - name: SwiftFormat (lint only)

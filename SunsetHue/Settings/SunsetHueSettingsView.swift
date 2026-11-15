@@ -1010,7 +1010,7 @@ struct SunsetHueSettingsView: View {
                     cacheReadFailed = true
                 }
             }
-            if cacheReadFailed && snapshots.isEmpty && !appModel.state.locations.isEmpty {
+            if cacheReadFailed, snapshots.isEmpty, !appModel.state.locations.isEmpty {
                 diagnosticsMessage = "Cache could not be read."
                 return
             }

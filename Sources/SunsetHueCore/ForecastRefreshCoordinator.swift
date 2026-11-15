@@ -159,7 +159,7 @@ public actor ForecastRefreshCoordinator {
         for location in state.locations {
             let snapshot = try? await forecastCache.loadSnapshot(for: location.id)
             if let snapshot {
-                if snapshot.status == .current && (!snapshot.hasOperationalCoverage(for: location, now: now) || !snapshot.hasDisplayCoverage(for: location, now: now)) {
+                if snapshot.status == .current, !(snapshot.hasOperationalCoverage(for: location, now: now) || snapshot.hasDisplayCoverage(for: location, now: now)) {
                     nextDates.append(now)
                 } else if let next = snapshot.nextScheduledRefresh(
                     refreshIntervalHours: location.refreshIntervalHours,
