@@ -30,7 +30,7 @@ struct SunsetHueMenuBarPopoverView: View {
             controls
         }
         .padding(.vertical, 8)
-        .frame(width: 360)
+        .frame(width: 440)
         .onAppear { setPopupPresented(true) }
         .onDisappear { setPopupPresented(false) }
         .accessibilityElement(children: .contain)
@@ -222,7 +222,18 @@ struct SunsetHueMenuBarPopoverView: View {
     }
 
     private var controls: some View {
-        VStack(spacing: 6) {
+        HStack(spacing: 6) {
+            Button {
+                dismissPopupThen {
+                    MainWindowPresenter.present(openWindow: openWindow)
+                }
+            } label: {
+                Text("Open SunsetHue")
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.small)
+
             Button {
                 appModel.refreshAllFromCommand()
             } label: {
@@ -232,39 +243,37 @@ struct SunsetHueMenuBarPopoverView: View {
                             .controlSize(.mini)
                     }
                     Text(appModel.isRefreshing ? "Refreshing…" : "Refresh All")
+                        .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity)
             }
             .disabled(appModel.isRefreshing)
             .controlSize(.small)
             .keyboardShortcut("r", modifiers: [.command])
-            .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 8) {
-                Button("Open SunsetHue…") {
-                    dismissPopupThen {
-                        MainWindowPresenter.present(openWindow: openWindow)
-                    }
+            Button {
+                dismissPopupThen {
+                    SettingsPresenter.present(openSettings: openSettings)
                 }
-                .controlSize(.small)
-
-                Spacer(minLength: 4)
-
-                Button("Settings…") {
-                    dismissPopupThen {
-                        SettingsPresenter.present(openSettings: openSettings)
-                    }
-                }
-                .controlSize(.small)
-                .keyboardShortcut(",", modifiers: [.command])
-
-                Button("Quit SunsetHue") {
-                    NSApp.terminate(nil)
-                }
-                .controlSize(.small)
-                .keyboardShortcut("q", modifiers: [.command])
+            } label: {
+                Text("Settings")
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
             }
+            .controlSize(.small)
+            .keyboardShortcut(",", modifiers: [.command])
+
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                Text("Quit")
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.small)
+            .keyboardShortcut("q", modifiers: [.command])
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .padding(.top, 4)
         .padding(.bottom, 2)
     }

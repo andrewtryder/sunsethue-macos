@@ -35,15 +35,6 @@ struct SunsetHueApp: App {
                 }
                 .onAppear {
                     menuBarLabelController.attach(appModel: appModel, preferencesStore: menuBarPreferencesStore)
-                    if !AppPreferenceDefaults.shared.openMainWindowOnLaunch {
-                        DispatchQueue.main.async {
-                            if let window = NSApp.windows.first(where: {
-                                $0.identifier?.rawValue == "main" || $0.title == "SunsetHue"
-                            }) {
-                                window.close()
-                            }
-                        }
-                    }
                 }
         }
         .defaultLaunchBehavior(
@@ -128,8 +119,10 @@ enum MainWindowPresenter {
     static func present(openWindow: OpenWindowAction) {
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" || $0.title == "SunsetHue" }) {
-            window.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async {
+            if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" || $0.title == "SunsetHue" }) {
+                window.makeKeyAndOrderFront(nil)
+            }
         }
     }
 }
