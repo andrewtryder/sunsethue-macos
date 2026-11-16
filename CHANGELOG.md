@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.3](https://github.com/andrewtryder/sunsethue-macos/compare/v1.4.2...v1.4.3) (2026-11-16)
+
+
+### Bug Fixes
+
+* unify menu bar button bar and prevent main window dismissal ([#21](https://github.com/andrewtryder/sunsethue-macos/issues/21)) ([098a930](https://github.com/andrewtryder/sunsethue-macos/commit/098a930305f1865e7d086ece11038a549e0eb2cd))
+
 ## [1.4.2](https://github.com/andrewtryder/sunsethue-macos/compare/v1.4.1...v1.4.2) (2026-11-16)
 
 
