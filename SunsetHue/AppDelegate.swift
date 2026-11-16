@@ -43,13 +43,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let menuBarOnly = UserDefaults.standard.bool(forKey: "menuBarOnlyMode")
         AppPresentationModeController.apply(menuBarOnly: menuBarOnly)
 
+        if !AppPreferenceDefaults.shared.openMainWindowOnLaunch {
+            DispatchQueue.main.async {
+                for window in NSApp.windows where window.identifier?.rawValue == "main" || window.title == "SunsetHue" {
+                    window.close()
+                }
+            }
+        }
+
         guard isSecondaryInstance else { return }
         activateExistingInstance()
         NSApp.terminate(nil)
     }
 
-    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag {
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {
+        let hasVisibleMainWindow = NSApp.windows.contains { window in
+            window.styleMask.contains(.titled) && window.isVisible
+        }
+        if !hasVisibleMainWindow {
             NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
         }
         return true
