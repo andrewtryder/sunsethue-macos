@@ -1,5 +1,5 @@
-import SwiftUI
 import SunsetHueCore
+import SwiftUI
 
 struct MediumWidgetView: View {
     let entry: SunsetHueEntry
@@ -62,8 +62,8 @@ struct MediumEventColumn: View {
                 Image(systemName: event.eventType.symbolName)
                     .foregroundStyle(event.eventType.iconColor)
             }
-                .font(.caption.weight(.semibold))
-                .labelStyle(.titleAndIcon)
+            .font(.caption.weight(.semibold))
+            .labelStyle(.titleAndIcon)
 
             Text(style.percentage)
                 .font(.title2.weight(.bold))

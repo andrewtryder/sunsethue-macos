@@ -61,7 +61,8 @@ public enum MenuBarRotationLogic: Sendable {
         switch preferences.locationMode {
         case .selectedLocation:
             if let selectedLocationID,
-               let selected = locations.first(where: { $0.id == selectedLocationID }) {
+               let selected = locations.first(where: { $0.id == selectedLocationID })
+            {
                 return selected
             }
             return locations.first
@@ -103,19 +104,20 @@ public enum MenuBarRotationLogic: Sendable {
         }
 
         if let location = locationForLabel(
-            locations: locations,
-            snapshots: snapshots,
-            preferences: preferences,
-            selectedLocationID: selectedLocationID,
-            now: now,
-            epoch: epoch
-        ),
+               locations: locations,
+               snapshots: snapshots,
+               preferences: preferences,
+               selectedLocationID: selectedLocationID,
+               now: now,
+               epoch: epoch
+           ),
            let item = MenuBarForecastResolver.resolve(
-            location: location,
-            snapshot: snapshots[location.id],
-            selection: preferences.eventSelection,
-            now: now
-           ) {
+               location: location,
+               snapshot: snapshots[location.id],
+               selection: preferences.eventSelection,
+               now: now
+           )
+        {
             candidates.append(item.eventTime.addingTimeInterval(1))
         }
 

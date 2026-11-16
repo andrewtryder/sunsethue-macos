@@ -56,21 +56,21 @@ struct LocationEntity: AppEntity {
     }
 
     init(location: SavedLocation) {
-        self.id = location.id
-        self.name = location.name
+        id = location.id
+        name = location.name
     }
 }
 
 struct LocationEntityQuery: EntityQuery {
     func entities(for identifiers: [LocationEntity.ID]) async throws -> [LocationEntity] {
-        let locations = (try? await SharedStorageFactory.makeSettingsStore().load())?.value.locations ?? []
+        let locations = await (try? SharedStorageFactory.makeSettingsStore().load())?.value.locations ?? []
         return locations
             .filter { identifiers.contains($0.id) }
             .map(LocationEntity.init)
     }
 
     func suggestedEntities() async throws -> [LocationEntity] {
-        let locations = (try? await SharedStorageFactory.makeSettingsStore().load())?.value.locations ?? []
+        let locations = await (try? SharedStorageFactory.makeSettingsStore().load())?.value.locations ?? []
         return locations.map(LocationEntity.init)
     }
 

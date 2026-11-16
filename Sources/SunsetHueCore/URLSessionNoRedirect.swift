@@ -2,15 +2,15 @@ import Foundation
 
 /// URLSession delegate that refuses redirects.
 public final class NoRedirectSessionDelegate: NSObject, URLSessionTaskDelegate, Sendable {
-    public override init() {
+    override public init() {
         super.init()
     }
 
     public func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
+        _: URLSession,
+        task _: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest _: URLRequest,
         completionHandler: @escaping (URLRequest?) -> Void
     ) {
         completionHandler(nil)

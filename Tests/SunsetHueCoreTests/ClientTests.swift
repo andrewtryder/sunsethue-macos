@@ -1,5 +1,8 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
+
+// Test code: static-identifier fixtures and setUp-established state are safe to unwrap.
+// swiftlint:disable force_unwrapping
 
 final class ClientTests: XCTestCase {
     private let apiKey = "test-key-not-real"
@@ -44,7 +47,7 @@ final class ClientTests: XCTestCase {
         await assertError(client, equals: .rateLimited(retryAfter: 120))
     }
 
-    func testRateLimitParsingFromHTTPDate() async {
+    func testRateLimitParsingFromHTTPDate() async throws {
         let future = Date().addingTimeInterval(3600)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -65,8 +68,8 @@ final class ClientTests: XCTestCase {
             XCTFail("Expected rate limit")
         } catch let SunsetHueError.rateLimited(retryAfter) {
             XCTAssertNotNil(retryAfter)
-            XCTAssertGreaterThan(retryAfter!, 3500)
-            XCTAssertLessThanOrEqual(retryAfter!, SunsetHueConstants.maxRetryAfterSeconds)
+            XCTAssertGreaterThan(try XCTUnwrap(retryAfter), 3500)
+            XCTAssertLessThanOrEqual(try XCTUnwrap(retryAfter), SunsetHueConstants.maxRetryAfterSeconds)
         } catch {
             XCTFail("Unexpected \(error)")
         }

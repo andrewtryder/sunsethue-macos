@@ -12,7 +12,9 @@ public struct HTTPResponse: Sendable {
     }
 
     public func headerValue(forName name: String) -> String? {
-        if let exact = headers[name] { return exact }
+        if let exact = headers[name] {
+            return exact
+        }
         let lowered = name.lowercased()
         return headers.first(where: { $0.key.lowercased() == lowered })?.value
     }
@@ -61,7 +63,8 @@ public struct URLSessionTransport: HTTPTransport {
 
         if let contentLength = http.value(forHTTPHeaderField: "Content-Length"),
            let length = Int(contentLength),
-           length > maxResponseBytes {
+           length > maxResponseBytes
+        {
             bytes.task.cancel()
             throw SunsetHueError.oversizedResponse
         }
@@ -101,13 +104,13 @@ public struct URLSessionTransport: HTTPTransport {
     private func mapURLError(_ error: URLError, cancelledAsOversized: Bool) -> SunsetHueError {
         switch error.code {
         case .timedOut:
-            return .timeout
+            .timeout
         case .cancelled:
-            return cancelledAsOversized ? .oversizedResponse : .networkUnavailable
+            cancelledAsOversized ? .oversizedResponse : .networkUnavailable
         case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
-            return .networkUnavailable
+            .networkUnavailable
         default:
-            return .networkUnavailable
+            .networkUnavailable
         }
     }
 }
@@ -159,7 +162,8 @@ public final class MockHTTPTransport: HTTPTransport, @unchecked Sendable {
                 .queryItems?
                 .first(where: { $0.name == "type" })?
                 .value,
-               let index = stubs.firstIndex(where: { stubMatchesEventType($0, requestedType) }) {
+               let index = stubs.firstIndex(where: { stubMatchesEventType($0, requestedType) })
+            {
                 return stubs.remove(at: index)
             }
             return stubs.removeFirst()
@@ -178,7 +182,8 @@ public final class MockHTTPTransport: HTTPTransport, @unchecked Sendable {
         guard stub.error == nil,
               let payload = try? JSONSerialization.jsonObject(with: stub.body) as? [String: Any],
               let data = payload["data"] as? [String: Any],
-              let type = data["type"] as? String else {
+              let type = data["type"] as? String
+        else {
             return false
         }
         return type == requestedType

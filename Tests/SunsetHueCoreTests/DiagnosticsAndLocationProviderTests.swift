@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class DiagnosticsAndLocationProviderTests: XCTestCase {
     func testDiagnosticsRedactsSecretsAndExactCoordinates() throws {
@@ -69,7 +69,7 @@ final class DiagnosticsAndLocationProviderTests: XCTestCase {
         let bundle = PreviewFixtures.sampleBundle()
         let settings = InMemorySettingsStore(state: SharedAppState(locations: [location], selectedLocationID: location.id))
         let cache = InMemoryForecastCache(snapshots: [
-            location.id: .fromSuccessful(bundle: bundle)
+            location.id: .fromSuccessful(bundle: bundle),
         ])
         let coordinator = ForecastRefreshCoordinator(
             settingsStore: settings,

@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class ResponseParserTests: XCTestCase {
     func testSuccessfulSunsetResponseParsing() throws {
@@ -33,7 +33,7 @@ final class ResponseParserTests: XCTestCase {
     func testUnknownJSONFieldsAreIgnored() throws {
         var payload = try fixtureJSON("event_full")
         payload["unexpected_top"] = "ok"
-        var data = payload["data"] as! [String: Any]
+        var data = try XCTUnwrap(payload["data"] as? [String: Any])
         data["extra_field"] = 123
         payload["data"] = data
         let encoded = try JSONSerialization.data(withJSONObject: payload)
@@ -43,7 +43,7 @@ final class ResponseParserTests: XCTestCase {
 
     func testInvalidQualityRange() throws {
         var payload = try fixtureJSON("event_full")
-        var data = payload["data"] as! [String: Any]
+        var data = try XCTUnwrap(payload["data"] as? [String: Any])
         data["quality"] = 1.2
         payload["data"] = data
         let encoded = try JSONSerialization.data(withJSONObject: payload)
@@ -54,7 +54,7 @@ final class ResponseParserTests: XCTestCase {
 
     func testInvalidCloudCoverRange() throws {
         var payload = try fixtureJSON("event_full")
-        var data = payload["data"] as! [String: Any]
+        var data = try XCTUnwrap(payload["data"] as? [String: Any])
         data["cloud_cover"] = -0.1
         payload["data"] = data
         let encoded = try JSONSerialization.data(withJSONObject: payload)
@@ -63,7 +63,7 @@ final class ResponseParserTests: XCTestCase {
 
     func testDirectionNormalizationOf360() throws {
         var payload = try fixtureJSON("event_full")
-        var data = payload["data"] as! [String: Any]
+        var data = try XCTUnwrap(payload["data"] as? [String: Any])
         data["direction"] = 360
         payload["data"] = data
         let encoded = try JSONSerialization.data(withJSONObject: payload)
@@ -85,7 +85,7 @@ final class ResponseParserTests: XCTestCase {
 
     func testMalformedMagicHourArray() throws {
         var payload = try fixtureJSON("event_full")
-        var data = payload["data"] as! [String: Any]
+        var data = try XCTUnwrap(payload["data"] as? [String: Any])
         data["magics"] = ["golden_hour": ["2026-08-01T22:44:00.000Z"]]
         payload["data"] = data
         let encoded = try JSONSerialization.data(withJSONObject: payload)
@@ -96,7 +96,7 @@ final class ResponseParserTests: XCTestCase {
 
     func testBoolRejectedAsNumber() throws {
         var payload = try fixtureJSON("event_full")
-        var data = payload["data"] as! [String: Any]
+        var data = try XCTUnwrap(payload["data"] as? [String: Any])
         data["quality"] = true
         payload["data"] = data
         let encoded = try JSONSerialization.data(withJSONObject: payload)
@@ -106,7 +106,9 @@ final class ResponseParserTests: XCTestCase {
     func testIntegerZeroQualityAndUnitCloudCoverParse() throws {
         // Live API returns JSON integers such as quality: 0 and cloud_cover: 1.
         // Swift's `is Bool` incorrectly treats those NSNumbers as Bool.
-        let json = """
+        // Multiline JSON literal parsed via data(using:); safe — parsing is fallible below.
+        // swiftlint:disable:next non_optional_string_data_conversion
+        let json = try XCTUnwrap("""
         {
           "time": "2026-08-02T01:26:47.565Z",
           "location": {"latitude": 42.90729, "longitude": -71.15149},
@@ -125,7 +127,7 @@ final class ResponseParserTests: XCTestCase {
             }
           }
         }
-        """.data(using: .utf8)!
+        """.data(using: .utf8))
         let forecast = try ResponseParser.parseEventForecast(data: json, expectedEventType: .sunset)
         XCTAssertEqual(forecast.quality, 0)
         XCTAssertEqual(forecast.cloudCover, 1)

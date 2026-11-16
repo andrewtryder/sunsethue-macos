@@ -76,11 +76,17 @@ public actor ForecastRefreshCoordinator {
         inFlightRefreshes.removeValue(forKey: id)
     }
 
-    private func generation(for id: UUID) -> Int { locationGenerations[id, default: 0] }
+    private func generation(for id: UUID) -> Int {
+        locationGenerations[id, default: 0]
+    }
 
     private func canPersist(locationID: UUID, generation: Int?) -> Bool {
-        if removedLocationIDs.contains(locationID) { return false }
-        if let generation, generation != self.generation(for: locationID) { return false }
+        if removedLocationIDs.contains(locationID) {
+            return false
+        }
+        if let generation, generation != self.generation(for: locationID) {
+            return false
+        }
         return true
     }
 
@@ -89,7 +95,7 @@ public actor ForecastRefreshCoordinator {
         isRefreshingAll = true
         defer { isRefreshingAll = false }
 
-        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        let state = await (try? settingsStore.load())?.value ?? SharedAppState()
         for location in state.locations {
             let existing = try? await forecastCache.loadSnapshot(for: location.id)
             let needsRefresh = forceNeeded(existing: existing, location: location, force: false)
@@ -103,7 +109,7 @@ public actor ForecastRefreshCoordinator {
     /// Manual "Refresh All": fetches every location regardless of freshness. Active rate-limit
     /// deadlines are still respected per location, and overlapping calls share in-flight requests.
     public func refreshAllLocations(trigger: RefreshTrigger = .manual) async {
-        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        let state = await (try? settingsStore.load())?.value ?? SharedAppState()
         for location in state.locations {
             _ = await refresh(locationID: location.id, force: true, trigger: trigger)
         }
@@ -112,7 +118,7 @@ public actor ForecastRefreshCoordinator {
 
     /// Force-refresh every location currently marked authentication-required (e.g. after saving a new API key).
     public func refreshAuthenticationRequiredLocations(trigger: RefreshTrigger = .apiKeyChanged) async {
-        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        let state = await (try? settingsStore.load())?.value ?? SharedAppState()
         for location in state.locations {
             let existing = try? await forecastCache.loadSnapshot(for: location.id)
             guard existing?.status == .authenticationRequired else { continue }
@@ -123,7 +129,7 @@ public actor ForecastRefreshCoordinator {
 
     /// Mark every cached location as authentication-required while preserving forecast data.
     public func markAllSnapshotsAuthenticationRequired() async {
-        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        let state = await (try? settingsStore.load())?.value ?? SharedAppState()
         let attemptedAt = Date()
         for location in state.locations {
             let previous = try? await forecastCache.loadSnapshot(for: location.id)
@@ -147,13 +153,13 @@ public actor ForecastRefreshCoordinator {
 
     public func scheduleNextRefresh() async {
         scheduledTask?.cancel()
-        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        let state = await (try? settingsStore.load())?.value ?? SharedAppState()
         let now = Date()
         var nextDates: [Date] = []
         for location in state.locations {
             let snapshot = try? await forecastCache.loadSnapshot(for: location.id)
             if let snapshot {
-                if snapshot.status == .current && (!snapshot.hasOperationalCoverage(for: location, now: now) || !snapshot.hasDisplayCoverage(for: location, now: now)) {
+                if snapshot.status == .current, !(snapshot.hasOperationalCoverage(for: location, now: now) || snapshot.hasDisplayCoverage(for: location, now: now)) {
                     nextDates.append(now)
                 } else if let next = snapshot.nextScheduledRefresh(
                     refreshIntervalHours: location.refreshIntervalHours,
@@ -185,8 +191,9 @@ public actor ForecastRefreshCoordinator {
         let now = Date()
 
         if force {
-            if case .rateLimited(let retryAfter) = existing.status,
-               let retryAfter, retryAfter > now {
+            if case let .rateLimited(retryAfter) = existing.status,
+               let retryAfter, retryAfter > now
+            {
                 return false
             }
             return true
@@ -195,9 +202,13 @@ public actor ForecastRefreshCoordinator {
         switch existing.status {
         case .authenticationRequired, .invalidRequest:
             return false
-        case .rateLimited(let retryAfter):
-            if let retryAfter, retryAfter > now { return false }
-            if let next = existing.nextAttemptAt, next > now { return false }
+        case let .rateLimited(retryAfter):
+            if let retryAfter, retryAfter > now {
+                return false
+            }
+            if let next = existing.nextAttemptAt, next > now {
+                return false
+            }
             return true
         case .current:
             let isFresh = existing.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now)
@@ -205,10 +216,14 @@ public actor ForecastRefreshCoordinator {
             let hasDisplay = existing.hasDisplayCoverage(for: location, now: now)
             return !isFresh || !hasCoverage || !hasDisplay
         case .stale:
-            if let next = existing.nextAttemptAt, next > now { return false }
+            if let next = existing.nextAttemptAt, next > now {
+                return false
+            }
             return true
         case .temporarilyUnavailable, .invalidResponse:
-            if let next = existing.nextAttemptAt, next > now { return false }
+            if let next = existing.nextAttemptAt, next > now {
+                return false
+            }
             return true
         }
     }
@@ -222,10 +237,12 @@ public actor ForecastRefreshCoordinator {
         var loaded: SavedLocation?
         repeat {
             generation = self.generation(for: locationID)
-            let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+            let state = await (try? settingsStore.load())?.value ?? SharedAppState()
             loaded = state.locations.first(where: { $0.id == locationID })
         } while generation != self.generation(for: locationID)
-        guard let location = loaded, !removedLocationIDs.contains(locationID) else { return nil }
+        guard let location = loaded, !removedLocationIDs.contains(locationID) else {
+            return nil
+        }
 
         if let existingTask = inFlightRefreshes[locationID] {
             let joinedResult = await existingTask.value
@@ -268,8 +285,9 @@ public actor ForecastRefreshCoordinator {
                 return RefreshExecutionResult(snapshot: previous, performedNetworkRefresh: false)
             }
         } else if let previous,
-                  case .rateLimited(let retryAfter) = previous.status,
-                  let retryAfter, retryAfter > now {
+                  case let .rateLimited(retryAfter) = previous.status,
+                  let retryAfter, retryAfter > now
+        {
             // Manual refresh still respects an active rate-limit deadline.
             await activityRecorder.record(
                 locationID: location.id,
@@ -300,7 +318,7 @@ public actor ForecastRefreshCoordinator {
                 )
                 let savedSnapshot: CachedLocationSnapshot?
                 switch outcome {
-                case .committed(let s), .rejectedStale(let s):
+                case let .committed(s), let .rejectedStale(s):
                     savedSnapshot = s
                     await activityRecorder.record(
                         locationID: location.id,
@@ -311,7 +329,7 @@ public actor ForecastRefreshCoordinator {
                     )
                 case .discarded:
                     savedSnapshot = nil
-                case .failed(let fallback):
+                case let .failed(fallback):
                     savedSnapshot = fallback
                     await activityRecorder.record(
                         locationID: location.id,
@@ -340,7 +358,7 @@ public actor ForecastRefreshCoordinator {
             )
             let savedSnapshot: CachedLocationSnapshot?
             switch outcome {
-            case .committed(let s), .rejectedStale(let s):
+            case let .committed(s), let .rejectedStale(s):
                 savedSnapshot = s
                 await activityRecorder.record(
                     locationID: location.id,
@@ -351,7 +369,7 @@ public actor ForecastRefreshCoordinator {
                 )
             case .discarded:
                 savedSnapshot = nil
-            case .failed(let fallback):
+            case let .failed(fallback):
                 savedSnapshot = fallback
                 await activityRecorder.record(
                     locationID: location.id,
@@ -377,11 +395,10 @@ public actor ForecastRefreshCoordinator {
             wasSuccessfulNetworkRefresh = snapshot.status == .current
         } else if let error = outcome.error {
             let status = status(from: error)
-            let rateLimitRetry: Date?
-            if case .rateLimited(let retryAfter) = status {
-                rateLimitRetry = retryAfter
+            let rateLimitRetry: Date? = if case let .rateLimited(retryAfter) = status {
+                retryAfter
             } else {
-                rateLimitRetry = nil
+                nil
             }
             snapshot = makeFailureSnapshot(
                 locationID: location.id,
@@ -424,7 +441,7 @@ public actor ForecastRefreshCoordinator {
         case .discarded:
             // Location was removed or edited while the request was in flight.
             return RefreshExecutionResult(snapshot: nil, performedNetworkRefresh: true)
-        case .failed(let fallback):
+        case let .failed(fallback):
             savedSnapshot = fallback
             await activityRecorder.record(
                 locationID: location.id,
@@ -433,7 +450,7 @@ public actor ForecastRefreshCoordinator {
                 result: .persistenceFailure,
                 details: "Cache persistence failed"
             )
-        case .rejectedStale(let authoritative):
+        case let .rejectedStale(authoritative):
             savedSnapshot = authoritative
             await activityRecorder.record(
                 locationID: location.id,
@@ -442,7 +459,7 @@ public actor ForecastRefreshCoordinator {
                 result: .skippedFresh,
                 details: "Authoritative snapshot is newer"
             )
-        case .committed(let saved):
+        case let .committed(saved):
             savedSnapshot = saved
             if wasSuccessfulNetworkRefresh {
                 await activityRecorder.record(
@@ -453,13 +470,12 @@ public actor ForecastRefreshCoordinator {
                     details: "Updated \(snapshot.forecasts.count) forecasts"
                 )
             } else {
-                let resultSummary: RefreshResultSummary
-                switch snapshot.status {
-                case .authenticationRequired: resultSummary = .authenticationRequired
-                case .rateLimited: resultSummary = .rateLimited
-                case .invalidRequest: resultSummary = .invalidRequest
-                case .temporarilyUnavailable, .invalidResponse, .stale: resultSummary = .transientFailure
-                case .current: resultSummary = .refreshedSuccessfully
+                let resultSummary: RefreshResultSummary = switch snapshot.status {
+                case .authenticationRequired: .authenticationRequired
+                case .rateLimited: .rateLimited
+                case .invalidRequest: .invalidRequest
+                case .temporarilyUnavailable, .invalidResponse, .stale: .transientFailure
+                case .current: .refreshedSuccessfully
                 }
                 await activityRecorder.record(
                     locationID: location.id,
@@ -497,7 +513,7 @@ public actor ForecastRefreshCoordinator {
         do {
             let result = try await forecastCache.saveSnapshot(candidate)
             switch result {
-            case .committed(let snapshot):
+            case let .committed(snapshot):
                 // Re-verify that the location was not removed or edited while awaiting forecastCache.saveSnapshot.
                 // If it was removed, or if its identity changed without a newer valid snapshot having replaced
                 // this write, undo the stale write by deleting the cache entry.
@@ -516,7 +532,7 @@ public actor ForecastRefreshCoordinator {
                     wasSuccessfulNetworkRefresh: wasSuccessfulNetworkRefresh
                 )
                 return .committed(snapshot)
-            case .rejectedStale(let authoritative):
+            case let .rejectedStale(authoritative):
                 guard canPersist(locationID: location.id, generation: generation) else {
                     if removedLocationIDs.contains(location.id) {
                         try? await forecastCache.deleteLocation(location.id)
@@ -549,7 +565,7 @@ public actor ForecastRefreshCoordinator {
         switch error {
         case .authentication, .missingCredentials:
             return .authenticationRequired
-        case .rateLimited(let retryAfter):
+        case let .rateLimited(retryAfter):
             let date = retryAfter.map { Date().addingTimeInterval(TimeInterval($0)) }
             return .rateLimited(retryAfter: date)
         case .invalidRequest, .invalidCoordinates, .invalidLocation:

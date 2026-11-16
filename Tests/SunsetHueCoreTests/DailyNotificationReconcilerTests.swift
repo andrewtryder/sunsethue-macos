@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 /// In-memory stand-in for the system notification center.
 actor FakeDailyNotificationCenter: DailyNotificationScheduling {
@@ -12,11 +12,19 @@ actor FakeDailyNotificationCenter: DailyNotificationScheduling {
     private(set) var listCount = 0
 
     init(pending: [DailyNotificationDescriptor] = []) {
-        for descriptor in pending { self.pending[descriptor.identifier] = descriptor }
+        for descriptor in pending {
+            self.pending[descriptor.identifier] = descriptor
+        }
     }
 
-    func failScheduling(for identifiers: Set<String>) { failingIdentifiers = identifiers }
-    func closeGate() { gateOpen = false }
+    func failScheduling(for identifiers: Set<String>) {
+        failingIdentifiers = identifiers
+    }
+
+    func closeGate() {
+        gateOpen = false
+    }
+
     func openGate() {
         gateOpen = true
         let waiters = gateWaiters
@@ -42,7 +50,9 @@ actor FakeDailyNotificationCenter: DailyNotificationScheduling {
 
     func removePending(identifiers: [String]) async {
         removeCalls.append(identifiers)
-        for id in identifiers { pending.removeValue(forKey: id) }
+        for id in identifiers {
+            pending.removeValue(forKey: id)
+        }
     }
 
     func resetCallLog() {
@@ -51,7 +61,7 @@ actor FakeDailyNotificationCenter: DailyNotificationScheduling {
     }
 
     func waitUntilListed(_ count: Int) async {
-        for _ in 0..<400 where listCount < count {
+        for _ in 0 ..< 400 where listCount < count {
             try? await Task.sleep(nanoseconds: 5_000_000)
         }
     }
@@ -160,7 +170,7 @@ final class DailyNotificationReconcilerTests: XCTestCase {
         let scheduler = DailyNotificationScheduler(scheduling: center)
 
         let first = Task { await scheduler.apply(desired: [descriptor("a")]) }
-        await center.waitUntilListed(1)          // first pass is now blocked mid-flight
+        await center.waitUntilListed(1) // first pass is now blocked mid-flight
         let second = Task { await scheduler.apply(desired: [descriptor("b")]) }
         try? await Task.sleep(nanoseconds: 20_000_000)
         let third = Task { await scheduler.apply(desired: [descriptor("c"), descriptor("d")]) }
@@ -181,9 +191,9 @@ final class DailyNotificationReconcilerTests: XCTestCase {
     func testManyConcurrentIdenticalRequestsProduceNoDuplicates() async {
         let center = FakeDailyNotificationCenter()
         let scheduler = DailyNotificationScheduler(scheduling: center)
-        let desired = (0..<5).map { descriptor("n\($0)") }
+        let desired = (0 ..< 5).map { descriptor("n\($0)") }
         await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<8 {
+            for _ in 0 ..< 8 {
                 group.addTask { await scheduler.apply(desired: desired) }
             }
         }
@@ -215,8 +225,8 @@ final class DailyNotificationReconcilerTests: XCTestCase {
 
     private func snapshot(for location: SavedLocation, around date: Date) -> CachedLocationSnapshot {
         var forecasts: [EventForecast] = []
-        for offset in 0..<5 {
-            let event = date.addingTimeInterval(TimeInterval(offset) * 86_400 + 43_200)
+        for offset in 0 ..< 5 {
+            let event = date.addingTimeInterval(TimeInterval(offset) * 86400 + 43200)
             forecasts.append(
                 EventForecast(
                     responseTime: date,
@@ -231,7 +241,7 @@ final class DailyNotificationReconcilerTests: XCTestCase {
                     direction: 270,
                     blueHour: nil,
                     goldenHour: nil,
-                    forecastDate: date.addingTimeInterval(TimeInterval(offset) * 86_400)
+                    forecastDate: date.addingTimeInterval(TimeInterval(offset) * 86400)
                 )
             )
         }
@@ -268,14 +278,14 @@ final class DailyNotificationReconcilerTests: XCTestCase {
         )
         XCTAssertTrue(unauthorized.isEmpty)
 
-        var masterOff = prefs
-        masterOff.notificationsEnabled = false
+        var notificationsDisabledState = prefs
+        notificationsDisabledState.notificationsEnabled = false
         XCTAssertTrue(DailyNotificationDescriptorBuilder.descriptors(
-            state: state, snapshots: snaps, preferences: masterOff, isAuthorized: true, now: now
+            state: state, snapshots: snaps, preferences: notificationsDisabledState, isAuthorized: true, now: now
         ).isEmpty)
     }
 
-    func testSpringForwardAndFallBackKeepLocalWallClockTime() {
+    func testSpringForwardAndFallBackKeepLocalWallClockTime() throws {
         let ny = makeLocation(timeZone: "America/New_York")
         let rule = DailySummaryRule(enabled: true, firstTimeMinutes: 8 * 60)
 
@@ -284,22 +294,22 @@ final class DailyNotificationReconcilerTests: XCTestCase {
             ("spring", "2026-03-07T12:00:00Z", "2026-03-08"),
             ("fall", "2026-10-31T12:00:00Z", "2026-11-01"),
         ] {
-            let now = ISO8601DateFormatter().date(from: start)!
+            let now = try XCTUnwrap(ISO8601DateFormatter().date(from: start))
             let plans = DailyNotificationSchedulePlanner.plans(location: ny, rule: rule, now: now, dayCount: 3)
             let transitionDay = plans.first { $0.identifier.contains(dayKey) }
             XCTAssertNotNil(transitionDay, label)
             guard let plan = transitionDay else { continue }
-            let comps = DailyNotificationSchedulePlanner.dateComponents(for: plan, timeZone: ny.timeZone!)
+            let comps = try DailyNotificationSchedulePlanner.dateComponents(for: plan, timeZone: XCTUnwrap(ny.timeZone))
             XCTAssertEqual(comps.hour, 8, "\(label): delivery stays 08:00 local")
             XCTAssertEqual(comps.minute, 0)
             var cal = Calendar(identifier: .gregorian)
-            cal.timeZone = ny.timeZone!
+            cal.timeZone = try XCTUnwrap(ny.timeZone)
             XCTAssertEqual(cal.component(.hour, from: plan.deliveryDate), 8, "\(label): absolute date resolves to 08:00 local")
         }
     }
 
-    func testSameInstantYieldsDifferentLocalDaysAcrossTimeZones() {
-        let now = ISO8601DateFormatter().date(from: "2026-06-15T20:00:00Z")! // Jun 16 05:00 Tokyo, Jun 15 13:00 LA
+    func testSameInstantYieldsDifferentLocalDaysAcrossTimeZones() throws {
+        let now = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-06-15T20:00:00Z")) // Jun 16 05:00 Tokyo, Jun 15 13:00 LA
         let rule = DailySummaryRule(enabled: true, firstTimeMinutes: 8 * 60)
         let tokyo = makeLocation(timeZone: "Asia/Tokyo")
         let la = makeLocation(timeZone: "America/Los_Angeles")
@@ -309,9 +319,8 @@ final class DailyNotificationReconcilerTests: XCTestCase {
         XCTAssertTrue(tokyoFirst?.identifier.hasSuffix("2026-06-16.1") ?? false, tokyoFirst?.identifier ?? "nil")
         XCTAssertTrue(laFirst?.identifier.hasSuffix("2026-06-16.1") ?? false, laFirst?.identifier ?? "nil")
         // LA's 08:00 on Jun 15 has already passed, so the first LA slot is the next morning.
-        XCTAssertGreaterThan(laFirst!.deliveryDate, now)
-        XCTAssertGreaterThan(tokyoFirst!.deliveryDate, now)
-        XCTAssertLessThan(tokyoFirst!.deliveryDate, laFirst!.deliveryDate)
+        XCTAssertGreaterThan(try XCTUnwrap(laFirst?.deliveryDate), now)
+        XCTAssertGreaterThan(try XCTUnwrap(tokyoFirst?.deliveryDate), now)
+        XCTAssertLessThan(try XCTUnwrap(tokyoFirst?.deliveryDate), try XCTUnwrap(laFirst?.deliveryDate))
     }
 }
-

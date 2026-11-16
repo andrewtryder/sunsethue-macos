@@ -20,7 +20,10 @@ struct WidgetEventContent: Identifiable, Hashable {
 }
 
 struct WidgetDaySection: Identifiable, Hashable {
-    var id: Int { dayOffset }
+    var id: Int {
+        dayOffset
+    }
+
     let dayOffset: Int
     let dayLabel: String
     let timeZoneIdentifier: String
@@ -259,7 +262,8 @@ enum WidgetContentResolver {
     ) -> String? {
         guard let window,
               let start = PresentationFormatting.timeString(window.start, timeZone: timeZone, locale: locale),
-              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone, locale: locale) else {
+              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone, locale: locale)
+        else {
             return nil
         }
         return "\(prefix) \(start)–\(end)"
@@ -269,30 +273,29 @@ enum WidgetContentResolver {
         for entry: SunsetHueEntry,
         location: SavedLocation
     ) -> [EventType] {
-        let modeTypes: [EventType]
-        switch entry.configuration.eventMode {
-        case .sunrise: modeTypes = [.sunrise]
-        case .sunset: modeTypes = [.sunset]
-        case .both: modeTypes = [.sunrise, .sunset]
+        let modeTypes: [EventType] = switch entry.configuration.eventMode {
+        case .sunrise: [.sunrise]
+        case .sunset: [.sunset]
+        case .both: [.sunrise, .sunset]
         }
         return modeTypes.filter { type in
             switch type {
-            case .sunrise: return location.includeSunrise
-            case .sunset: return location.includeSunset
+            case .sunrise: location.includeSunrise
+            case .sunset: location.includeSunset
             }
         }
     }
 
     private static func daySections(
         bundle: LocationForecastBundle,
-        location: SavedLocation,
+        location _: SavedLocation,
         timeZone: TimeZone,
         types: [EventType],
         maxDays: Int,
         now: Date,
         locale: Locale
     ) -> [WidgetDaySection] {
-        (0..<maxDays).compactMap { dayOffset in
+        (0 ..< maxDays).compactMap { dayOffset in
             let events = types.compactMap { type -> WidgetEventContent? in
                 guard let forecast = bundle.forecast(
                     dayOffset: dayOffset,
@@ -379,21 +382,20 @@ enum WidgetContentResolver {
         guard let missing = missingTomorrowTypes.first else { return nil }
 
         // Prefer sunrise then sunset when naming the missing type in Both mode.
-        let typeName: String
-        switch eventMode {
+        let typeName: String = switch eventMode {
         case .sunrise:
-            typeName = "sunrise"
+            "sunrise"
         case .sunset:
-            typeName = "sunset"
+            "sunset"
         case .both:
             if missingTomorrowTypes.contains(.sunrise) {
-                typeName = "sunrise"
+                "sunrise"
             } else if missingTomorrowTypes.contains(.sunset) {
-                typeName = "sunset"
+                "sunset"
             } else if let last = upcoming.last {
-                typeName = last.eventType == .sunrise ? "sunset" : "sunrise"
+                last.eventType == .sunrise ? "sunset" : "sunrise"
             } else {
-                typeName = missing.displayName.lowercased()
+                missing.displayName.lowercased()
             }
         }
         return "Set Forecast Days to 2 for tomorrow's \(typeName)"

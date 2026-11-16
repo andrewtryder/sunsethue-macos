@@ -12,13 +12,13 @@ public enum RefreshTrigger: String, Codable, Hashable, Sendable, CaseIterable {
 
     public var displayName: String {
         switch self {
-        case .bootstrap: return "Bootstrap"
-        case .manual: return "Manual"
-        case .scheduled: return "Scheduled"
-        case .backgroundActivity: return "Background Activity"
-        case .didWake: return "Wake"
-        case .didBecomeActive: return "Active"
-        case .apiKeyChanged: return "API Key Changed"
+        case .bootstrap: "Bootstrap"
+        case .manual: "Manual"
+        case .scheduled: "Scheduled"
+        case .backgroundActivity: "Background Activity"
+        case .didWake: "Wake"
+        case .didBecomeActive: "Active"
+        case .apiKeyChanged: "API Key Changed"
         }
     }
 }
@@ -35,13 +35,13 @@ public enum RefreshResultSummary: String, Codable, Hashable, Sendable, CaseItera
 
     public var displayName: String {
         switch self {
-        case .skippedFresh: return "Skipped (Fresh)"
-        case .refreshedSuccessfully: return "Refreshed Successfully"
-        case .authenticationRequired: return "Authentication Required"
-        case .rateLimited: return "Rate Limited"
-        case .transientFailure: return "Transient Failure"
-        case .invalidRequest: return "Invalid Request"
-        case .persistenceFailure: return "Persistence Failure"
+        case .skippedFresh: "Skipped (Fresh)"
+        case .refreshedSuccessfully: "Refreshed Successfully"
+        case .authenticationRequired: "Authentication Required"
+        case .rateLimited: "Rate Limited"
+        case .transientFailure: "Transient Failure"
+        case .invalidRequest: "Invalid Request"
+        case .persistenceFailure: "Persistence Failure"
         }
     }
 }
@@ -76,7 +76,7 @@ public struct RefreshActivityRecord: Identifiable, Codable, Hashable, Sendable {
 }
 
 /// Thread-safe bounded in-memory rolling history of refresh activity.
-public actor RefreshActivityRecorder: Sendable {
+public actor RefreshActivityRecorder {
     public static let defaultMaxEntries = 50
 
     private let maxEntries: Int
@@ -136,7 +136,7 @@ public enum CoverageDiagnostics: Sendable {
             guard let refDate = forecast.forecastDate ?? forecast.eventTime else { return nil }
             return calc.dayOffset(for: refDate, timeZone: timeZone, now: now)
         })
-        if daysWithForecasts.contains(0) && daysWithForecasts.contains(1) {
+        if daysWithForecasts.contains(0), daysWithForecasts.contains(1) {
             if daysWithForecasts.contains(2) {
                 return "Today + Tomorrow + 2d"
             }
@@ -202,7 +202,7 @@ public struct LocationRefreshDiagnostics: Identifiable, Sendable {
             case .current: statusName = "Current"
             case .stale: statusName = "Stale"
             case .authenticationRequired: statusName = "Authentication Required"
-            case .rateLimited(let retryAfter):
+            case let .rateLimited(retryAfter):
                 if let retryAfter {
                     let formatted = retryAfter.formatted(date: .omitted, time: .shortened)
                     statusName = "Rate Limited (until \(formatted))"

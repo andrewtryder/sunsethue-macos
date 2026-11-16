@@ -1,12 +1,13 @@
-import SwiftUI
 import SunsetHueCore
+import SwiftUI
 
 struct LargeWidgetView: View {
     let entry: SunsetHueEntry
 
     var body: some View {
         if let content = WidgetContentResolver.resolve(entry: entry, preferSingle: false),
-           !content.daySections.isEmpty {
+           !content.daySections.isEmpty
+        {
             ViewThatFits(in: .vertical) {
                 LargeForecastLayout(
                     content: content,
@@ -76,9 +77,9 @@ struct LargeForecastLayout: View {
 
     private func detailLevel(for dayOffset: Int) -> LargeDayDetailLevel {
         switch dayOffset {
-        case 0: return todayDetail
-        case 1: return tomorrowDetail
-        default: return thirdDayDetail
+        case 0: todayDetail
+        case 1: tomorrowDetail
+        default: thirdDayDetail
         }
     }
 }
@@ -135,14 +136,13 @@ struct LargeEventRow: View {
         var parts = [
             event.eventType.displayName,
             "\(qualityStyle.percentage) \(qualityStyle.status)",
-            "at \(event.timeLabel)"
+            "at \(event.timeLabel)",
         ]
         if showMetadata {
-            let cloud: String
-            if let cloudCover = event.cloudCover {
-                cloud = cloudCover.formatted(.percent.precision(.fractionLength(0)))
+            let cloud: String = if let cloudCover = event.cloudCover {
+                cloudCover.formatted(.percent.precision(.fractionLength(0)))
             } else {
-                cloud = "—"
+                "—"
             }
             parts.append("Cloud cover \(cloud)")
             parts.append("golden hour \(windowAccessibility(event.goldenHour))")
@@ -154,7 +154,8 @@ struct LargeEventRow: View {
     private func windowAccessibility(_ window: MagicHourWindow?) -> String {
         guard let window,
               let start = PresentationFormatting.timeString(window.start, timeZone: timeZone),
-              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone) else {
+              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone)
+        else {
             return "—"
         }
         return "\(start) to \(end)"
@@ -268,7 +269,8 @@ struct LargeMetadataLine: View {
     private func windowLabel(_ window: MagicHourWindow?) -> String {
         guard let window,
               let start = PresentationFormatting.timeString(window.start, timeZone: timeZone),
-              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone) else {
+              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone)
+        else {
             return "—"
         }
         return "\(start)–\(end)"

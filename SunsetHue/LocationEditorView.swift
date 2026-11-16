@@ -1,7 +1,7 @@
-import SwiftUI
 import CoreLocation
 import MapKit
 import SunsetHueCore
+import SwiftUI
 
 struct LocationEditorView: View {
     @EnvironmentObject private var appModel: AppModel
@@ -321,7 +321,7 @@ final class CoreCurrentLocationProvider: NSObject, ObservableObject, CurrentLoca
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated func locationManager(_: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         Task { @MainActor in
             guard let location = locations.last else {
                 resumeOnce(throwing: LocationProviderError.unavailable)
@@ -338,7 +338,7 @@ final class CoreCurrentLocationProvider: NSObject, ObservableObject, CurrentLoca
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    nonisolated func locationManager(_: CLLocationManager, didFailWithError _: Error) {
         Task { @MainActor in
             resumeOnce(throwing: LocationProviderError.unavailable)
         }
@@ -354,13 +354,13 @@ enum LocationProviderError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .denied:
-            return "Location access denied. Enter coordinates manually."
+            "Location access denied. Enter coordinates manually."
         case .unavailable:
-            return "Could not determine current location. Enter coordinates manually."
+            "Could not determine current location. Enter coordinates manually."
         case .busy:
-            return "A location request is already in progress."
+            "A location request is already in progress."
         case .timeout:
-            return "Timed out waiting for location. Enter coordinates manually."
+            "Timed out waiting for location. Enter coordinates manually."
         }
     }
 }

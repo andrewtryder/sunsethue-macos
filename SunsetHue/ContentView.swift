@@ -1,5 +1,5 @@
-import SwiftUI
 import SunsetHueCore
+import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var appModel: AppModel
@@ -37,8 +37,13 @@ struct ContentView: View {
 struct EmptyLocationsView: View {
     @EnvironmentObject private var appModel: AppModel
 
-    private var hasKey: Bool { appModel.credentialState == .configured }
-    private var hasLocation: Bool { !appModel.state.locations.isEmpty }
+    private var hasKey: Bool {
+        appModel.credentialState == .configured
+    }
+
+    private var hasLocation: Bool {
+        !appModel.state.locations.isEmpty
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -107,7 +112,9 @@ private struct SetupStepRow<Action: View>: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.headline)
                 Text(detail).font(.callout).foregroundStyle(.secondary)
-                if !isDone { action().padding(.top, 2) }
+                if !isDone {
+                    action().padding(.top, 2)
+                }
             }
         }
         .accessibilityElement(children: .combine)

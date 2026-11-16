@@ -11,7 +11,7 @@ public struct ForecastDateCalculator: Sendable {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         let start = calendar.startOfDay(for: now)
-        return (0..<max(0, dayCount)).compactMap { offset in
+        return (0 ..< max(0, dayCount)).compactMap { offset in
             calendar.date(byAdding: .day, value: offset, to: start)
         }
     }
@@ -24,7 +24,7 @@ public struct ForecastDateCalculator: Sendable {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         let startOfToday = calendar.startOfDay(for: now)
-        let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? now.addingTimeInterval(86_400)
+        let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? now.addingTimeInterval(86400)
         return startOfTomorrow.addingTimeInterval(TimeInterval(delaySeconds))
     }
 
@@ -90,7 +90,7 @@ public struct ForecastDateCalculator: Sendable {
             dates.append(midnight)
         }
 
-        let unique = Array(Set(dates.map { $0.timeIntervalSinceReferenceDate }))
+        let unique = Array(Set(dates.map(\.timeIntervalSinceReferenceDate)))
             .sorted()
             .map { Date(timeIntervalSinceReferenceDate: $0) }
         return unique.filter { $0 >= now && $0 <= reloadDate }

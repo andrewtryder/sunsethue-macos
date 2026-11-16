@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class MultiLocation14Tests: XCTestCase {
     func testLocationReorderingPreservesArrayOrder() {
@@ -39,12 +39,12 @@ final class MultiLocation14Tests: XCTestCase {
         }
         """
 
-        let decoded = try JSONDecoder().decode(NotificationPreferences.self, from: v1JSON.data(using: .utf8)!)
+        let decoded = try JSONDecoder().decode(NotificationPreferences.self, from: XCTUnwrap(v1JSON.data(using: .utf8)))
         XCTAssertTrue(decoded.notificationsEnabled)
         XCTAssertEqual(decoded.locationID, UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
 
         // rule(for: targetID) should resolve the root rules
-        let primaryID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+        let primaryID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let resolvedRule = decoded.rule(for: primaryID)
         XCTAssertTrue(resolvedRule.dailySummary.enabled)
         XCTAssertTrue(resolvedRule.qualityAlert.enabled)

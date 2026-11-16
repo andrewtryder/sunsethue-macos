@@ -1,5 +1,8 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
+
+// Test code: static-identifier fixtures and setUp-established state are safe to unwrap.
+// swiftlint:disable implicitly_unwrapped_optional
 
 final class StorageMigrationTests: XCTestCase {
     private var tempDir: URL!
@@ -103,7 +106,7 @@ final class StorageMigrationTests: XCTestCase {
                 includeSunrise: true,
                 includeSunset: true,
                 refreshIntervalHours: 6
-            )
+            ),
         ])
         try encoder.encode(oldState).write(to: appSupportDir.appendingPathComponent("app-state.json"))
 
@@ -119,7 +122,7 @@ final class StorageMigrationTests: XCTestCase {
                 includeSunrise: true,
                 includeSunset: true,
                 refreshIntervalHours: 6
-            )
+            ),
         ])
         try encoder.encode(existingState).write(to: teamGroupDir.appendingPathComponent("app-state.json"))
 

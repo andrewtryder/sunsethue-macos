@@ -1,8 +1,7 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class StoragePathResolverTests: XCTestCase {
-
     func testNoTeamIDResolvesToApplicationSupportWithoutProbingAppGroup() {
         let groupLookupCallCount = LockIsolated<Int>(0)
         let requestedGroups = LockIsolated<[String]>([])
@@ -204,7 +203,7 @@ private final class LockIsolated<Value>: @unchecked Sendable {
     private var _value: Value
 
     init(_ value: Value) {
-        self._value = value
+        _value = value
     }
 
     var value: Value {

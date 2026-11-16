@@ -5,7 +5,7 @@ struct StatusBadge: View {
     let title: String
     let tone: StatusTone
     var accessibilityLabelText: String = "Status"
-    var accessibilityValueText: String? = nil
+    var accessibilityValueText: String?
 
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -22,10 +22,10 @@ struct StatusBadge: View {
     }
 
     init(quality style: QualityStyle) {
-        self.title = style.status
-        self.tone = style.tone
-        self.accessibilityLabelText = "Forecast quality"
-        self.accessibilityValueText = "\(style.percentage), \(style.status)"
+        title = style.status
+        tone = style.tone
+        accessibilityLabelText = "Forecast quality"
+        accessibilityValueText = "\(style.percentage), \(style.status)"
     }
 
     var body: some View {

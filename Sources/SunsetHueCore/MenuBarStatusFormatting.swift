@@ -85,7 +85,8 @@ public struct MenuBarStatus: Equatable, Sendable {
         }
 
         if !MenuBarForecastResolver.isSelectionEnabled(location: location, selection: selection),
-           let warning = MenuBarForecastResolver.disabledEventMessage(selection: selection) {
+           let warning = MenuBarForecastResolver.disabledEventMessage(selection: selection)
+        {
             return MenuBarStatus(
                 locationName: location.name,
                 eventType: nil,
@@ -211,7 +212,8 @@ public enum MenuBarStatusFormatting: Sendable {
             "quality \(qualityNumber)",
         ]
         if let timeZone = status.timeZone,
-           let time = PresentationFormatting.timeString(status.eventTime, timeZone: timeZone) {
+           let time = PresentationFormatting.timeString(status.eventTime, timeZone: timeZone)
+        {
             parts.append("at \(time)")
         }
         _ = style // accessibility always includes full context
@@ -225,7 +227,8 @@ public enum MenuBarStatusFormatting: Sendable {
     ) -> String? {
         guard let window,
               let start = PresentationFormatting.timeString(window.start, timeZone: timeZone),
-              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone) else {
+              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone)
+        else {
             return nil
         }
         return "\(prefix) \(start)–\(end)"
@@ -299,4 +302,3 @@ public enum MenuBarStatusFormatting: Sendable {
         }
     }
 }
-

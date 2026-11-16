@@ -1,5 +1,8 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
+
+// Test code: static-identifier fixtures and setUp-established state are safe to unwrap.
+// swiftlint:disable implicitly_unwrapped_optional
 
 final class LegacyCacheMigrationHardeningTests: XCTestCase {
     private var root: URL!
@@ -23,8 +26,13 @@ final class LegacyCacheMigrationHardeningTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    private var legacyURL: URL { root.appendingPathComponent("forecast-cache.json") }
-    private var cacheDir: URL { root.appendingPathComponent("forecast-cache", isDirectory: true) }
+    private var legacyURL: URL {
+        root.appendingPathComponent("forecast-cache.json")
+    }
+
+    private var cacheDir: URL {
+        root.appendingPathComponent("forecast-cache", isDirectory: true)
+    }
 
     private func bundle(for id: UUID) -> LocationForecastBundle {
         let template = PreviewFixtures.sampleBundle()

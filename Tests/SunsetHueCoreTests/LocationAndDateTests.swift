@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class LocationAndDateTests: XCTestCase {
     func testCoordinateValidation() {
@@ -22,7 +22,7 @@ final class LocationAndDateTests: XCTestCase {
             timeZoneIdentifier: "America/New_York"
         )
         XCTAssertEqual(try first.validated().normalizedCoordinateKey, try second.validated().normalizedCoordinateKey)
-        XCTAssertThrowsError(try second.validated(againstExisting: [try first.validated()])) { error in
+        XCTAssertThrowsError(try second.validated(againstExisting: [first.validated()])) { error in
             XCTAssertEqual(error as? SunsetHueError, .duplicateLocation)
         }
     }
@@ -41,9 +41,9 @@ final class LocationAndDateTests: XCTestCase {
         XCTAssertNoThrow(try location.validated())
     }
 
-    func testDateGenerationAcrossLocalMidnight() {
+    func testDateGenerationAcrossLocalMidnight() throws {
         let calculator = ForecastDateCalculator()
-        let tz = TimeZone(identifier: "America/New_York")!
+        let tz = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
         // 2026-03-08 23:30 America/New_York
         var components = DateComponents()
         components.year = 2026
@@ -52,7 +52,7 @@ final class LocationAndDateTests: XCTestCase {
         components.hour = 23
         components.minute = 30
         components.timeZone = tz
-        let now = Calendar(identifier: .gregorian).date(from: components)!
+        let now = try XCTUnwrap(Calendar(identifier: .gregorian).date(from: components))
         let dates = calculator.localCalendarDates(dayCount: 3, timeZone: tz, now: now)
         XCTAssertEqual(dates.count, 3)
 
@@ -67,9 +67,9 @@ final class LocationAndDateTests: XCTestCase {
         XCTAssertEqual(cal.component(.second, from: midnight), SunsetHueConstants.midnightRefreshDelaySeconds)
     }
 
-    func testDaylightSavingTimeBoundary() {
+    func testDaylightSavingTimeBoundary() throws {
         let calculator = ForecastDateCalculator()
-        let tz = TimeZone(identifier: "America/New_York")!
+        let tz = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
         // US DST spring forward 2026-03-08
         var components = DateComponents()
         components.year = 2026
@@ -78,7 +78,7 @@ final class LocationAndDateTests: XCTestCase {
         components.hour = 1
         components.minute = 30
         components.timeZone = tz
-        let now = Calendar(identifier: .gregorian).date(from: components)!
+        let now = try XCTUnwrap(Calendar(identifier: .gregorian).date(from: components))
         let midnight = calculator.nextMidnightRefresh(timeZone: tz, now: now)
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
@@ -87,9 +87,9 @@ final class LocationAndDateTests: XCTestCase {
         XCTAssertEqual(cal.component(.hour, from: midnight), 0)
     }
 
-    func testWidgetTimelineRefreshDateCalculation() {
+    func testWidgetTimelineRefreshDateCalculation() throws {
         let calculator = ForecastDateCalculator()
-        let tz = TimeZone(identifier: "UTC")!
+        let tz = try XCTUnwrap(TimeZone(identifier: "UTC"))
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let reload = calculator.preferredTimelineReload(
             refreshIntervalHours: 6,
@@ -110,18 +110,18 @@ final class LocationAndDateTests: XCTestCase {
         // Floor of 15 minutes wins over 30s retry.
         XCTAssertEqual(rateLimited.timeIntervalSince(now), 15 * 60, accuracy: 1)
 
-        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let id = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
         let jitter = SunsetHueConstants.timelineJitterSeconds(for: id)
         XCTAssertGreaterThanOrEqual(jitter, 0)
         XCTAssertLessThan(jitter, SunsetHueConstants.maxTimelineJitterSeconds)
         XCTAssertEqual(jitter, SunsetHueConstants.timelineJitterSeconds(for: id))
     }
 
-    func testDeepLinkParsing() {
-        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+    func testDeepLinkParsing() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
         let url = DeepLink.locationURL(id: id)
         XCTAssertEqual(DeepLink.parse(url), .location(id))
-        XCTAssertEqual(DeepLink.parse(URL(string: "sunsethue://")!), .openApp)
+        XCTAssertEqual(try DeepLink.parse(XCTUnwrap(URL(string: "sunsethue://"))), .openApp)
     }
 
     func testTimelineDisplayDatesIncludeBlueHourBounds() {
@@ -129,7 +129,8 @@ final class LocationAndDateTests: XCTestCase {
         let tz = PreviewFixtures.sampleTimeZone
         let sunrise = PreviewFixtures.averageSunrise()
         guard let blueStart = sunrise.blueHour?.start,
-              let blueEnd = sunrise.blueHour?.end else {
+              let blueEnd = sunrise.blueHour?.end
+        else {
             return XCTFail("Fixture missing blue hour")
         }
         let now = blueStart.addingTimeInterval(-60)

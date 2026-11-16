@@ -25,8 +25,12 @@ enum CoordinatedFileIO {
                 readError = error
             }
         }
-        if let coordinatorError { throw coordinatorError }
-        if let readError { throw readError }
+        if let coordinatorError {
+            throw coordinatorError
+        }
+        if let readError {
+            throw readError
+        }
         return result
     }
 
@@ -54,8 +58,12 @@ enum CoordinatedFileIO {
                 writeError = error
             }
         }
-        if let coordinatorError { throw coordinatorError }
-        if let writeError { throw writeError }
+        if let coordinatorError {
+            throw coordinatorError
+        }
+        if let writeError {
+            throw writeError
+        }
     }
 
     static func deleteItem(at url: URL) throws {
@@ -75,8 +83,12 @@ enum CoordinatedFileIO {
                 deleteError = error
             }
         }
-        if let coordinatorError { throw coordinatorError }
-        if let deleteError { throw deleteError }
+        if let coordinatorError {
+            throw coordinatorError
+        }
+        if let deleteError {
+            throw deleteError
+        }
     }
 
     /// Moves a damaged file aside. Returns the quarantine file name on success.

@@ -1,5 +1,5 @@
-import SwiftUI
 import SunsetHueCore
+import SwiftUI
 
 /// Shared quality bands for app + widget surfaces.
 struct QualityStyle: Equatable {
@@ -64,11 +64,11 @@ enum StatusTone: Equatable {
 
     var tint: Color {
         switch self {
-        case .positive: return .green
-        case .warning: return .orange
-        case .negative: return .red
-        case .info: return .blue
-        case .neutral: return .secondary
+        case .positive: .green
+        case .warning: .orange
+        case .negative: .red
+        case .info: .blue
+        case .neutral: .secondary
         }
     }
 }
@@ -76,9 +76,8 @@ enum StatusTone: Equatable {
 extension EventType {
     var iconColor: Color {
         switch self {
-        case .sunrise: return .orange
-        case .sunset: return .pink
+        case .sunrise: .orange
+        case .sunset: .pink
         }
     }
 }
-

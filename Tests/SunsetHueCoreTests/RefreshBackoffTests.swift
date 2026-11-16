@@ -1,9 +1,9 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class RefreshBackoffTests: XCTestCase {
-    func testTemporaryUnavailableUsesExponentialLadder() {
-        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+    func testTemporaryUnavailableUsesExponentialLadder() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
         let start = Date(timeIntervalSince1970: 1_700_000_000)
 
         let first = RefreshBackoff.nextAttempt(
@@ -69,8 +69,8 @@ final class RefreshBackoffTests: XCTestCase {
         XCTAssertEqual(due.timeIntervalSince(now), 6 * 3600, accuracy: 1)
     }
 
-    func testTimelineJitterIsDeterministicAcrossCalls() {
-        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+    func testTimelineJitterIsDeterministicAcrossCalls() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
         let jitter = SunsetHueConstants.timelineJitterSeconds(for: id)
         XCTAssertEqual(jitter, SunsetHueConstants.timelineJitterSeconds(for: id))
         XCTAssertGreaterThanOrEqual(jitter, 0)

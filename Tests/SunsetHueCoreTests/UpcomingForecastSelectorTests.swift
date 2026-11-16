@@ -1,14 +1,14 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class UpcomingForecastSelectorTests: XCTestCase {
     private let timeZone = PreviewFixtures.sampleTimeZone
 
-    func testOrdersFutureEventsChronologically() {
+    func testOrdersFutureEventsChronologically() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         let today = calendar.startOfDay(for: Date())
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
 
         let sunrise = PreviewFixtures.averageSunrise(on: today)
         let sunset = PreviewFixtures.excellentSunset(on: today)
@@ -58,11 +58,11 @@ final class UpcomingForecastSelectorTests: XCTestCase {
         XCTAssertFalse(result.contains { $0.eventType == .sunrise })
     }
 
-    func testRespectsAllowedTypesAndLimit() {
+    func testRespectsAllowedTypesAndLimit() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         let today = calendar.startOfDay(for: Date())
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
 
         let bundle = LocationForecastBundle(
             locationID: PreviewFixtures.sampleLocationID,

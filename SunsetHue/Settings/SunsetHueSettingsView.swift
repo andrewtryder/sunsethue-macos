@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import SunsetHueCore
+import SwiftUI
 
 struct SunsetHueSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
@@ -106,7 +106,7 @@ struct SunsetHueSettingsView: View {
                     Text("Turning on notifications will ask for permission.")
                         .sunsetHueMuted()
                 }
-                Toggle("Enable notifications", isOn: notificationMasterBinding)
+                Toggle("Enable notifications", isOn: notificationsEnabledBinding)
                 if appModel.state.locations.isEmpty {
                     Text("Add a location before configuring notification delivery.")
                         .sunsetHueMuted()
@@ -189,25 +189,25 @@ struct SunsetHueSettingsView: View {
 
     private var notificationStatusLabel: String {
         switch appModel.notificationAuthorization {
-        case .authorized, .provisional, .ephemeral: return "Allowed"
-        case .denied: return "Denied"
-        case .notDetermined: return "Not requested"
+        case .authorized, .provisional, .ephemeral: "Allowed"
+        case .denied: "Denied"
+        case .notDetermined: "Not requested"
         }
     }
 
     private var notificationStatusTone: StatusTone {
         switch appModel.notificationAuthorization {
-        case .authorized, .provisional, .ephemeral: return .positive
-        case .denied: return .warning
-        case .notDetermined: return .neutral
+        case .authorized, .provisional, .ephemeral: .positive
+        case .denied: .warning
+        case .notDetermined: .neutral
         }
     }
 
-    private var notificationMasterBinding: Binding<Bool> {
+    private var notificationsEnabledBinding: Binding<Bool> {
         Binding(
             get: { appModel.notificationPreferences.notificationsEnabled },
             set: { enabled in
-                Task { await appModel.updateNotificationMaster(enabled: enabled) }
+                Task { await appModel.updateNotificationsEnabled(enabled) }
             }
         )
     }
@@ -231,7 +231,7 @@ struct SunsetHueSettingsView: View {
                         rule.dailySummary.enabled = enabled
                     }
                     if enabled {
-                        await appModel.updateNotificationMaster(enabled: true)
+                        await appModel.updateNotificationsEnabled(true)
                     }
                 }
             }
@@ -246,10 +246,12 @@ struct SunsetHueSettingsView: View {
                 Task {
                     await appModel.updateLocationNotificationRule(for: id) { rule in
                         rule.dailySummary.secondTimeEnabled = enabled
-                        if enabled { rule.dailySummary.enabled = true }
+                        if enabled {
+                            rule.dailySummary.enabled = true
+                        }
                     }
                     if enabled {
-                        await appModel.updateNotificationMaster(enabled: true)
+                        await appModel.updateNotificationsEnabled(true)
                     }
                 }
             }
@@ -266,7 +268,7 @@ struct SunsetHueSettingsView: View {
                         rule.qualityAlert.enabled = enabled
                     }
                     if enabled {
-                        await appModel.updateNotificationMaster(enabled: true)
+                        await appModel.updateNotificationsEnabled(true)
                     }
                 }
             }
@@ -356,14 +358,14 @@ struct SunsetHueSettingsView: View {
 
     private func notificationTestStageLabel(_ stage: NotificationTestResult.Stage) -> String {
         switch stage {
-        case .checkingSettings: return "Checking settings"
-        case .requestingAuthorization: return "Requesting authorization"
-        case .scheduled: return "Scheduled"
-        case .confirmedPending: return "Confirmed pending"
-        case .foregroundDelegateReceived: return "Foreground delegate received"
-        case .confirmedDelivered: return "Delivered"
-        case .suppressed: return "Suppressed"
-        case .failed: return "Failed"
+        case .checkingSettings: "Checking settings"
+        case .requestingAuthorization: "Requesting authorization"
+        case .scheduled: "Scheduled"
+        case .confirmedPending: "Confirmed pending"
+        case .foregroundDelegateReceived: "Foreground delegate received"
+        case .confirmedDelivered: "Delivered"
+        case .suppressed: "Suppressed"
+        case .failed: "Failed"
         }
     }
 
@@ -421,7 +423,8 @@ struct SunsetHueSettingsView: View {
                         }
                         if !newValue,
                            !AppPreferenceDefaults.shared.openMainWindowOnLaunch,
-                           launchAtLogin.isEnabled {
+                           launchAtLogin.isEnabled
+                        {
                             launchAtLogin.errorMessage =
                                 "Keep the menu bar icon, the main window on launch, or turn off Launch at Login so SunsetHue stays reachable."
                             return
@@ -477,7 +480,8 @@ struct SunsetHueSettingsView: View {
                 }
 
                 if appModel.state.locations.count > 1,
-                   menuBarPreferencesStore.preferences.locationMode == .rotateLocations {
+                   menuBarPreferencesStore.preferences.locationMode == .rotateLocations
+                {
                     Picker(
                         "Rotate every",
                         selection: Binding(
@@ -520,7 +524,8 @@ struct SunsetHueSettingsView: View {
                     set: { enabled in
                         if enabled,
                            !showMenuBarExtra,
-                           !AppPreferenceDefaults.shared.openMainWindowOnLaunch {
+                           !AppPreferenceDefaults.shared.openMainWindowOnLaunch
+                        {
                             launchAtLogin.errorMessage =
                                 "Enable the menu bar icon or “Open main window when launched” before turning on Launch at Login."
                             return
@@ -620,7 +625,7 @@ struct SunsetHueSettingsView: View {
                     )
                 }
 
-                if appModel.hasAPIKey && !isReplacingAPIKey {
+                if appModel.hasAPIKey, !isReplacingAPIKey {
                     Text("••••••••••")
                         .foregroundStyle(.secondary)
                         .accessibilityLabel("API key saved")
@@ -712,19 +717,19 @@ struct SunsetHueSettingsView: View {
 
     private var credentialStatusLabel: String {
         switch appModel.credentialState {
-        case .unknown: return "Checking…"
-        case .configured: return "Configured"
-        case .missing: return "Not configured"
-        case .unavailable: return "Keychain unavailable"
+        case .unknown: "Checking…"
+        case .configured: "Configured"
+        case .missing: "Not configured"
+        case .unavailable: "Keychain unavailable"
         }
     }
 
     private var credentialStatusTone: StatusTone {
         switch appModel.credentialState {
-        case .unknown: return .neutral
-        case .configured: return .positive
-        case .missing: return .warning
-        case .unavailable: return .negative
+        case .unknown: .neutral
+        case .configured: .positive
+        case .missing: .warning
+        case .unavailable: .negative
         }
     }
 
@@ -948,20 +953,20 @@ struct SunsetHueSettingsView: View {
 
     private func tone(for status: RefreshStatus) -> StatusTone {
         switch status {
-        case .current: return .positive
-        case .stale: return .neutral
-        case .authenticationRequired: return .warning
-        case .rateLimited: return .warning
-        case .temporarilyUnavailable, .invalidResponse, .invalidRequest: return .negative
+        case .current: .positive
+        case .stale: .neutral
+        case .authenticationRequired: .warning
+        case .rateLimited: .warning
+        case .temporarilyUnavailable, .invalidResponse, .invalidRequest: .negative
         }
     }
 
     private func toneColor(for result: RefreshResultSummary) -> Color {
         switch result {
-        case .refreshedSuccessfully: return .green
-        case .skippedFresh: return .secondary
-        case .authenticationRequired, .rateLimited: return .orange
-        case .transientFailure, .invalidRequest, .persistenceFailure: return .red
+        case .refreshedSuccessfully: .green
+        case .skippedFresh: .secondary
+        case .authenticationRequired, .rateLimited: .orange
+        case .transientFailure, .invalidRequest, .persistenceFailure: .red
         }
     }
 
@@ -1005,7 +1010,7 @@ struct SunsetHueSettingsView: View {
                     cacheReadFailed = true
                 }
             }
-            if cacheReadFailed && snapshots.isEmpty && !appModel.state.locations.isEmpty {
+            if cacheReadFailed, snapshots.isEmpty, !appModel.state.locations.isEmpty {
                 diagnosticsMessage = "Cache could not be read."
                 return
             }

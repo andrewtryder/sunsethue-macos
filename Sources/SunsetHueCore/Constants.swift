@@ -44,6 +44,7 @@ public enum SunsetHueConstants: Sendable {
         }
         return teamAppGroupIdentifier(teamID: teamID)
     }
+
     public static let keychainService = "com.andrewtryder.SunsetHue"
     /// App-only Keychain account (not shared with the widget).
     public static let keychainAccount = "api-key-v2"
@@ -64,6 +65,7 @@ public enum SunsetHueConstants: Sendable {
             nil
         ) as? String
     }
+
     /// Keep in sync with Config/Version.xcconfig and project.yml (release-please).
     public static let marketingVersion = "1.4.1" // x-release-please-version
     public static let userAgent = "SunsetHue-macOS/\(marketingVersion)"
@@ -103,16 +105,15 @@ public enum EventType: String, Codable, Sendable, CaseIterable, Hashable {
 
     public var displayName: String {
         switch self {
-        case .sunrise: return "Sunrise"
-        case .sunset: return "Sunset"
+        case .sunrise: "Sunrise"
+        case .sunset: "Sunset"
         }
     }
 
     public var symbolName: String {
         switch self {
-        case .sunrise: return "sunrise.fill"
-        case .sunset: return "sunset.fill"
+        case .sunrise: "sunrise.fill"
+        case .sunset: "sunset.fill"
         }
     }
 }
-

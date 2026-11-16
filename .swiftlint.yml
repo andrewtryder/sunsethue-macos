@@ -1,0 +1,177 @@
+# SwiftLint owns code-quality and maintainability rules; formatting lives in
+# .swiftformat (SwiftFormat rewrites whitespace/line-wrapping, so SwiftLint's
+# overlapping style rules are disabled here to keep the two tools from fighting).
+#
+# Tool version this file is written for: SwiftLint 0.65.x, SwiftFormat 0.64.x.
+# Repo language mode: Swift 5 (SWIFT_VERSION=5.0 / swiftLanguageMode(.v5)).
+
+# Only include maintained sources; generated Xcode projects, build output, and
+# package checkouts never contain hand-written Swift.
+included:
+  - Sources
+  - Tests
+  - SunsetHue
+  - SunsetHueWidget
+  - SharedUI
+
+excluded:
+  # Build artifacts / generated / vendored content (belt-and-braces vs `included`).
+  - .build
+  - .swiftpm
+  - build
+  - dist
+  - DerivedData
+  - SunsetHue.xcodeproj
+  - Tests/SunsetHueCoreTests/Fixtures
+  - "**/*+Generated.swift"
+
+# ---------------------------------------------------------------------------
+# Rules that overlap with SwiftFormat (formatting only) are disabled so exactly
+# one tool owns each style decision.
+# ---------------------------------------------------------------------------
+disabled_rules:
+  - line_length               # SwiftFormat wraps lines
+  - trailing_comma            # SwiftFormat trailingCommas
+  - trailing_whitespace       # SwiftFormat
+  - vertical_whitespace       # SwiftFormat
+  - trailing_newline          # SwiftFormat
+  - indentation_width         # SwiftFormat indent
+  - leading_whitespace        # SwiftFormat
+  - statement_position        # SwiftFormat elseOnSameLine
+  - return_arrow_whitespace   # SwiftFormat
+  - opening_brace             # SwiftFormat wrapMultilineStatementBraces
+  - closure_spacing           # SwiftFormat spaceInsideParens family
+  - operator_usage_whitespace # SwiftFormat spaceAroundOperators
+  - void_return               # SwiftFormat void
+  # TODO/FIXME markers track real follow-ups; keep them visible but non-blocking.
+  - todo
+
+# ---------------------------------------------------------------------------
+# Opt-in rules (not enabled by default; explicitly selected for this repo).
+# ---------------------------------------------------------------------------
+opt_in_rules:
+  - empty_count
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - discouraged_none_name
+  - nslocalizedstring_key
+  - balanced_xctest_lifecycle
+  - non_optional_string_data_conversion
+  - redundant_sendable
+  - static_over_final_class
+  - implicit_optional_initialization
+  - compiler_protocol_init
+
+analyzer_rules:
+  - unused_import
+
+# ---------------------------------------------------------------------------
+# Rule configuration + severity gates. Anything marked error blocks a commit/CI.
+#
+# Files listed under a rule's `excluded` are explicit, documented exceptions:
+# they were flagged by the pre-enforcement audit and predate this config.
+# Splitting them is tracked follow-up work, not a lint escape hatch; new code is
+# held to the thresholds. When a file is split, remove its entry.
+# ---------------------------------------------------------------------------
+# Metric thresholds: warnings sit at the worst pre-existing audit values so the
+# current codebase passes --strict, while any NEW growth past the error tier
+# fails. Splitting the oversized files is tracked follow-up work; as each is
+# refactored, pull its threshold back down.
+cyclomatic_complexity:
+  warning: 25
+  error: 40
+
+function_body_length:
+  warning: 210
+  error: 260
+
+type_body_length:
+  warning: 1000
+  error: 1400
+
+file_length:
+  warning: 1100
+  error: 1500
+
+function_parameter_count:
+  warning: 9
+  error: 14
+
+inclusive_language:
+  severity: error
+
+identifier_name:
+  min_length: 2           # 'tz', 'qa', loop counters in tests: acceptable as-is
+  max_length: 45
+  excluded:
+    - id
+    - to
+    - by
+    - at
+    - in
+    - a
+    - b
+    - c
+    - f
+    - s
+    - ny
+    - la
+    - tz
+    - qa
+    - qb
+    - bg
+    - fd
+    - h
+
+type_name:
+  min_length: 3
+  max_length: 60
+
+large_tuple:
+  warning: 3
+
+force_cast:
+  severity: error
+force_try:
+  severity: error
+unused_import:
+  severity: error
+duplicate_imports:
+  severity: error
+empty_count:
+  severity: error
+unused_enumerated:
+  severity: error
+for_where:
+  severity: error
+implicit_optional_initialization:
+  severity: error
+compiler_protocol_init:
+  severity: error
+xctfail_message:
+  severity: error
+force_unwrapping:
+  severity: error
+
+non_optional_string_data_conversion:
+  severity: warning
+redundant_sendable:
+  severity: warning
+static_over_final_class:
+  severity: warning
+balanced_xctest_lifecycle:
+  severity: warning
+implicitly_unwrapped_optional:
+  severity: warning
+discouraged_none_name:
+  severity: warning
+nslocalizedstring_key:
+  severity: warning
+redundant_void_return:
+  severity: warning
+blanket_disable_command:
+  # Test files and PreviewFixtures carry file-scoped disables for unwrap rules:
+  # static-identifier fixtures and setUp-established state are safe to unwrap.
+  allowed_rules:
+    - force_unwrapping
+    - implicitly_unwrapped_optional

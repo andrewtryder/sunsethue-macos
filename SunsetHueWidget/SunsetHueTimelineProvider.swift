@@ -1,5 +1,5 @@
-import WidgetKit
 import SunsetHueCore
+import WidgetKit
 
 struct SunsetHueEntry: TimelineEntry {
     enum Kind {
@@ -41,11 +41,11 @@ struct SunsetHueEntry: TimelineEntry {
         configuration: SunsetHueWidgetConfigurationIntent
     ) {
         self.date = date
-        self.kind = Kind(model.kind)
-        self.location = model.location
-        self.bundle = model.bundle
+        kind = Kind(model.kind)
+        location = model.location
+        bundle = model.bundle
         self.configuration = configuration
-        self.statusMessage = model.statusMessage
+        statusMessage = model.statusMessage
     }
 }
 
@@ -71,7 +71,7 @@ struct SunsetHueTimelineProvider: AppIntentTimelineProvider {
     private let forecastCache = SharedStorageFactory.makeForecastCache()
     private let dateCalculator = ForecastDateCalculator()
 
-    func placeholder(in context: Context) -> SunsetHueEntry {
+    func placeholder(in _: Context) -> SunsetHueEntry {
         SunsetHueEntry(
             date: Date(),
             kind: .placeholder,
@@ -89,7 +89,7 @@ struct SunsetHueTimelineProvider: AppIntentTimelineProvider {
         return await makeEntry(for: configuration, date: Date())
     }
 
-    func timeline(for configuration: SunsetHueWidgetConfigurationIntent, in context: Context) async -> Timeline<SunsetHueEntry> {
+    func timeline(for configuration: SunsetHueWidgetConfigurationIntent, in _: Context) async -> Timeline<SunsetHueEntry> {
         let now = Date()
         let entry = await makeEntry(for: configuration, date: now)
 
@@ -116,7 +116,7 @@ struct SunsetHueTimelineProvider: AppIntentTimelineProvider {
         for configuration: SunsetHueWidgetConfigurationIntent,
         date: Date
     ) async -> SunsetHueEntry {
-        let state = (try? await settingsStore.load())?.value ?? SharedAppState()
+        let state = await (try? settingsStore.load())?.value ?? SharedAppState()
         guard !state.locations.isEmpty else {
             return SunsetHueEntry(
                 date: date,

@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import SunsetHueCore
+import SwiftUI
 
 /// Expanded menu-bar popup (`.menuBarExtraStyle(.window)`).
 struct SunsetHueMenuBarPopoverView: View {
@@ -31,10 +31,19 @@ struct SunsetHueMenuBarPopoverView: View {
         }
         .padding(.vertical, 8)
         .frame(width: 360)
-        .onAppear { labelController.isPopupPresented = true }
-        .onDisappear { labelController.isPopupPresented = false }
+        .onAppear { setPopupPresented(true) }
+        .onDisappear { setPopupPresented(false) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("SunsetHue menu")
+    }
+
+    /// Records presentation transitions on the controller. Idempotent by design:
+    /// SwiftUI may fire `onAppear`/`onDisappear` more than once per transition, and
+    /// the controller ignores writes that do not change the value.
+    private func setPopupPresented(_ presented: Bool) {
+        if labelController.isPopupPresented != presented {
+            labelController.isPopupPresented = presented
+        }
     }
 
     private var popoverRows: [MenuBarPopoverRow] {
@@ -160,7 +169,8 @@ struct SunsetHueMenuBarPopoverView: View {
         if let eventType = row.eventType,
            let eventLabel = row.eventLabel,
            let dayTimeLabel = row.dayTimeLabel,
-           let qualityLabel = row.qualityLabel {
+           let qualityLabel = row.qualityLabel
+        {
             // Normal forecast row: EVENT | TIME | QUALITY
             HStack(spacing: 6) {
                 HStack(spacing: 3) {
@@ -226,7 +236,6 @@ struct SunsetHueMenuBarPopoverView: View {
             }
             .disabled(appModel.isRefreshing)
             .controlSize(.small)
-            .disabled(appModel.isRefreshing)
             .keyboardShortcut("r", modifiers: [.command])
             .frame(maxWidth: .infinity, alignment: .leading)
 

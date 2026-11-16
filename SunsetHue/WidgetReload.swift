@@ -1,6 +1,6 @@
 import Foundation
-import WidgetKit
 import SunsetHueCore
+import WidgetKit
 
 enum WidgetReload {
     static func timelines() {

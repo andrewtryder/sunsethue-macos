@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 final class MenuBarForecastResolverTests: XCTestCase {
     private let timeZone = PreviewFixtures.sampleTimeZone
@@ -70,9 +70,9 @@ final class MenuBarForecastResolverTests: XCTestCase {
         XCTAssertEqual(item?.eventTime, sunsetTime)
     }
 
-    func testAfterSunsetSelectsTomorrowSunrise() {
+    func testAfterSunsetSelectsTomorrowSunrise() throws {
         let today = calendar.startOfDay(for: Date())
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
         let sunrise = PreviewFixtures.averageSunrise(on: today)
         let sunset = PreviewFixtures.excellentSunset(on: today)
         let tomorrowSunrise = PreviewFixtures.averageSunrise(on: tomorrow).withForecastDate(tomorrow)
@@ -171,10 +171,10 @@ final class MenuBarRotationLogicTests: XCTestCase {
         )
     }
 
-    func testRotationFollowsLocationOrder() {
-        let a = makeLocation(id: UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!, name: "A")
-        let b = makeLocation(id: UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!, name: "B")
-        let c = makeLocation(id: UUID(uuidString: "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC")!, name: "C")
+    func testRotationFollowsLocationOrder() throws {
+        let a = try makeLocation(id: XCTUnwrap(UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")), name: "A")
+        let b = try makeLocation(id: XCTUnwrap(UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")), name: "B")
+        let c = try makeLocation(id: XCTUnwrap(UUID(uuidString: "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC")), name: "C")
         let locations = [a, b, c]
         let prefs = MenuBarPreferences(locationMode: .rotateLocations, rotationIntervalSeconds: 10)
         let epoch = Date(timeIntervalSince1970: 0)

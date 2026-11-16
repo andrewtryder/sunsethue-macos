@@ -7,17 +7,17 @@ public enum NotificationEventMode: String, Codable, CaseIterable, Sendable {
 
     public var allowedTypes: Set<EventType> {
         switch self {
-        case .sunrise: return [.sunrise]
-        case .sunset: return [.sunset]
-        case .both: return [.sunrise, .sunset]
+        case .sunrise: [.sunrise]
+        case .sunset: [.sunset]
+        case .both: [.sunrise, .sunset]
         }
     }
 
     public var displayName: String {
         switch self {
-        case .sunrise: return "Sunrise"
-        case .sunset: return "Sunset"
-        case .both: return "Both"
+        case .sunrise: "Sunrise"
+        case .sunset: "Sunset"
+        case .both: "Both"
         }
     }
 }
@@ -123,8 +123,8 @@ public struct NotificationPreferences: Codable, Equatable, Sendable {
         locationRules[locationID] = rule
         if self.locationID == locationID || self.locationID == nil {
             self.locationID = locationID
-            self.dailySummary = rule.dailySummary
-            self.qualityAlert = rule.qualityAlert
+            dailySummary = rule.dailySummary
+            qualityAlert = rule.qualityAlert
         }
     }
 
@@ -132,14 +132,16 @@ public struct NotificationPreferences: Codable, Equatable, Sendable {
         locationRules.removeValue(forKey: locationID)
         if self.locationID == locationID {
             self.locationID = nil
-            self.dailySummary = DailySummaryRule()
-            self.qualityAlert = QualityAlertRule()
+            dailySummary = DailySummaryRule()
+            qualityAlert = QualityAlertRule()
         }
     }
 
     public var hasAnyDeliveryRuleEnabled: Bool {
         guard notificationsEnabled else { return false }
-        if dailySummary.enabled || qualityAlert.enabled { return true }
+        if dailySummary.enabled || qualityAlert.enabled {
+            return true
+        }
         return locationRules.values.contains { $0.dailySummary.enabled || $0.qualityAlert.enabled }
     }
 
@@ -155,13 +157,13 @@ public struct NotificationPreferences: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        self.notificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? false
-        self.locationID = try container.decodeIfPresent(UUID.self, forKey: .locationID)
-        self.dailySummary = try container.decodeIfPresent(DailySummaryRule.self, forKey: .dailySummary) ?? DailySummaryRule()
-        self.qualityAlert = try container.decodeIfPresent(QualityAlertRule.self, forKey: .qualityAlert) ?? QualityAlertRule()
-        self.playSound = try container.decodeIfPresent(Bool.self, forKey: .playSound) ?? true
-        self.locationRules = try container.decodeIfPresent([UUID: LocationNotificationRule].self, forKey: .locationRules) ?? [:]
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        notificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? false
+        locationID = try container.decodeIfPresent(UUID.self, forKey: .locationID)
+        dailySummary = try container.decodeIfPresent(DailySummaryRule.self, forKey: .dailySummary) ?? DailySummaryRule()
+        qualityAlert = try container.decodeIfPresent(QualityAlertRule.self, forKey: .qualityAlert) ?? QualityAlertRule()
+        playSound = try container.decodeIfPresent(Bool.self, forKey: .playSound) ?? true
+        locationRules = try container.decodeIfPresent([UUID: LocationNotificationRule].self, forKey: .locationRules) ?? [:]
     }
 }
 
@@ -205,7 +207,7 @@ public enum NotificationDeliveryLedgerMath {
         _ entries: [NotificationLedgerEntry],
         now: Date = Date()
     ) -> [NotificationLedgerEntry] {
-        let cutoff = now.addingTimeInterval(-TimeInterval(pruneAfterDays * 86_400))
+        let cutoff = now.addingTimeInterval(-TimeInterval(pruneAfterDays * 86400))
         return entries.filter { $0.recordedAt >= cutoff }
     }
 

@@ -20,8 +20,8 @@ public struct KeychainCredentialStore: CredentialStore {
 
         var usesDataProtection: Bool {
             switch self {
-            case .dataProtection: return true
-            case .login: return false
+            case .dataProtection: true
+            case .login: false
             }
         }
     }
@@ -52,16 +52,15 @@ public struct KeychainCredentialStore: CredentialStore {
                 throw error
             }
         }
-        if let lastError { throw lastError }
+        if let lastError {
+            throw lastError
+        }
         return nil
     }
 
     public func saveAPIKey(_ apiKey: String) throws {
         let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw SunsetHueError.missingCredentials
-        }
-        guard let data = trimmed.data(using: .utf8) else {
+        guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8) else {
             throw SunsetHueError.missingCredentials
         }
 
@@ -182,13 +181,13 @@ public enum KeychainStatusMapper {
     public static func error(for status: OSStatus) -> SunsetHueError {
         switch status {
         case errSecInteractionNotAllowed:
-            return .keychainUnavailable
+            .keychainUnavailable
         case errSecItemNotFound:
-            return .missingCredentials
+            .missingCredentials
         case errSecMissingEntitlement, errSecInvalidOwnerEdit:
-            return .keychainEntitlementMisconfigured
+            .keychainEntitlementMisconfigured
         default:
-            return .keychainUnavailable
+            .keychainUnavailable
         }
     }
 }
@@ -216,6 +215,6 @@ public final class InMemoryCredentialStore: CredentialStore, @unchecked Sendable
 
     public func deleteAPIKey() throws {
         lock.lock(); defer { lock.unlock() }
-        self.apiKey = nil
+        apiKey = nil
     }
 }

@@ -1,9 +1,11 @@
 name: CI
 
-# Default CI is intentionally lightweight: one macOS job (package tests, project
-# drift, metadata) plus one cheap Linux job (secret scan). Expensive work
-# (universal build, DMG packaging, sanitizers) can be run locally. No signing identity, provisioning
-# profile, or notarization is required anywhere.
+# CI runs the full quality gate on every push and PR: formatting (SwiftFormat),
+# linting (SwiftLint), package tests, an unsigned application build, XcodeGen
+# project sync, release metadata, and shell syntax. No signing identity,
+# provisioning profile, or notarization is required anywhere. Expensive extra
+# work (universal build, DMG packaging, sanitizers) remains local-only via
+# scripts/package-unsigned.sh.
 
 on:
   push:
@@ -19,9 +21,9 @@ concurrency:
 
 jobs:
   package-tests:
-    name: Package tests and project checks
+    name: Quality gate, tests, and unsigned build
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -38,8 +40,24 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install tooling
+        # SwiftFormat is version-pinned so local runs and CI agree on rule
+        # behavior: 0.64.x rule sets (andOperator, redundantParens) drift
+        # between patch releases and a drift silently breaks --lint gates.
+        run: |
+          brew install xcodegen swiftlint
+          brew install swiftformat
+          if [[ "$(swiftformat --version)" != "0.64.5" ]]; then
+            echo "Expected SwiftFormat 0.64.5, got $(swiftformat --version). Update the pin and re-verify locally." >&2
+            exit 1
+          fi
+          swiftlint version
+
+      - name: SwiftFormat (lint only)
+        run: swiftformat --lint .
+
+      - name: SwiftLint (strict)
+        run: swiftlint lint --strict --quiet
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -51,7 +69,35 @@ jobs:
         run: python3 scripts/verify_release_metadata.py
 
       - name: Run package tests
-        run: swift test --package-path .
+        run: swift test
+
+      - name: Build app (unsigned)
+        run: |
+          xcodebuild \
+            -scheme SunsetHue \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData-ci-unsigned \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=- \
+            build
+
+      - name: Verify built app bundle
+        run: |
+          APP="build/DerivedData-ci-unsigned/Build/Products/Debug/SunsetHue.app"
+          test -d "$APP"
+          test -x "$APP/Contents/MacOS/SunsetHue"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist"
+          echo "App bundle present and executable."
+
+      - name: Shell syntax checks
+        run: |
+          set -euo pipefail
+          for sh in $(find scripts -name '*.sh' -type f); do
+            bash -n "$sh"
+            echo "OK $sh"
+          done
 
   secret-scan:
     name: Secret scan

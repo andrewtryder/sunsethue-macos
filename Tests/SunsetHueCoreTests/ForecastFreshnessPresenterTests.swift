@@ -1,5 +1,8 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
+
+// Test code: static-identifier fixtures and setUp-established state are safe to unwrap.
+// swiftlint:disable force_unwrapping
 
 final class ForecastFreshnessPresenterTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_780_000_000)
@@ -55,8 +58,8 @@ final class ForecastFreshnessPresenterTests: XCTestCase {
         XCTAssertEqual(ForecastFreshnessPresenter.ageText(from: now.addingTimeInterval(-10), now: now), "just now")
         XCTAssertEqual(ForecastFreshnessPresenter.ageText(from: now.addingTimeInterval(-12 * 60), now: now), "12 min ago")
         XCTAssertEqual(ForecastFreshnessPresenter.ageText(from: now.addingTimeInterval(-3 * 3600), now: now), "3 hr ago")
-        XCTAssertEqual(ForecastFreshnessPresenter.ageText(from: now.addingTimeInterval(-86_400), now: now), "1 day ago")
-        XCTAssertEqual(ForecastFreshnessPresenter.ageText(from: now.addingTimeInterval(-3 * 86_400), now: now), "3 days ago")
+        XCTAssertEqual(ForecastFreshnessPresenter.ageText(from: now.addingTimeInterval(-86400), now: now), "1 day ago")
+        XCTAssertEqual(ForecastFreshnessPresenter.ageText(from: now.addingTimeInterval(-3 * 86400), now: now), "3 days ago")
     }
 
     func testFreshCurrentForecastIsDescribedAsCurrent() {
@@ -145,4 +148,3 @@ final class ForecastFreshnessPresenterTests: XCTestCase {
         XCTAssertTrue(result.isRefreshing)
     }
 }
-

@@ -1,5 +1,5 @@
-import SwiftUI
 import SunsetHueCore
+import SwiftUI
 
 struct SmallWidgetView: View {
     let entry: SunsetHueEntry

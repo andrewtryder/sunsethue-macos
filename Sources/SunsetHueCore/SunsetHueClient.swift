@@ -39,10 +39,14 @@ public struct SunsetHueClient: Sendable {
         }
         let dateString = String(format: "%04d-%02d-%02d", year, month, day)
 
-        var componentsURL = URLComponents(
-            url: SunsetHueConstants.apiBaseURL.appendingPathComponent(SunsetHueConstants.apiEventPath),
-            resolvingAgainstBaseURL: false
-        )!
+        guard
+            var componentsURL = URLComponents(
+                url: SunsetHueConstants.apiBaseURL.appendingPathComponent(SunsetHueConstants.apiEventPath),
+                resolvingAgainstBaseURL: false
+            )
+        else {
+            throw SunsetHueError.invalidRequest
+        }
         componentsURL.queryItems = [
             URLQueryItem(name: "latitude", value: String(validated.latitude)),
             URLQueryItem(name: "longitude", value: String(validated.longitude)),
@@ -92,7 +96,7 @@ public struct SunsetHueClient: Sendable {
 
     static func raiseForStatus(_ response: HTTPResponse) throws {
         let status = response.statusCode
-        if (200..<300).contains(status) {
+        if (200 ..< 300).contains(status) {
             return
         }
         if status == 401 || status == 403 {
@@ -105,7 +109,7 @@ public struct SunsetHueClient: Sendable {
         if status == 400 || status == 422 {
             throw SunsetHueError.invalidRequest
         }
-        if (500..<600).contains(status) {
+        if (500 ..< 600).contains(status) {
             throw SunsetHueError.serviceUnavailable
         }
         throw SunsetHueError.unexpectedStatus(status)

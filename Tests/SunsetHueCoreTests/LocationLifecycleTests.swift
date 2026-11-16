@@ -1,5 +1,5 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
 
 /// Transport whose responses are held until `release()` so tests can interleave
 /// location edits/deletions with an in-flight refresh deterministically.
@@ -9,11 +9,15 @@ actor GatedTransport: HTTPTransport {
     private var count = 0
     private let body: Data
 
-    init(body: Data) { self.body = body }
+    init(body: Data) {
+        self.body = body
+    }
 
-    var requestCount: Int { count }
+    var requestCount: Int {
+        count
+    }
 
-    func perform(_ request: URLRequest) async throws -> HTTPResponse {
+    func perform(_: URLRequest) async throws -> HTTPResponse {
         count += 1
         if !isOpen {
             await withCheckedContinuation { continuation in
@@ -31,7 +35,7 @@ actor GatedTransport: HTTPTransport {
     }
 
     func waitUntilRequested(minimum: Int = 1) async throws {
-        for _ in 0..<400 where count < minimum {
+        for _ in 0 ..< 400 where count < minimum {
             try await Task.sleep(nanoseconds: 5_000_000)
         }
     }
@@ -102,7 +106,7 @@ final class LocationLifecycleTests: XCTestCase {
                     blueHour: nil,
                     goldenHour: nil,
                     forecastDate: now
-                )
+                ),
             ],
             status: .current
         )
@@ -144,9 +148,9 @@ final class LocationLifecycleTests: XCTestCase {
         let location = makeLocation(forecastDays: 2, sunrise: true, sunset: true)
         let now = Date()
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = location.timeZone!
+        cal.timeZone = try XCTUnwrap(location.timeZone)
         let today = cal.startOfDay(for: now)
-        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = try XCTUnwrap(cal.date(byAdding: .day, value: 1, to: today))
 
         func makeEvent(_ type: EventType, on day: Date) -> EventForecast {
             EventForecast(
@@ -239,7 +243,7 @@ final class LocationLifecycleTests: XCTestCase {
 
     func testRemovalDuringInFlightRefreshDoesNotRecreateCache() async throws {
         let location = makeLocation()
-        let transport = GatedTransport(body: try loadFixture("event_full"))
+        let transport = try GatedTransport(body: loadFixture("event_full"))
         let (coordinator, settings, cache) = makeCoordinator(location: location, transport: transport)
 
         let refresh = Task { await coordinator.refreshLocation(id: location.id, force: true) }
@@ -263,7 +267,7 @@ final class LocationLifecycleTests: XCTestCase {
 
     func testEditDuringInFlightRefreshDiscardsOldCoordinateResult() async throws {
         let location = makeLocation()
-        let transport = GatedTransport(body: try loadFixture("event_full"))
+        let transport = try GatedTransport(body: loadFixture("event_full"))
         let (coordinator, settings, cache) = makeCoordinator(location: location, transport: transport)
 
         let refresh = Task { await coordinator.refreshLocation(id: location.id, force: true) }
@@ -282,7 +286,7 @@ final class LocationLifecycleTests: XCTestCase {
 
     func testOverlappingRefreshesAreSingleFlight() async throws {
         let location = makeLocation(forecastDays: 2, sunrise: false, sunset: true)
-        let transport = GatedTransport(body: try loadFixture("event_full"))
+        let transport = try GatedTransport(body: loadFixture("event_full"))
         let (coordinator, _, cache) = makeCoordinator(location: location, transport: transport)
 
         let first = Task { await coordinator.refreshLocation(id: location.id, force: false) }
@@ -336,13 +340,14 @@ final class LocationLifecycleTests: XCTestCase {
         let stored = try await cache.loadSnapshot(for: location.id)
         XCTAssertEqual(stored?.status, limited.status)
     }
+
     func testIncreasingForecastDaysTriggersRefreshWhenMissingDisplayCoverage() async throws {
         let location = makeLocation(forecastDays: 2, sunrise: false, sunset: true)
         let now = Date()
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = location.timeZone!
+        cal.timeZone = try XCTUnwrap(location.timeZone)
         let today = cal.startOfDay(for: now)
-        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = try XCTUnwrap(cal.date(byAdding: .day, value: 1, to: today))
 
         func makeEvent(_ type: EventType, on day: Date) -> EventForecast {
             EventForecast(
@@ -549,7 +554,9 @@ private actor TestGate {
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
     func wait() async {
-        if isGateOpen { return }
+        if isGateOpen {
+            return
+        }
         await withCheckedContinuation { c in
             waiters.append(c)
         }
@@ -571,20 +578,23 @@ private actor BlockingCache: ForecastCache {
     var internalCache = InMemoryForecastCache()
 
     func setOnSaveStart(_ action: (@Sendable () -> Void)?) {
-        self.onSaveStart = action
+        onSaveStart = action
     }
 
     func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? {
         try await internalCache.loadSnapshot(for: locationID)
     }
+
     func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? {
         try await internalCache.loadBundle(for: locationID)
     }
+
     func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
         onSaveStart?()
         await gate.wait()
         return try await internalCache.saveSnapshot(snapshot)
     }
+
     func deleteLocation(_ locationID: UUID) async throws {
         try await internalCache.deleteLocation(locationID)
     }
@@ -593,10 +603,10 @@ private actor BlockingCache: ForecastCache {
 private final class SpySideEffectSink: ForecastRefreshSideEffectSink, @unchecked Sendable {
     var emitted = false
     func didPersistSnapshot(
-        location: SavedLocation,
-        previous: CachedLocationSnapshot?,
-        current: CachedLocationSnapshot,
-        wasSuccessfulNetworkRefresh: Bool
+        location _: SavedLocation,
+        previous _: CachedLocationSnapshot?,
+        current _: CachedLocationSnapshot,
+        wasSuccessfulNetworkRefresh _: Bool
     ) async {
         emitted = true
     }

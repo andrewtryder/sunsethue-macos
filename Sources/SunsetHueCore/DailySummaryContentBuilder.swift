@@ -100,11 +100,12 @@ public enum DailySummaryContentBuilder: Sendable {
         if includeTomorrowPrefix,
            let forecastDate = forecast.forecastDate,
            let offset = ForecastDateCalculator().dayOffset(
-            for: forecastDate,
-            timeZone: timeZone,
-            now: deliveryDate
+               for: forecastDate,
+               timeZone: timeZone,
+               now: deliveryDate
            ),
-           offset == 1 {
+           offset == 1
+        {
             name = "Tomorrow \(forecast.eventType.displayName.lowercased())"
         }
         return "\(name) \(quality) \(status) at \(time)"
@@ -117,7 +118,8 @@ public enum DailySummaryContentBuilder: Sendable {
     ) -> String? {
         guard let window,
               let start = PresentationFormatting.timeString(window.start, timeZone: timeZone, locale: locale),
-              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone, locale: locale) else {
+              let end = PresentationFormatting.timeString(window.end, timeZone: timeZone, locale: locale)
+        else {
             return nil
         }
         return "\(start)–\(end)"

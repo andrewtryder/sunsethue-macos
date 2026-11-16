@@ -1,5 +1,8 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
+
+// Test code: static-identifier fixtures and setUp-established state are safe to unwrap.
+// swiftlint:disable force_unwrapping
 
 /// Streams a large body without a trustworthy Content-Length (or with a lying small one).
 private final class CancelCounter: @unchecked Sendable {
@@ -26,17 +29,25 @@ final class OversizedStreamURLProtocol: URLProtocol, @unchecked Sendable {
     static let markerHost = "oversized.sunsethue.test"
     private static let cancelCounter = CancelCounter()
 
-    static var cancelCount: Int { cancelCounter.count }
+    static var cancelCount: Int {
+        cancelCounter.count
+    }
 
     static func reset() {
         cancelCounter.reset()
     }
 
+    // URLProtocol requires overridable class members.
+    // swiftlint:disable:next static_over_final_class
     override class func canInit(with request: URLRequest) -> Bool {
         request.url?.host == markerHost
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    // URLProtocol requires overridable class members.
+    // swiftlint:disable:next static_over_final_class
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
 
     override func startLoading() {
         let response = HTTPURLResponse(
@@ -72,6 +83,11 @@ final class OversizedStreamURLProtocol: URLProtocol, @unchecked Sendable {
 }
 
 final class StreamingTransportTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        URLProtocol.registerClass(OversizedStreamURLProtocol.self)
+    }
+
     override func tearDown() {
         URLProtocol.unregisterClass(OversizedStreamURLProtocol.self)
         OversizedStreamURLProtocol.reset()
@@ -87,7 +103,7 @@ final class StreamingTransportTests: XCTestCase {
         let session = URLSession(configuration: config)
         let transport = URLSessionTransport(session: session)
 
-        let url = URL(string: "https://\(OversizedStreamURLProtocol.markerHost)/event")!
+        let url = try XCTUnwrap(URL(string: "https://\(OversizedStreamURLProtocol.markerHost)/event"))
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
 
@@ -103,13 +119,19 @@ final class StreamingTransportTests: XCTestCase {
         XCTAssertGreaterThan(OversizedStreamURLProtocol.cancelCount, 0)
     }
 
-    func testStreamingRejectsOversizedContentLengthBeforeBody() async {
+    func testStreamingRejectsOversizedContentLengthBeforeBody() async throws {
         final class ContentLengthURLProtocol: URLProtocol, @unchecked Sendable {
+            // URLProtocol requires overridable class members.
+            // swiftlint:disable:next static_over_final_class
             override class func canInit(with request: URLRequest) -> Bool {
                 request.url?.host == "content-length.sunsethue.test"
             }
 
-            override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+            // URLProtocol requires overridable class members.
+            // swiftlint:disable:next static_over_final_class
+            override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+                request
+            }
 
             override func startLoading() {
                 let response = HTTPURLResponse(
@@ -135,7 +157,7 @@ final class StreamingTransportTests: XCTestCase {
         config.protocolClasses = [ContentLengthURLProtocol.self]
         let session = URLSession(configuration: config)
         let transport = URLSessionTransport(session: session)
-        var request = URLRequest(url: URL(string: "https://content-length.sunsethue.test/event")!)
+        var request = try URLRequest(url: XCTUnwrap(URL(string: "https://content-length.sunsethue.test/event")))
         request.httpMethod = "GET"
 
         do {

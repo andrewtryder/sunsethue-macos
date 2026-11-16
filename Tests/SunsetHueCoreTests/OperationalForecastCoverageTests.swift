@@ -1,5 +1,8 @@
-import XCTest
 @testable import SunsetHueCore
+import XCTest
+
+// Test code: static-identifier fixtures and setUp-established state are safe to unwrap.
+// swiftlint:disable force_unwrapping
 
 final class OperationalForecastCoverageTests: XCTestCase {
     private let timeZoneNY = TimeZone(identifier: "America/New_York")!
@@ -49,7 +52,7 @@ final class OperationalForecastCoverageTests: XCTestCase {
         )
     }
 
-    // A. ForecastService with forecastDays == 1 fetches TWO local calendar days (today & tomorrow).
+    /// A. ForecastService with forecastDays == 1 fetches TWO local calendar days (today & tomorrow).
     func testForecastServiceWithOneForecastDayFetchesTwoLocalCalendarDays() async throws {
         let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
         let body = try loadFixture("event_full")
@@ -60,7 +63,7 @@ final class OperationalForecastCoverageTests: XCTestCase {
         let service = ForecastService(transport: transport)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
-        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0))!
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0)))
 
         let bundle = try await service.refresh(location: location, apiKey: "test-key", now: now)
 
@@ -74,7 +77,7 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertEqual(requestedDates, ["2026-08-20", "2026-08-21"])
     }
 
-    // B. ForecastService with forecastDays == 2 remains two days.
+    /// B. ForecastService with forecastDays == 2 remains two days.
     func testForecastServiceWithTwoForecastDaysFetchesTwoDays() async throws {
         let location = makeLocation(forecastDays: 2, sunrise: false, sunset: true)
         let body = try loadFixture("event_full")
@@ -85,7 +88,7 @@ final class OperationalForecastCoverageTests: XCTestCase {
         let service = ForecastService(transport: transport)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
-        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0))!
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0)))
 
         let bundle = try await service.refresh(location: location, apiKey: "test-key", now: now)
 
@@ -93,7 +96,7 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertEqual(transport.requests.count, 2)
     }
 
-    // C. ForecastService with forecastDays == 3 remains three days.
+    /// C. ForecastService with forecastDays == 3 remains three days.
     func testForecastServiceWithThreeForecastDaysFetchesThreeDays() async throws {
         let location = makeLocation(forecastDays: 3, sunrise: false, sunset: true)
         let body = try loadFixture("event_full")
@@ -105,7 +108,7 @@ final class OperationalForecastCoverageTests: XCTestCase {
         let service = ForecastService(transport: transport)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
-        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0))!
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0)))
 
         let bundle = try await service.refresh(location: location, apiKey: "test-key", now: now)
 
@@ -113,13 +116,13 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertEqual(transport.requests.count, 3)
     }
 
-    // D. Pre-sunset one-day legacy cache is considered operationally insufficient because tomorrow coverage is absent.
-    func testPreSunsetOneDayCacheIsOperationallyInsufficient() {
+    /// D. Pre-sunset one-day legacy cache is considered operationally insufficient because tomorrow coverage is absent.
+    func testPreSunsetOneDayCacheIsOperationallyInsufficient() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
-        let today = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0))!
-        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0))!
-        let sunsetTime = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 19, minute: 50))!
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0)))
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0)))
+        let sunsetTime = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 19, minute: 50)))
 
         let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
         let forecastToday = makeForecast(eventType: .sunset, date: today, eventTime: sunsetTime)
@@ -135,15 +138,15 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertFalse(snapshot.hasOperationalCoverage(for: location, now: now))
     }
 
-    // E. Two-day cache before sunset is operationally sufficient.
-    func testTwoDayCacheBeforeSunsetIsOperationallySufficient() {
+    /// E. Two-day cache before sunset is operationally sufficient.
+    func testTwoDayCacheBeforeSunsetIsOperationallySufficient() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
-        let today = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0))!
-        let tomorrow = calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 0, minute: 0))!
-        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0))!
-        let sunsetToday = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 19, minute: 50))!
-        let sunsetTomorrow = calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 19, minute: 48))!
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0)))
+        let tomorrow = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 0, minute: 0)))
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 18, minute: 0)))
+        let sunsetToday = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 19, minute: 50)))
+        let sunsetTomorrow = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 19, minute: 48)))
 
         let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
         let fToday = makeForecast(eventType: .sunset, date: today, eventTime: sunsetToday)
@@ -160,23 +163,23 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertTrue(snapshot.hasOperationalCoverage(for: location, now: now))
     }
 
-    // F. After today's sunset, resolver selects tomorrow's sunrise from a two-day cache.
-    func testAfterSunsetResolverSelectsTomorrowSunriseFromTwoDayCache() {
+    /// F. After today's sunset, resolver selects tomorrow's sunrise from a two-day cache.
+    func testAfterSunsetResolverSelectsTomorrowSunriseFromTwoDayCache() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
-        let today = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0))!
-        let tomorrow = calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 0, minute: 0))!
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0)))
+        let tomorrow = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 0, minute: 0)))
 
-        let sunsetTodayTime = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 19, minute: 50))!
-        let sunriseTomorrowTime = calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 6, minute: 15))!
-        let sunsetTomorrowTime = calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 19, minute: 48))!
+        let sunsetTodayTime = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 19, minute: 50)))
+        let sunriseTomorrowTime = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 6, minute: 15)))
+        let sunsetTomorrowTime = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 19, minute: 48)))
 
         let location = makeLocation(forecastDays: 1, sunrise: true, sunset: true)
         let fSunsetToday = makeForecast(eventType: .sunset, date: today, eventTime: sunsetTodayTime)
         let fSunriseTomorrow = makeForecast(eventType: .sunrise, date: tomorrow, eventTime: sunriseTomorrowTime)
         let fSunsetTomorrow = makeForecast(eventType: .sunset, date: tomorrow, eventTime: sunsetTomorrowTime)
 
-        let afterSunsetNow = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 20, minute: 30))!
+        let afterSunsetNow = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 20, minute: 30)))
 
         let snapshot = CachedLocationSnapshot(
             locationID: location.id,
@@ -198,23 +201,23 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertEqual(resolved?.eventTime, sunriseTomorrowTime)
     }
 
-    // G. After today's sunset, resolver selects tomorrow's sunset if menu-bar selection == nextSunset.
-    func testAfterSunsetResolverSelectsTomorrowSunsetWhenSelectionIsNextSunset() {
+    /// G. After today's sunset, resolver selects tomorrow's sunset if menu-bar selection == nextSunset.
+    func testAfterSunsetResolverSelectsTomorrowSunsetWhenSelectionIsNextSunset() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
-        let today = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0))!
-        let tomorrow = calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 0, minute: 0))!
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 0, minute: 0)))
+        let tomorrow = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 0, minute: 0)))
 
-        let sunsetTodayTime = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 19, minute: 50))!
-        let sunriseTomorrowTime = calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 6, minute: 15))!
-        let sunsetTomorrowTime = calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 19, minute: 48))!
+        let sunsetTodayTime = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 19, minute: 50)))
+        let sunriseTomorrowTime = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 6, minute: 15)))
+        let sunsetTomorrowTime = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 19, minute: 48)))
 
         let location = makeLocation(forecastDays: 1, sunrise: true, sunset: true)
         let fSunsetToday = makeForecast(eventType: .sunset, date: today, eventTime: sunsetTodayTime)
         let fSunriseTomorrow = makeForecast(eventType: .sunrise, date: tomorrow, eventTime: sunriseTomorrowTime)
         let fSunsetTomorrow = makeForecast(eventType: .sunset, date: tomorrow, eventTime: sunsetTomorrowTime)
 
-        let afterSunsetNow = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 20, minute: 30))!
+        let afterSunsetNow = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 20, hour: 20, minute: 30)))
 
         let snapshot = CachedLocationSnapshot(
             locationID: location.id,
@@ -236,18 +239,18 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertEqual(resolved?.eventTime, sunsetTomorrowTime)
     }
 
-    // H. Different location timezones evaluate day coverage correctly.
-    func testDifferentLocationTimezonesEvaluateDayCoverageCorrectly() {
+    /// H. Different location timezones evaluate day coverage correctly.
+    func testDifferentLocationTimezonesEvaluateDayCoverageCorrectly() throws {
         var calendarTokyo = Calendar(identifier: .gregorian)
         calendarTokyo.timeZone = timeZoneTokyo
 
         // When it is Aug 20 20:00 in NY (UTC Aug 21 00:00), in Tokyo it is Aug 21 09:00.
-        let now = Date(timeIntervalSince1970: 1787270400) // Aug 21, 2026 00:00 UTC
+        let now = Date(timeIntervalSince1970: 1_787_270_400) // Aug 21, 2026 00:00 UTC
 
         let locationTokyo = makeLocation(forecastDays: 1, timeZone: timeZoneTokyo, sunrise: false, sunset: true)
 
-        let tokyoToday = calendarTokyo.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 0, minute: 0))!
-        let tokyoTomorrow = calendarTokyo.date(from: DateComponents(year: 2026, month: 8, day: 22, hour: 0, minute: 0))!
+        let tokyoToday = try XCTUnwrap(calendarTokyo.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 0, minute: 0)))
+        let tokyoTomorrow = try XCTUnwrap(calendarTokyo.date(from: DateComponents(year: 2026, month: 8, day: 22, hour: 0, minute: 0)))
 
         let fTokyoToday = makeForecast(eventType: .sunset, date: tokyoToday, eventTime: tokyoToday.addingTimeInterval(18 * 3600))
         let fTokyoTomorrow = makeForecast(eventType: .sunset, date: tokyoTomorrow, eventTime: tokyoTomorrow.addingTimeInterval(18 * 3600))
@@ -273,7 +276,7 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertTrue(fullSnapshot.hasOperationalCoverage(for: locationTokyo, now: now))
     }
 
-    // I. A recently fetched current cache with insufficient horizon is selected for automatic refresh.
+    /// I. A recently fetched current cache with insufficient horizon is selected for automatic refresh.
     func testRecentlyFetchedCacheWithInsufficientHorizonIsSelectedForRefresh() async throws {
         let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
         let now = Date()
@@ -315,14 +318,14 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertEqual(updated?.forecasts.count, 2)
     }
 
-    // J. A recently fetched current cache with sufficient two-day coverage is NOT gratuitously refreshed.
+    /// J. A recently fetched current cache with sufficient two-day coverage is NOT gratuitously refreshed.
     func testRecentlyFetchedCacheWithSufficientCoverageIsNotGratuitouslyRefreshed() async throws {
         let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
         let now = Date()
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZoneNY
         let today = calendar.startOfDay(for: now)
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
         let sunsetToday = calendar.date(bySettingHour: 19, minute: 0, second: 0, of: today) ?? today.addingTimeInterval(19 * 3600)
         let sunsetTomorrow = calendar.date(bySettingHour: 19, minute: 0, second: 0, of: tomorrow) ?? tomorrow.addingTimeInterval(19 * 3600)
 
@@ -356,8 +359,8 @@ final class OperationalForecastCoverageTests: XCTestCase {
         XCTAssertEqual(result?.fetchedAt, snapshot.fetchedAt)
     }
 
-    // K. Rate-limited cache with insufficient coverage still respects Retry-After.
-    func testRateLimitedCacheWithInsufficientCoverageStillRespectsRetryAfter() async throws {
+    /// K. Rate-limited cache with insufficient coverage still respects Retry-After.
+    func testRateLimitedCacheWithInsufficientCoverageStillRespectsRetryAfter() async {
         let location = makeLocation(forecastDays: 1, sunrise: false, sunset: true)
         let now = Date()
         let retryAfterDate = now.addingTimeInterval(1800) // 30 minutes in future
