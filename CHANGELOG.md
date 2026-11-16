@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/andrewtryder/sunsethue-macos/compare/v1.4.1...v1.4.2) (2026-11-16)
+
+
+### Bug Fixes
+
+* fix menu bar popup quitting the app and add quality gates ([#19](https://github.com/andrewtryder/sunsethue-macos/issues/19)) ([c912520](https://github.com/andrewtryder/sunsethue-macos/commit/c912520f8d32a1cc637924b68634c662de92c17d))
+
 ## [1.4.1](https://github.com/andrewtryder/sunsethue-macos/compare/v1.4.0...v1.4.1) (2026-11-13)
 
 
