@@ -97,7 +97,7 @@ public struct EventForecast: Codable, Hashable, Sendable {
     }
 
     public var isQualityAvailable: Bool {
-        modelData && quality != nil
+        modelData && ForecastQualityTier.normalizedQuality(quality) != nil
     }
 
     public func withForecastDate(_ date: Date) -> EventForecast {

@@ -3,14 +3,14 @@ import Foundation
 public enum PresentationFormatting: Sendable {
     /// Convert a normalized 0...1 value to a one-decimal percentage for display only.
     public static func percentage(fromNormalized value: Double?) -> String? {
-        guard let value else { return nil }
-        let percent = (value * 1000).rounded() / 10
+        guard let normalized = ForecastQualityTier.normalizedQuality(value) else { return nil }
+        let percent = (normalized * 1000).rounded() / 10
         return String(format: "%.1f%%", percent)
     }
 
     public static func percentageValue(fromNormalized value: Double?) -> Double? {
-        guard let value else { return nil }
-        return (value * 1000).rounded() / 10
+        guard let normalized = ForecastQualityTier.normalizedQuality(value) else { return nil }
+        return (normalized * 1000).rounded() / 10
     }
 
     public static func directionLabel(_ degrees: Double?) -> String? {

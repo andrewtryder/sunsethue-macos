@@ -164,6 +164,13 @@ struct SunsetHueMenuBarPopoverView: View {
         .accessibilityHint("Opens this location in SunsetHue")
     }
 
+    private func qualityColor(for row: MenuBarPopoverRow) -> Color {
+        guard !row.isStale, let tier = row.qualityTier else {
+            return .secondary
+        }
+        return tier.qualityColor
+    }
+
     @ViewBuilder
     private func trailingContent(for row: MenuBarPopoverRow) -> some View {
         if let eventType = row.eventType,
@@ -190,7 +197,7 @@ struct SunsetHueMenuBarPopoverView: View {
 
                 Text(qualityLabel)
                     .font(.subheadline.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(qualityColor(for: row))
                     .frame(minWidth: 38, alignment: .trailing)
 
                 if row.isRefreshing {
@@ -278,9 +285,11 @@ struct SunsetHueMenuBarPopoverView: View {
         .padding(.bottom, 2)
     }
 
-    private func dismissPopupThen(_ action: @escaping () -> Void) {
+    private func dismissPopupThen(_ action: @escaping @MainActor @Sendable () -> Void) {
         dismiss()
-        DispatchQueue.main.async(execute: action)
+        DispatchQueue.main.async {
+            action()
+        }
     }
 }
 

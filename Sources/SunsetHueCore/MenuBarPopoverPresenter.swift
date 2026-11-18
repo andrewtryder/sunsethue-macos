@@ -7,6 +7,8 @@ public struct MenuBarPopoverRow: Identifiable, Equatable, Sendable {
     public let eventLabel: String?
     public let dayTimeLabel: String?
     public let qualityLabel: String?
+    public let quality: Double?
+    public let qualityTier: ForecastQualityTier?
     public let statusMessage: String?
     public let statusSymbolName: String?
     public let isSelected: Bool
@@ -21,6 +23,8 @@ public struct MenuBarPopoverRow: Identifiable, Equatable, Sendable {
         eventLabel: String? = nil,
         dayTimeLabel: String? = nil,
         qualityLabel: String? = nil,
+        quality: Double? = nil,
+        qualityTier: ForecastQualityTier? = nil,
         statusMessage: String? = nil,
         statusSymbolName: String? = nil,
         isSelected: Bool = false,
@@ -34,6 +38,8 @@ public struct MenuBarPopoverRow: Identifiable, Equatable, Sendable {
         self.eventLabel = eventLabel
         self.dayTimeLabel = dayTimeLabel
         self.qualityLabel = qualityLabel
+        self.quality = quality
+        self.qualityTier = qualityTier
         self.statusMessage = statusMessage
         self.statusSymbolName = statusSymbolName
         self.isSelected = isSelected
@@ -70,10 +76,17 @@ public enum MenuBarPopoverPresenter: Sendable {
                 timeZone: timeZone,
                 now: now
             )
-            let quality = MenuBarStatusFormatting.compactPercentage(fromNormalized: item.quality)
-            let qualityNumber = quality.replacingOccurrences(of: "%", with: " percent")
+            let normalizedQuality = ForecastQualityTier.normalizedQuality(item.quality)
+            let quality = MenuBarStatusFormatting.compactPercentage(fromNormalized: normalizedQuality)
+            let resolvedTier = ForecastQualityTier.resolve(quality: normalizedQuality)
             let staleSuffix = isStale ? ", forecast is stale" : ""
-            let accessibility = "\(item.eventType.displayName), \(dayTime), quality \(qualityNumber)\(staleSuffix)"
+            let accessibility: String
+            if let resolvedTier {
+                let qualityNumber = quality.replacingOccurrences(of: "%", with: " percent")
+                accessibility = "\(item.eventType.displayName), \(dayTime), quality \(qualityNumber), \(resolvedTier.displayName)\(staleSuffix)"
+            } else {
+                accessibility = "\(item.eventType.displayName), \(dayTime), quality unavailable\(staleSuffix)"
+            }
             return MenuBarPopoverRow(
                 id: location.id,
                 name: location.name,
@@ -81,6 +94,8 @@ public enum MenuBarPopoverPresenter: Sendable {
                 eventLabel: item.eventType.displayName,
                 dayTimeLabel: dayTime,
                 qualityLabel: quality,
+                quality: normalizedQuality,
+                qualityTier: isStale ? nil : resolvedTier,
                 statusMessage: nil,
                 statusSymbolName: nil,
                 isSelected: isSelected,
@@ -102,6 +117,8 @@ public enum MenuBarPopoverPresenter: Sendable {
             eventLabel: nil,
             dayTimeLabel: nil,
             qualityLabel: nil,
+            quality: nil,
+            qualityTier: nil,
             statusMessage: message,
             statusSymbolName: symbol,
             isSelected: isSelected,

@@ -33,7 +33,7 @@ actor ForecastNotificationCoordinator {
         preferencesStore: any NotificationPreferencesStoring = NotificationPreferencesStore(),
         ledgerStore: NotificationDeliveryLedgerStore = NotificationDeliveryLedgerStore()
     ) {
-        self.center = center ?? SystemNotificationCenterClient(center: unCenter)
+        self.center = center ?? SystemNotificationCenterClient()
         self.unCenter = unCenter
         self.preferencesStore = preferencesStore
         self.ledgerStore = ledgerStore
@@ -178,37 +178,67 @@ actor ForecastNotificationCoordinator {
         )
     }
 
+    /// Thread-safe one-shot coordinator between the NotificationCenter observer and the timeout task.
+    /// Safe `@unchecked Sendable` invariant: mutable fields (`resumed`, `token`) are accessed
+    /// exclusively while holding `lock`; `NotificationCenter.removeObserver` runs after unlocking.
+    private final class ForegroundWaitGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var resumed = false
+        private var token: NSObjectProtocol?
+        private let continuation: CheckedContinuation<Bool, Never>
+
+        init(continuation: CheckedContinuation<Bool, Never>) {
+            self.continuation = continuation
+        }
+
+        func setToken(_ token: NSObjectProtocol) {
+            lock.lock()
+            let shouldRemoveImmediately = resumed
+            if !shouldRemoveImmediately {
+                self.token = token
+            }
+            lock.unlock()
+            if shouldRemoveImmediately {
+                NotificationCenter.default.removeObserver(token)
+            }
+        }
+
+        @Sendable func finish(_ value: Bool) {
+            lock.lock()
+            guard !resumed else {
+                lock.unlock()
+                return
+            }
+            resumed = true
+            let activeToken = token
+            token = nil
+            lock.unlock()
+            if let activeToken {
+                NotificationCenter.default.removeObserver(activeToken)
+            }
+            continuation.resume(returning: value)
+        }
+    }
+
     private static func waitForForegroundPresentation(identifier: String, timeout: TimeInterval) async -> Bool {
         await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
             let name = NotificationTestWorkflow.foregroundPresentedNotification
-            var token: NSObjectProtocol?
-            let lock = NSLock()
-            var resumed = false
+            let gate = ForegroundWaitGate(continuation: continuation)
 
-            func finish(_ value: Bool) {
-                lock.lock()
-                defer { lock.unlock() }
-                guard !resumed else { return }
-                resumed = true
-                if let token {
-                    NotificationCenter.default.removeObserver(token)
-                }
-                continuation.resume(returning: value)
-            }
-
-            token = NotificationCenter.default.addObserver(
+            let token = NotificationCenter.default.addObserver(
                 forName: name,
                 object: nil,
                 queue: .main
             ) { note in
                 guard let presentedID = note.userInfo?["identifier"] as? String,
                       presentedID == identifier else { return }
-                finish(true)
+                gate.finish(true)
             }
+            gate.setToken(token)
 
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                finish(false)
+                gate.finish(false)
             }
         }
     }
@@ -226,6 +256,8 @@ actor ForecastNotificationCoordinator {
 }
 
 /// `UNUserNotificationCenter` adapter for daily summaries.
+/// Safe `@unchecked Sendable` invariant: `center` is an immutable `UNUserNotificationCenter`
+/// singleton reference, which Apple's UserNotifications framework documents as thread-safe.
 struct UNDailyNotificationScheduling: DailyNotificationScheduling, @unchecked Sendable {
     let center: UNUserNotificationCenter
 

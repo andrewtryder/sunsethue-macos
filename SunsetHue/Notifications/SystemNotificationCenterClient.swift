@@ -1,13 +1,20 @@
 import Foundation
 import SunsetHueCore
-import UserNotifications
 
+// `@preconcurrency` only suppresses Sendable warnings on Apple SDK async ObjC return types
+// (`UNNotificationSettings`, `UNNotificationRequest`, `UNNotification`) whose contents are mapped
+// immediately to Sendable value types before returning.
+@preconcurrency import UserNotifications
+
+/// Stateless adapter over `UNUserNotificationCenter.current()`.
+/// Computing `.current()` avoids storing a non-Sendable `UNUserNotificationCenter` reference;
+/// `UNUserNotificationCenter.current()` is safe to call across concurrency domains.
 struct SystemNotificationCenterClient: NotificationCenterClienting {
-    private let center: UNUserNotificationCenter
-
-    init(center: UNUserNotificationCenter = .current()) {
-        self.center = center
+    private var center: UNUserNotificationCenter {
+        .current()
     }
+
+    init() {}
 
     func notificationSettings() async -> NotificationSettingsSnapshot {
         let settings = await center.notificationSettings()

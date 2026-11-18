@@ -370,44 +370,13 @@ struct SunsetHueSettingsView: View {
     }
 
     private var menuBarPreview: some View {
-        let preferences = menuBarPreferencesStore.preferences
-        let status: MenuBarStatus = {
-            if let location = appModel.selectedLocation ?? appModel.state.locations.first {
-                let item = MenuBarForecastResolver.resolve(
-                    location: location,
-                    snapshot: appModel.snapshotsByLocationID[location.id] ?? appModel.snapshot,
-                    selection: preferences.eventSelection,
-                    now: Date()
-                )
-                return MenuBarStatus.from(
-                    location: location,
-                    item: item,
-                    snapshot: appModel.snapshotsByLocationID[location.id] ?? appModel.snapshot,
-                    selection: preferences.eventSelection
-                )
-            }
-            // Fixture-style preview when no locations exist.
-            return MenuBarStatus(
-                locationName: "Sandown",
-                eventType: .sunset,
-                quality: 0.82,
-                eventTime: Date(),
-                timeZone: .current,
-                message: nil
-            )
-        }()
-        let title = MenuBarStatusFormatting.labelText(for: status, style: preferences.displayStyle)
-        return HStack(spacing: 8) {
-            Text("Preview:")
-                .foregroundStyle(.secondary)
-            Label(title.isEmpty ? " " : title, systemImage: status.symbolName)
-                .labelStyle(.titleAndIcon)
-            Spacer(minLength: 0)
-        }
-        .font(.caption)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Menu bar label preview")
-        .accessibilityValue(MenuBarStatusFormatting.accessibilityLabel(for: status, style: preferences.displayStyle))
+        let location = appModel.selectedLocation ?? appModel.state.locations.first
+        let snapshot = location.flatMap { appModel.snapshotsByLocationID[$0.id] ?? appModel.snapshot }
+        return MenuBarLabelPreviewRow(
+            location: location,
+            snapshot: snapshot,
+            preferences: menuBarPreferencesStore.preferences
+        )
     }
 
     private var generalTab: some View {
@@ -1048,5 +1017,76 @@ struct SunsetHueSettingsView: View {
                 diagnosticsMessage = "File could not be written."
             }
         }
+    }
+}
+
+private struct MenuBarLabelPreviewRow: View {
+    let location: SavedLocation?
+    let snapshot: CachedLocationSnapshot?
+    let preferences: MenuBarPreferences
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
+    private var status: MenuBarStatus {
+        if let location {
+            let now = Date()
+            let item = MenuBarForecastResolver.resolve(
+                location: location,
+                snapshot: snapshot,
+                selection: preferences.eventSelection,
+                now: now
+            )
+            let bestItem = MenuBarForecastResolver.resolveBestUpcomingItem(
+                location: location,
+                snapshot: snapshot,
+                selection: preferences.eventSelection,
+                now: now
+            )
+            return MenuBarStatus.from(
+                location: location,
+                item: item,
+                snapshot: snapshot,
+                selection: preferences.eventSelection,
+                bestUpcomingItem: bestItem
+            )
+        }
+        // Fixture-style preview when no locations exist.
+        return MenuBarStatus(
+            locationName: "Sandown",
+            eventType: .sunset,
+            quality: 0.82,
+            eventTime: Date(),
+            timeZone: .current,
+            message: nil,
+            bestUpcomingEventType: .sunset,
+            bestUpcomingQuality: 0.82,
+            iconQualityTier: .excellent
+        )
+    }
+
+    var body: some View {
+        let status = status
+        let title = MenuBarStatusFormatting.labelText(for: status, style: preferences.displayStyle)
+        let iconImage = MenuBarIconRenderer.image(
+            for: status.iconDescriptor,
+            appearance: MenuBarAppearanceVariant.from(colorScheme),
+            isHighContrast: colorSchemeContrast == .increased
+        )
+        HStack(spacing: 8) {
+            Text("Preview:")
+                .foregroundStyle(.secondary)
+            Label {
+                Text(title.isEmpty ? " " : title)
+            } icon: {
+                Image(nsImage: iconImage)
+            }
+            .labelStyle(.titleAndIcon)
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Menu bar label preview")
+        .accessibilityValue(MenuBarStatusFormatting.accessibilityLabel(for: status, style: preferences.displayStyle))
     }
 }

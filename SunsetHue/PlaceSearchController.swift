@@ -1,6 +1,6 @@
 import CoreLocation
 import Foundation
-@preconcurrency import MapKit
+import MapKit
 import SunsetHueCore
 
 @MainActor
@@ -20,6 +20,7 @@ final class PlaceSearchController: NSObject, ObservableObject, MKLocalSearchComp
     }
 
     func updateQuery(_ value: String) {
+        suppressNextCompleterUpdate = false
         query = value
         completer.queryFragment = value
     }
@@ -37,22 +38,28 @@ final class PlaceSearchController: NSObject, ObservableObject, MKLocalSearchComp
         results = []
     }
 
-    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
-        if suppressNextCompleterUpdate {
-            suppressNextCompleterUpdate = false
-            results = []
-            return
+    nonisolated func completerDidUpdateResults(_: MKLocalSearchCompleter) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if suppressNextCompleterUpdate {
+                suppressNextCompleterUpdate = false
+                results = []
+                return
+            }
+            results = Array(completer.results.prefix(8))
+            errorMessage = nil
         }
-        results = Array(completer.results.prefix(8))
-        errorMessage = nil
     }
 
-    func completer(_: MKLocalSearchCompleter, didFailWithError _: Error) {
-        if suppressNextCompleterUpdate {
-            suppressNextCompleterUpdate = false
+    nonisolated func completer(_: MKLocalSearchCompleter, didFailWithError _: Error) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if suppressNextCompleterUpdate {
+                suppressNextCompleterUpdate = false
+            }
+            results = []
+            errorMessage = "Place search is temporarily unavailable."
         }
-        results = []
-        errorMessage = "Place search is temporarily unavailable."
     }
 
     func resolve(_ completion: MKLocalSearchCompletion) async throws -> ResolvedPlace {

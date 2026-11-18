@@ -17,8 +17,7 @@ let package = Package(
             name: "SunsetHueCore",
             path: "Sources/SunsetHueCore",
             swiftSettings: [
-                .enableUpcomingFeature("ConciseMagicFile"),
-                .swiftLanguageMode(.v5),
+                .swiftLanguageMode(.v6),
             ]
         ),
         .testTarget(
@@ -29,8 +28,7 @@ let package = Package(
                 .copy("Fixtures"),
             ],
             swiftSettings: [
-                .enableUpcomingFeature("ConciseMagicFile"),
-                .swiftLanguageMode(.v5),
+                .swiftLanguageMode(.v6),
             ]
         ),
     ]

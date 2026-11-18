@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol CurrentLocationProviding: AnyObject {
+public protocol CurrentLocationProviding: AnyObject, Sendable {
     func requestLocation() async throws -> CurrentLocationResult
 }
 
@@ -17,19 +17,49 @@ public struct CurrentLocationResult: Sendable {
     }
 }
 
-/// Test double that counts invocations.
-public final class CountingLocationProvider: CurrentLocationProviding, @unchecked Sendable {
-    public private(set) var requestCount = 0
-    public var result = CurrentLocationResult(
-        latitude: 40.0,
-        longitude: -74.0,
-        timeZoneIdentifier: "America/New_York"
-    )
+#if DEBUG
+    /// Test double that counts invocations.
+    /// Safe `@unchecked Sendable` invariant: all mutable state (`_requestCount`, `_result`)
+    /// is exclusively accessed while holding `lock`.
+    public final class CountingLocationProvider: CurrentLocationProviding, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _requestCount = 0
+        private var _result = CurrentLocationResult(
+            latitude: 40.0,
+            longitude: -74.0,
+            timeZoneIdentifier: "America/New_York"
+        )
 
-    public init() {}
+        public var requestCount: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return _requestCount
+        }
 
-    public func requestLocation() async throws -> CurrentLocationResult {
-        requestCount += 1
-        return result
+        public var result: CurrentLocationResult {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return _result
+            }
+            set {
+                lock.lock()
+                defer { lock.unlock() }
+                _result = newValue
+            }
+        }
+
+        public init() {}
+
+        public func requestLocation() async throws -> CurrentLocationResult {
+            consumeRequest()
+        }
+
+        private func consumeRequest() -> CurrentLocationResult {
+            lock.lock()
+            defer { lock.unlock() }
+            _requestCount += 1
+            return _result
+        }
     }
-}
+#endif

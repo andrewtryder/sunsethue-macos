@@ -93,7 +93,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    deinit {
+    isolated deinit {
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
         }

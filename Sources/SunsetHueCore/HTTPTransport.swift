@@ -115,77 +115,81 @@ public struct URLSessionTransport: HTTPTransport {
     }
 }
 
-/// Injectable transport for tests.
-public final class MockHTTPTransport: HTTPTransport, @unchecked Sendable {
-    public struct Stub: Sendable {
-        public let statusCode: Int
-        public let headers: [String: String]
-        public let body: Data
-        public let error: SunsetHueError?
+#if DEBUG
+    /// Injectable transport for tests.
+    /// Safe `@unchecked Sendable` invariant: all mutable state (`stubs`, `_requests`)
+    /// is synchronized exclusively through the private serial `queue`.
+    public final class MockHTTPTransport: HTTPTransport, @unchecked Sendable {
+        public struct Stub: Sendable {
+            public let statusCode: Int
+            public let headers: [String: String]
+            public let body: Data
+            public let error: SunsetHueError?
 
-        public init(
-            statusCode: Int = 200,
-            headers: [String: String] = [:],
-            body: Data = Data(),
-            error: SunsetHueError? = nil
-        ) {
-            self.statusCode = statusCode
-            self.headers = headers
-            self.body = body
-            self.error = error
-        }
-    }
-
-    private let queue = DispatchQueue(label: "MockHTTPTransport")
-    private var stubs: [Stub]
-    private var _requests: [URLRequest] = []
-
-    public var requests: [URLRequest] {
-        queue.sync { _requests }
-    }
-
-    public init(stubs: [Stub] = []) {
-        self.stubs = stubs
-    }
-
-    public func enqueue(_ stub: Stub) {
-        queue.sync { stubs.append(stub) }
-    }
-
-    public func perform(_ request: URLRequest) async throws -> HTTPResponse {
-        let stub: Stub = try queue.sync {
-            _requests.append(request)
-            guard !stubs.isEmpty else {
-                throw SunsetHueError.networkUnavailable
+            public init(
+                statusCode: Int = 200,
+                headers: [String: String] = [:],
+                body: Data = Data(),
+                error: SunsetHueError? = nil
+            ) {
+                self.statusCode = statusCode
+                self.headers = headers
+                self.body = body
+                self.error = error
             }
-            if let requestedType = URLComponents(url: request.url ?? URL(fileURLWithPath: "/"), resolvingAgainstBaseURL: false)?
-                .queryItems?
-                .first(where: { $0.name == "type" })?
-                .value,
-               let index = stubs.firstIndex(where: { stubMatchesEventType($0, requestedType) })
-            {
-                return stubs.remove(at: index)
+        }
+
+        private let queue = DispatchQueue(label: "MockHTTPTransport")
+        private var stubs: [Stub]
+        private var _requests: [URLRequest] = []
+
+        public var requests: [URLRequest] {
+            queue.sync { _requests }
+        }
+
+        public init(stubs: [Stub] = []) {
+            self.stubs = stubs
+        }
+
+        public func enqueue(_ stub: Stub) {
+            queue.sync { stubs.append(stub) }
+        }
+
+        public func perform(_ request: URLRequest) async throws -> HTTPResponse {
+            let stub: Stub = try queue.sync {
+                _requests.append(request)
+                guard !stubs.isEmpty else {
+                    throw SunsetHueError.networkUnavailable
+                }
+                if let requestedType = URLComponents(url: request.url ?? URL(fileURLWithPath: "/"), resolvingAgainstBaseURL: false)?
+                    .queryItems?
+                    .first(where: { $0.name == "type" })?
+                    .value,
+                   let index = stubs.firstIndex(where: { stubMatchesEventType($0, requestedType) })
+                {
+                    return stubs.remove(at: index)
+                }
+                return stubs.removeFirst()
             }
-            return stubs.removeFirst()
+
+            if let error = stub.error {
+                throw error
+            }
+            if stub.body.count > SunsetHueConstants.maxResponseBytes {
+                throw SunsetHueError.oversizedResponse
+            }
+            return HTTPResponse(statusCode: stub.statusCode, headers: stub.headers, body: stub.body)
         }
 
-        if let error = stub.error {
-            throw error
+        private func stubMatchesEventType(_ stub: Stub, _ requestedType: String) -> Bool {
+            guard stub.error == nil,
+                  let payload = try? JSONSerialization.jsonObject(with: stub.body) as? [String: Any],
+                  let data = payload["data"] as? [String: Any],
+                  let type = data["type"] as? String
+            else {
+                return false
+            }
+            return type == requestedType
         }
-        if stub.body.count > SunsetHueConstants.maxResponseBytes {
-            throw SunsetHueError.oversizedResponse
-        }
-        return HTTPResponse(statusCode: stub.statusCode, headers: stub.headers, body: stub.body)
     }
-
-    private func stubMatchesEventType(_ stub: Stub, _ requestedType: String) -> Bool {
-        guard stub.error == nil,
-              let payload = try? JSONSerialization.jsonObject(with: stub.body) as? [String: Any],
-              let data = payload["data"] as? [String: Any],
-              let type = data["type"] as? String
-        else {
-            return false
-        }
-        return type == requestedType
-    }
-}
+#endif

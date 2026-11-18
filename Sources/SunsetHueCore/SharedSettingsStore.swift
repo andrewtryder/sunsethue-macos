@@ -331,60 +331,62 @@ public actor FileForecastCache: ForecastCache {
     }
 }
 
-public actor InMemorySettingsStore: SharedSettingsStore {
-    private var state = SharedAppState()
-    private var recovery: StorageRecovery?
+#if DEBUG
+    public actor InMemorySettingsStore: SharedSettingsStore {
+        private var state = SharedAppState()
+        private var recovery: StorageRecovery?
 
-    public init(state: SharedAppState = SharedAppState(), recovery: StorageRecovery? = nil) {
-        self.state = state
-        self.recovery = recovery
-    }
-
-    public func load() async throws -> StoreLoadResult<SharedAppState> {
-        StoreLoadResult(value: state, recovery: recovery)
-    }
-
-    public func save(_ state: SharedAppState) async throws {
-        self.state = state
-        recovery = nil
-    }
-}
-
-public actor InMemoryForecastCache: ForecastCache {
-    private var snapshots: [UUID: CachedLocationSnapshot] = [:]
-
-    public init(snapshots: [UUID: CachedLocationSnapshot] = [:]) {
-        self.snapshots = snapshots
-    }
-
-    public func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? {
-        snapshots[locationID]
-    }
-
-    public func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? {
-        snapshots[locationID]?.bundle
-    }
-
-    @discardableResult
-    public func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
-        if let existing = snapshots[snapshot.locationID] {
-            if snapshot.fetchedAt < existing.fetchedAt, snapshot.status == .current, existing.status == .current {
-                return .rejectedStale(authoritative: existing)
-            }
-            if snapshot.lastAttemptAt < existing.lastAttemptAt {
-                return .rejectedStale(authoritative: existing)
-            }
+        public init(state: SharedAppState = SharedAppState(), recovery: StorageRecovery? = nil) {
+            self.state = state
+            self.recovery = recovery
         }
-        var normalized = snapshot
-        normalized.schemaVersion = SunsetHueConstants.currentCacheSchemaVersion
-        snapshots[snapshot.locationID] = normalized
-        return .committed(normalized)
+
+        public func load() async throws -> StoreLoadResult<SharedAppState> {
+            StoreLoadResult(value: state, recovery: recovery)
+        }
+
+        public func save(_ state: SharedAppState) async throws {
+            self.state = state
+            recovery = nil
+        }
     }
 
-    public func deleteLocation(_ locationID: UUID) async throws {
-        snapshots.removeValue(forKey: locationID)
+    public actor InMemoryForecastCache: ForecastCache {
+        private var snapshots: [UUID: CachedLocationSnapshot] = [:]
+
+        public init(snapshots: [UUID: CachedLocationSnapshot] = [:]) {
+            self.snapshots = snapshots
+        }
+
+        public func loadSnapshot(for locationID: UUID) async throws -> CachedLocationSnapshot? {
+            snapshots[locationID]
+        }
+
+        public func loadBundle(for locationID: UUID) async throws -> LocationForecastBundle? {
+            snapshots[locationID]?.bundle
+        }
+
+        @discardableResult
+        public func saveSnapshot(_ snapshot: CachedLocationSnapshot) async throws -> CacheSaveResult {
+            if let existing = snapshots[snapshot.locationID] {
+                if snapshot.fetchedAt < existing.fetchedAt, snapshot.status == .current, existing.status == .current {
+                    return .rejectedStale(authoritative: existing)
+                }
+                if snapshot.lastAttemptAt < existing.lastAttemptAt {
+                    return .rejectedStale(authoritative: existing)
+                }
+            }
+            var normalized = snapshot
+            normalized.schemaVersion = SunsetHueConstants.currentCacheSchemaVersion
+            snapshots[snapshot.locationID] = normalized
+            return .committed(normalized)
+        }
+
+        public func deleteLocation(_ locationID: UUID) async throws {
+            snapshots.removeValue(forKey: locationID)
+        }
     }
-}
+#endif
 
 public enum SharedStorageFactory {
     public static func makeSettingsStore() -> any SharedSettingsStore {

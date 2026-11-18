@@ -37,7 +37,7 @@ fail() { printf '\033[1;31mFAIL\033[0m %s\n' "$*" >&2; }
 
 for tool in swiftformat swiftlint; do
   if ! command -v "$tool" > /dev/null 2>&1; then
-    fail "${tool} is not installed. Install with 'brew install swiftformat' / 'brew install swiftlint'."
+    fail "${tool} is not installed. Install pinned official release binaries for SwiftFormat / SwiftLint."
     exit 2
   fi
 done

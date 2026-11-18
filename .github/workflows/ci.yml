@@ -41,17 +41,54 @@ jobs:
           swift --version
 
       - name: Install tooling
-        # SwiftFormat is version-pinned so local runs and CI agree on rule
-        # behavior: 0.64.x rule sets (andOperator, redundantParens) drift
-        # between patch releases and a drift silently breaks --lint gates.
+        # Version- and SHA-256-pinned official GitHub Release archives avoid
+        # Homebrew overhead and formula drift between local checks and CI.
         run: |
-          brew install xcodegen swiftlint
-          brew install swiftformat
-          if [[ "$(swiftformat --version)" != "0.64.5" ]]; then
-            echo "Expected SwiftFormat 0.64.5, got $(swiftformat --version). Update the pin and re-verify locally." >&2
+          set -euo pipefail
+          TOOLS_DIR="${RUNNER_TEMP}/sunsethue-tools"
+          BIN_DIR="${TOOLS_DIR}/bin"
+          mkdir -p "${BIN_DIR}" "${TOOLS_DIR}/swiftlint" "${TOOLS_DIR}/swiftformat"
+
+          XCODEGEN_VERSION="2.47.0"
+          XCODEGEN_SHA256="6ef12a3ef5327c2c713397f46d9160550f8b1cdc5c925cd884d65c77c9f696cd"
+          SWIFTLINT_VERSION="0.65.1"
+          SWIFTLINT_SHA256="c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0"
+          SWIFTFORMAT_VERSION="0.64.7"
+          SWIFTFORMAT_SHA256="e82e224325cbd3403fc7b68caf6c917926dc106de3af875fca4b87e3c4634038"
+
+          curl -fsSL -o "${TOOLS_DIR}/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          curl -fsSL -o "${TOOLS_DIR}/portable_swiftlint.zip" \
+            "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip"
+          curl -fsSL -o "${TOOLS_DIR}/swiftformat.zip" \
+            "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip"
+
+          printf '%s  %s\n' "${XCODEGEN_SHA256}" "${TOOLS_DIR}/xcodegen.zip" | shasum -a 256 --check
+          printf '%s  %s\n' "${SWIFTLINT_SHA256}" "${TOOLS_DIR}/portable_swiftlint.zip" | shasum -a 256 --check
+          printf '%s  %s\n' "${SWIFTFORMAT_SHA256}" "${TOOLS_DIR}/swiftformat.zip" | shasum -a 256 --check
+
+          unzip -q "${TOOLS_DIR}/xcodegen.zip" -d "${TOOLS_DIR}"
+          unzip -q "${TOOLS_DIR}/portable_swiftlint.zip" -d "${TOOLS_DIR}/swiftlint"
+          unzip -q "${TOOLS_DIR}/swiftformat.zip" -d "${TOOLS_DIR}/swiftformat"
+
+          chmod +x "${TOOLS_DIR}/xcodegen/bin/xcodegen" "${TOOLS_DIR}/swiftlint/swiftlint" "${TOOLS_DIR}/swiftformat/swiftformat"
+          ln -sf "${TOOLS_DIR}/swiftlint/swiftlint" "${BIN_DIR}/swiftlint"
+          ln -sf "${TOOLS_DIR}/swiftformat/swiftformat" "${BIN_DIR}/swiftformat"
+
+          XCODEGEN_BIN="${TOOLS_DIR}/xcodegen/bin"
+          echo "${BIN_DIR}" >> "${GITHUB_PATH}"
+          echo "${XCODEGEN_BIN}" >> "${GITHUB_PATH}"
+          export PATH="${BIN_DIR}:${XCODEGEN_BIN}:${PATH}"
+
+          if [[ "$(swiftformat --version)" != "${SWIFTFORMAT_VERSION}" ]]; then
+            echo "Expected SwiftFormat ${SWIFTFORMAT_VERSION}, got $(swiftformat --version)." >&2
             exit 1
           fi
-          swiftlint version
+          if [[ "$(swiftlint version)" != "${SWIFTLINT_VERSION}" ]]; then
+            echo "Expected SwiftLint ${SWIFTLINT_VERSION}, got $(swiftlint version)." >&2
+            exit 1
+          fi
+          xcodegen --version
 
       - name: SwiftFormat (lint only)
         run: swiftformat --lint .

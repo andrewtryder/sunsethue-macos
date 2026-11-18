@@ -2,12 +2,6 @@ import Combine
 import Foundation
 import SunsetHueCore
 
-struct MenuBarLabelContent: Equatable, Sendable {
-    var symbolName: String
-    var title: String
-    var accessibilityLabel: String
-}
-
 @MainActor
 final class MenuBarLabelController: ObservableObject {
     @Published private(set) var content = MenuBarLabelContent(
@@ -45,27 +39,24 @@ final class MenuBarLabelController: ObservableObject {
     /// changes. Subscriptions are created exactly once; later calls only refresh
     /// content against the (possibly newly created) model objects.
     func attach(appModel: AppModel, preferencesStore: MenuBarPreferencesStore) {
-        let isNewModel = (self.appModel !== appModel) || (self.preferencesStore !== preferencesStore)
         self.appModel = appModel
         self.preferencesStore = preferencesStore
 
         if !isAttached {
             isAttached = true
-            appModel.objectWillChange
-                .receive(on: RunLoop.main)
-                .sink { [weak self] _ in
-                    self?.refreshNow()
-                    self?.restartSchedule()
-                }
-                .store(in: &cancellables)
-
-            preferencesStore.$preferences
-                .receive(on: RunLoop.main)
-                .sink { [weak self] _ in
-                    self?.refreshNow()
-                    self?.restartSchedule()
-                }
-                .store(in: &cancellables)
+            Publishers.CombineLatest4(
+                appModel.$state.map(\.locations).removeDuplicates(),
+                appModel.$snapshotsByLocationID.removeDuplicates(),
+                appModel.$selectedLocationID.removeDuplicates(),
+                preferencesStore.$preferences.removeDuplicates()
+            )
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshNow()
+                self?.restartSchedule()
+            }
+            .store(in: &cancellables)
         }
 
         refreshNow()
@@ -74,47 +65,14 @@ final class MenuBarLabelController: ObservableObject {
 
     func refreshNow(at now: Date = Date()) {
         guard let appModel, let preferencesStore else { return }
-        let preferences = preferencesStore.preferences
-        let locations = appModel.state.locations
-        let snapshots = appModel.snapshotsByLocationID
-
-        let next: MenuBarLabelContent
-        if let location = MenuBarRotationLogic.locationForLabel(
-            locations: locations,
-            snapshots: snapshots,
-            preferences: preferences,
+        let next = MenuBarLabelContent.resolve(
+            locations: appModel.state.locations,
+            snapshots: appModel.snapshotsByLocationID,
+            preferences: preferencesStore.preferences,
             selectedLocationID: appModel.selectedLocationID,
             now: now,
             epoch: epoch
-        ) {
-            let snapshot = snapshots[location.id]
-            let item = MenuBarForecastResolver.resolve(
-                location: location,
-                snapshot: snapshot,
-                selection: preferences.eventSelection,
-                now: now
-            )
-            let status = MenuBarStatus.from(
-                location: location,
-                item: item,
-                snapshot: snapshot,
-                selection: preferences.eventSelection
-            )
-            next = MenuBarLabelContent(
-                symbolName: status.symbolName,
-                title: MenuBarStatusFormatting.labelText(for: status, style: preferences.displayStyle),
-                accessibilityLabel: MenuBarStatusFormatting.accessibilityLabel(
-                    for: status,
-                    style: preferences.displayStyle
-                )
-            )
-        } else {
-            next = MenuBarLabelContent(
-                symbolName: "sun.horizon",
-                title: preferences.displayStyle == .iconOnly ? "" : "SunsetHue",
-                accessibilityLabel: "SunsetHue"
-            )
-        }
+        )
 
         // Skip identical assignments so unchanged label content never triggers a
         // SwiftUI invalidation of the menu bar item or the open popup.
@@ -126,11 +84,11 @@ final class MenuBarLabelController: ObservableObject {
     private func restartSchedule() {
         scheduleTask?.cancel()
         scheduleTask = nil
-        guard !isPopupPresented, let appModel, let preferencesStore else { return }
+        guard !isPopupPresented, appModel != nil, preferencesStore != nil else { return }
 
         scheduleTask = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self, let appModel = self.appModel, let preferencesStore = self.preferencesStore else {
+                guard let self, let appModel, let preferencesStore else {
                     return
                 }
                 if isPopupPresented {
