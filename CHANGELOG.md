@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/andrewtryder/sunsethue-macos/compare/v1.4.3...v1.5.0) (2026-11-18)
+
+
+### Features
+
+* migrate to Swift 6 and add quality-based menu bar colors ([#23](https://github.com/andrewtryder/sunsethue-macos/issues/23)) ([c7a8b41](https://github.com/andrewtryder/sunsethue-macos/commit/c7a8b41bb72cd7964afa682c7d2da03b5d9ae5f2))
+
 ## [1.4.3](https://github.com/andrewtryder/sunsethue-macos/compare/v1.4.2...v1.4.3) (2026-11-16)
 
 
