@@ -3,10 +3,10 @@
 # tool that rewrites whitespace/line-wrapping; SwiftLint disables its style rules
 # that SwiftFormat also enforces.
 #
-# Repo language mode: Swift 5 (SWIFT_VERSION=5.0 / swiftLanguageMode(.v5)),
+# Repo language mode: Swift 6 (SWIFT_VERSION = 6.0 / .swiftLanguageMode(.v6)),
 # compiled with the Swift 6 toolchain.
 
---swift-version 5.10
+--swift-version 6.0
 
 # Keep imports tidy project-wide (sortImports is enabled by default; pinned here
 # for clarity). It sorts import lines without touching semantics.

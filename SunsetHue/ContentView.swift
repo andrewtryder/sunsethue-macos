@@ -122,11 +122,13 @@ private struct SetupStepRow<Action: View>: View {
     }
 }
 
-#Preview("Empty") {
-    ContentView()
-        .environmentObject(AppModel(
-            settingsStore: InMemorySettingsStore(),
-            forecastCache: InMemoryForecastCache(),
-            credentialStore: InMemoryCredentialStore()
-        ))
-}
+#if DEBUG
+    #Preview("Empty") {
+        ContentView()
+            .environmentObject(AppModel(
+                settingsStore: InMemorySettingsStore(),
+                forecastCache: InMemoryForecastCache(),
+                credentialStore: InMemoryCredentialStore()
+            ))
+    }
+#endif

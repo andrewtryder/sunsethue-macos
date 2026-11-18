@@ -416,20 +416,22 @@ struct AtmosphereBackground: View {
     }
 }
 
-#Preview("Forecast") {
-    let settings = InMemorySettingsStore(state: SharedAppState(locations: [PreviewFixtures.sampleLocation]))
-    let cache = InMemoryForecastCache(snapshots: [
-        PreviewFixtures.sampleLocationID: .fromSuccessful(bundle: PreviewFixtures.sampleBundle()),
-    ])
-    let model = AppModel(
-        settingsStore: settings,
-        forecastCache: cache,
-        credentialStore: InMemoryCredentialStore(apiKey: "preview-not-a-real-key")
-    )
-    return ForecastDetailView(location: PreviewFixtures.sampleLocation)
-        .environmentObject(model)
-        .frame(width: 900, height: 700)
-}
+#if DEBUG
+    #Preview("Forecast") {
+        let settings = InMemorySettingsStore(state: SharedAppState(locations: [PreviewFixtures.sampleLocation]))
+        let cache = InMemoryForecastCache(snapshots: [
+            PreviewFixtures.sampleLocationID: .fromSuccessful(bundle: PreviewFixtures.sampleBundle()),
+        ])
+        let model = AppModel(
+            settingsStore: settings,
+            forecastCache: cache,
+            credentialStore: InMemoryCredentialStore(apiKey: "preview-not-a-real-key")
+        )
+        return ForecastDetailView(location: PreviewFixtures.sampleLocation)
+            .environmentObject(model)
+            .frame(width: 900, height: 700)
+    }
+#endif
 
 /// Compact status: current forecasts get one muted line; stale or failed states get a clear
 /// headline, the age of cached data, and the next planned attempt. Re-evaluated each minute so
@@ -470,7 +472,7 @@ struct ForecastFreshnessStatusView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
                 [freshness.headline, freshness.detail, freshness.ageText, freshness.nextRefreshText]
-                    .compactMap { $0 }.joined(separator: ". ")
+                    .compactMap(\.self).joined(separator: ". ")
             )
         }
     }

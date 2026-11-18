@@ -91,7 +91,7 @@ public enum ForecastFreshnessPresenter: Sendable {
                 : credentialState == .missing
                 ? "Add your API key in Settings → Account."
                 : "SunsetHue rejected the API key. Check or replace it in Settings → Account."
-            let detail = [action, savedPhrase].compactMap { $0 }.joined(separator: " ")
+            let detail = [action, savedPhrase].compactMap(\.self).joined(separator: " ")
             return make(.authenticationRequired, "API key needs attention", detail, updated, nil,
                         isRefreshing, hasForecasts, true, "key.slash")
 

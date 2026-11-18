@@ -3,7 +3,7 @@
 # overlapping style rules are disabled here to keep the two tools from fighting).
 #
 # Tool version this file is written for: SwiftLint 0.65.x, SwiftFormat 0.64.x.
-# Repo language mode: Swift 5 (SWIFT_VERSION=5.0 / swiftLanguageMode(.v5)).
+# Repo language mode: Swift 6 (SWIFT_VERSION = 6.0 / .swiftLanguageMode(.v6)).
 
 # Only include maintained sources; generated Xcode projects, build output, and
 # package checkouts never contain hand-written Swift.

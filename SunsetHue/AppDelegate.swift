@@ -89,16 +89,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    func userNotificationCenter(
+    nonisolated func userNotificationCenter(
         _: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         let identifier = notification.request.identifier
-        NotificationCenter.default.post(
-            name: NotificationTestWorkflow.foregroundPresentedNotification,
-            object: nil,
-            userInfo: ["identifier": identifier]
-        )
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: NotificationTestWorkflow.foregroundPresentedNotification,
+                object: nil,
+                userInfo: ["identifier": identifier]
+            )
+        }
 
         var options: UNNotificationPresentationOptions = [.banner, .list]
         if Self.playSoundPreferenceEnabled() {
@@ -107,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         return options
     }
 
-    func userNotificationCenter(
+    nonisolated func userNotificationCenter(
         _: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
@@ -120,9 +122,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         let url = DeepLink.locationURL(id: id)
-        NotificationCenter.default.post(name: Self.localOpenURLNotification, object: url)
-        NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
-        NSApp.activate(ignoringOtherApps: true)
+        await MainActor.run {
+            NotificationCenter.default.post(name: Self.localOpenURLNotification, object: url)
+            NotificationCenter.default.post(name: Self.reopenMainWindowNotification, object: nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     @objc @MainActor private func handleForwardedURL(_ notification: Notification) {
@@ -141,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         existing.activate(options: [.activateAllWindows])
     }
 
-    private static func playSoundPreferenceEnabled() -> Bool {
+    private nonisolated static func playSoundPreferenceEnabled() -> Bool {
         let store = NotificationPreferencesStore()
         return store.load().playSound
     }

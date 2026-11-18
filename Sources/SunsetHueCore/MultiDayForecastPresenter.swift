@@ -102,31 +102,11 @@ public enum MultiDayForecastPresenter: Sendable {
         bundle: LocationForecastBundle,
         now: Date = Date()
     ) -> EventForecast? {
-        let timeZone = location.timeZone ?? .current
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = timeZone
-        let startOfToday = cal.startOfDay(for: now)
-        guard let horizonEnd = cal.date(byAdding: .day, value: max(1, location.forecastDays), to: startOfToday) else {
-            return nil
-        }
-
-        let allowed = Set(location.enabledEvents)
-        let futureEvents = bundle.forecasts.filter {
-            allowed.contains($0.eventType) &&
-                ($0.eventTime ?? Date.distantPast) > now &&
-                ($0.eventTime ?? Date.distantFuture) < horizonEnd
-        }
-        guard !futureEvents.isEmpty else { return nil }
-
-        // Find the event with highest quality; if tied or no quality, pick the earliest upcoming
-        return futureEvents.max { a, b in
-            let qa = a.quality ?? -1.0
-            let qb = b.quality ?? -1.0
-            if qa != qb {
-                return qa < qb
-            }
-            // Tie-break: earlier eventTime is better
-            return (a.eventTime ?? Date.distantFuture) > (b.eventTime ?? Date.distantFuture)
-        }
+        MenuBarForecastResolver.bestUpcomingForecast(
+            from: bundle,
+            location: location,
+            allowedTypes: Set(location.enabledEvents),
+            now: now
+        )
     }
 }

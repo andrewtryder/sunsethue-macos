@@ -175,6 +175,7 @@ public actor ForecastRefreshCoordinator {
         }
         guard let soonest = nextDates.min() else { return }
         let delay = max(1, soonest.timeIntervalSince(now))
+        scheduledTask?.cancel()
         scheduledTask = Task {
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }

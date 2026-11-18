@@ -304,18 +304,19 @@ final class CoreCurrentLocationProvider: NSObject, ObservableObject, CurrentLoca
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
         Task { @MainActor in
             guard continuation != nil else { return }
-            switch manager.authorizationStatus {
+            switch status {
             case .authorizedAlways:
-                manager.requestLocation()
+                self.manager.requestLocation()
             case .denied, .restricted:
                 resumeOnce(throwing: LocationProviderError.denied)
             case .notDetermined:
                 break
             default:
-                if manager.authorizationStatus.rawValue > 2 {
-                    manager.requestLocation()
+                if status.rawValue > 2 {
+                    self.manager.requestLocation()
                 }
             }
         }

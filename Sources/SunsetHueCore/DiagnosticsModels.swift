@@ -299,6 +299,8 @@ public struct StorageDiagnostics: Sendable {
 }
 
 /// Global thread-safe recorder for WidgetCenter reload requests and cache commit events.
+/// Safe `@unchecked Sendable` invariant: `_lastReloadRequested` and `_lastCacheCommit`
+/// are exclusively accessed while holding `lock`.
 public final class WidgetReloadStateTracker: @unchecked Sendable {
     public static let shared = WidgetReloadStateTracker()
 

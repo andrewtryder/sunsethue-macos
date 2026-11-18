@@ -6,6 +6,8 @@ protocol NotificationPreferencesStoring: Sendable {
     func save(_ preferences: NotificationPreferences)
 }
 
+/// Safe `@unchecked Sendable` invariant: `defaults` is an immutable `UserDefaults` reference,
+/// which Apple's Foundation documentation guarantees is thread-safe across threads.
 struct NotificationPreferencesStore: NotificationPreferencesStoring, @unchecked Sendable {
     static let defaultsKey = "notificationPreferences.v1"
 
@@ -43,6 +45,8 @@ protocol NotificationDeliveryLedgerStoring: Sendable {
     func save(_ entries: [NotificationLedgerEntry])
 }
 
+/// Safe `@unchecked Sendable` invariant: `defaults` is an immutable `UserDefaults` reference,
+/// which Apple's Foundation documentation guarantees is thread-safe across threads.
 struct NotificationDeliveryLedgerStore: NotificationDeliveryLedgerStoring, @unchecked Sendable {
     static let defaultsKey = "notificationDeliveryLedger.v1"
 

@@ -169,11 +169,14 @@ final class DailyNotificationReconcilerTests: XCTestCase {
         await center.closeGate()
         let scheduler = DailyNotificationScheduler(scheduling: center)
 
-        let first = Task { await scheduler.apply(desired: [descriptor("a")]) }
+        let desiredA = [descriptor("a")]
+        let desiredB = [descriptor("b")]
+        let desiredCD = [descriptor("c"), descriptor("d")]
+        let first = Task { await scheduler.apply(desired: desiredA) }
         await center.waitUntilListed(1) // first pass is now blocked mid-flight
-        let second = Task { await scheduler.apply(desired: [descriptor("b")]) }
+        let second = Task { await scheduler.apply(desired: desiredB) }
         try? await Task.sleep(nanoseconds: 20_000_000)
-        let third = Task { await scheduler.apply(desired: [descriptor("c"), descriptor("d")]) }
+        let third = Task { await scheduler.apply(desired: desiredCD) }
         try? await Task.sleep(nanoseconds: 20_000_000)
         await center.openGate()
 

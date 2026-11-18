@@ -10,6 +10,9 @@ public struct MenuBarStatus: Equatable, Sendable {
     /// Short label fallback (e.g. "API key needed"). Nil when the location name should show instead.
     public let message: String?
     public let snapshotStatus: RefreshStatus?
+    public let bestUpcomingEventType: EventType?
+    public let bestUpcomingQuality: Double?
+    public let iconQualityTier: ForecastQualityTier?
 
     public init(
         locationName: String,
@@ -18,7 +21,10 @@ public struct MenuBarStatus: Equatable, Sendable {
         eventTime: Date?,
         timeZone: TimeZone? = nil,
         message: String?,
-        snapshotStatus: RefreshStatus? = nil
+        snapshotStatus: RefreshStatus? = nil,
+        bestUpcomingEventType: EventType? = nil,
+        bestUpcomingQuality: Double? = nil,
+        iconQualityTier: ForecastQualityTier? = nil
     ) {
         self.locationName = locationName
         self.eventType = eventType
@@ -27,6 +33,17 @@ public struct MenuBarStatus: Equatable, Sendable {
         self.timeZone = timeZone
         self.message = message
         self.snapshotStatus = snapshotStatus
+        self.bestUpcomingEventType = bestUpcomingEventType
+        self.bestUpcomingQuality = bestUpcomingQuality
+        self.iconQualityTier = iconQualityTier
+    }
+
+    public var iconDescriptor: MenuBarIconDescriptor {
+        MenuBarIconDescriptor(
+            symbolName: symbolName,
+            qualityTier: iconQualityTier,
+            isTemplate: iconQualityTier == nil
+        )
     }
 
     public static func from(
@@ -35,7 +52,32 @@ public struct MenuBarStatus: Equatable, Sendable {
         snapshot: CachedLocationSnapshot?,
         selection: MenuBarEventSelection
     ) -> MenuBarStatus {
+        let trustworthyItem: MenuBarForecastItem? = if let item, !item.isStale, snapshot?.status == .current {
+            item
+        } else {
+            nil
+        }
+        return from(
+            location: location,
+            item: item,
+            snapshot: snapshot,
+            selection: selection,
+            bestUpcomingItem: trustworthyItem
+        )
+    }
+
+    public static func from(
+        location: SavedLocation,
+        item: MenuBarForecastItem?,
+        snapshot: CachedLocationSnapshot?,
+        selection: MenuBarEventSelection,
+        bestUpcomingItem: MenuBarForecastItem?
+    ) -> MenuBarStatus {
         if let item {
+            let bestQuality = bestUpcomingItem.flatMap { ForecastQualityTier.normalizedQuality($0.quality) }
+            let bestTier = ForecastQualityTier.resolve(quality: bestQuality)
+            let bestEventType = bestTier != nil ? bestUpcomingItem?.eventType : nil
+
             return MenuBarStatus(
                 locationName: location.name,
                 eventType: item.eventType,
@@ -43,7 +85,10 @@ public struct MenuBarStatus: Equatable, Sendable {
                 eventTime: item.eventTime,
                 timeZone: location.timeZone,
                 message: nil,
-                snapshotStatus: snapshot?.status
+                snapshotStatus: snapshot?.status,
+                bestUpcomingEventType: bestEventType,
+                bestUpcomingQuality: bestTier != nil ? bestQuality : nil,
+                iconQualityTier: bestTier
             )
         }
 
@@ -140,13 +185,7 @@ public enum MenuBarStatusFormatting: Sendable {
         if let qualityText, !qualityText.isEmpty {
             return qualityText
         }
-        guard let quality else { return "Unavailable" }
-        switch quality {
-        case ..<0.25: return "Poor"
-        case ..<0.50: return "Fair"
-        case ..<0.75: return "Good"
-        default: return "Excellent"
-        }
+        return ForecastQualityTier.resolve(quality: quality)?.displayName ?? "Unavailable"
     }
 
     public static func truncatedLocationName(_ name: String, maxLength: Int = maxLocationNameLength) -> String {
@@ -198,25 +237,45 @@ public enum MenuBarStatusFormatting: Sendable {
             return "\(status.locationName), \(message)"
         }
 
-        guard
-            let eventType = status.eventType,
-            let percentage = PresentationFormatting.percentage(fromNormalized: status.quality)
-        else {
+        _ = style // accessibility always includes full context
+        guard let eventType = status.eventType else {
             return status.locationName
         }
 
-        let qualityNumber = percentage.replacingOccurrences(of: "%", with: " percent")
+        let normalizedItemQuality = ForecastQualityTier.normalizedQuality(status.quality)
         var parts = [
             status.locationName,
             "next \(eventType.displayName.lowercased())",
-            "quality \(qualityNumber)",
         ]
+
+        if let percentage = PresentationFormatting.percentage(fromNormalized: normalizedItemQuality) {
+            let qualityNumber = percentage.replacingOccurrences(of: "%", with: " percent")
+            parts.append("quality \(qualityNumber)")
+        } else {
+            parts.append("quality unavailable")
+        }
+
         if let timeZone = status.timeZone,
            let time = PresentationFormatting.timeString(status.eventTime, timeZone: timeZone)
         {
             parts.append("at \(time)")
         }
-        _ = style // accessibility always includes full context
+
+        if let iconTier = status.iconQualityTier {
+            if let bestEvent = status.bestUpcomingEventType,
+               let bestQuality = status.bestUpcomingQuality,
+               let bestPercentage = PresentationFormatting.percentage(fromNormalized: bestQuality),
+               bestEvent != eventType || bestQuality != normalizedItemQuality
+            {
+                let bestNumber = bestPercentage.replacingOccurrences(of: "%", with: " percent")
+                parts.append(
+                    "icon color \(iconTier.displayName.lowercased()) for best upcoming \(bestEvent.displayName.lowercased()) at \(bestNumber)"
+                )
+            } else {
+                parts.append("icon color \(iconTier.displayName.lowercased())")
+            }
+        }
+
         return parts.joined(separator: ", ")
     }
 
@@ -235,8 +294,7 @@ public enum MenuBarStatusFormatting: Sendable {
     }
 
     public static func compactPercentage(fromNormalized value: Double?) -> String {
-        guard let value else { return "—" }
-        let clamped = max(0.0, min(1.0, value))
+        guard let clamped = ForecastQualityTier.normalizedQuality(value) else { return "—" }
         let percent = Int((clamped * 100).rounded())
         return "\(percent)%"
     }
@@ -300,5 +358,133 @@ public enum MenuBarStatusFormatting: Sendable {
         case .current:
             return ("No forecast available", "minus.circle")
         }
+    }
+}
+
+public enum MenuBarAppearanceVariant: String, Hashable, Sendable {
+    case light
+    case dark
+}
+
+public struct MenuBarIconCacheKey: Hashable, Sendable {
+    public let symbolName: String
+    public let qualityTier: ForecastQualityTier?
+    public let appearance: MenuBarAppearanceVariant
+    public let isHighContrast: Bool
+
+    public init(
+        symbolName: String,
+        qualityTier: ForecastQualityTier?,
+        appearance: MenuBarAppearanceVariant,
+        isHighContrast: Bool
+    ) {
+        self.symbolName = symbolName
+        self.qualityTier = qualityTier
+        self.appearance = appearance
+        self.isHighContrast = isHighContrast
+    }
+}
+
+public struct MenuBarIconDescriptor: Equatable, Sendable {
+    public let symbolName: String
+    public let qualityTier: ForecastQualityTier?
+    public let isTemplate: Bool
+
+    public init(symbolName: String, qualityTier: ForecastQualityTier?, isTemplate: Bool) {
+        self.symbolName = symbolName
+        self.qualityTier = qualityTier
+        self.isTemplate = isTemplate
+    }
+
+    public func cacheKey(
+        appearance: MenuBarAppearanceVariant,
+        isHighContrast: Bool
+    ) -> MenuBarIconCacheKey {
+        MenuBarIconCacheKey(
+            symbolName: symbolName,
+            qualityTier: qualityTier,
+            appearance: appearance,
+            isHighContrast: isHighContrast
+        )
+    }
+}
+
+public struct MenuBarLabelContent: Equatable, Sendable {
+    public let symbolName: String
+    public let title: String
+    public let accessibilityLabel: String
+    public let iconQualityTier: ForecastQualityTier?
+    public let iconDescriptor: MenuBarIconDescriptor
+
+    public init(
+        symbolName: String,
+        title: String,
+        accessibilityLabel: String,
+        iconQualityTier: ForecastQualityTier? = nil
+    ) {
+        self.symbolName = symbolName
+        self.title = title
+        self.accessibilityLabel = accessibilityLabel
+        self.iconQualityTier = iconQualityTier
+        iconDescriptor = MenuBarIconDescriptor(
+            symbolName: symbolName,
+            qualityTier: iconQualityTier,
+            isTemplate: iconQualityTier == nil
+        )
+    }
+
+    public static func resolve(
+        locations: [SavedLocation],
+        snapshots: [UUID: CachedLocationSnapshot],
+        preferences: MenuBarPreferences,
+        selectedLocationID: UUID?,
+        now: Date = Date(),
+        epoch: Date = Date(timeIntervalSince1970: 0)
+    ) -> MenuBarLabelContent {
+        guard let location = MenuBarRotationLogic.locationForLabel(
+            locations: locations,
+            snapshots: snapshots,
+            preferences: preferences,
+            selectedLocationID: selectedLocationID,
+            now: now,
+            epoch: epoch
+        ) else {
+            return MenuBarLabelContent(
+                symbolName: "sun.horizon",
+                title: preferences.displayStyle == .iconOnly ? "" : "SunsetHue",
+                accessibilityLabel: "SunsetHue",
+                iconQualityTier: nil
+            )
+        }
+
+        let snapshot = snapshots[location.id]
+        let item = MenuBarForecastResolver.resolve(
+            location: location,
+            snapshot: snapshot,
+            selection: preferences.eventSelection,
+            now: now
+        )
+        let bestUpcomingItem = MenuBarForecastResolver.resolveBestUpcomingItem(
+            location: location,
+            snapshot: snapshot,
+            selection: preferences.eventSelection,
+            now: now
+        )
+        let status = MenuBarStatus.from(
+            location: location,
+            item: item,
+            snapshot: snapshot,
+            selection: preferences.eventSelection,
+            bestUpcomingItem: bestUpcomingItem
+        )
+        return MenuBarLabelContent(
+            symbolName: status.symbolName,
+            title: MenuBarStatusFormatting.labelText(for: status, style: preferences.displayStyle),
+            accessibilityLabel: MenuBarStatusFormatting.accessibilityLabel(
+                for: status,
+                style: preferences.displayStyle
+            ),
+            iconQualityTier: status.iconQualityTier
+        )
     }
 }

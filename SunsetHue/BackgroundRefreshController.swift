@@ -2,6 +2,13 @@ import Foundation
 import os
 import SunsetHueCore
 
+/// Safe `@unchecked Sendable` invariant: wraps the one-shot system completion handler provided
+/// by `NSBackgroundActivityScheduler.schedule`, which Apple's documentation defines as safe to
+/// invoke from any thread once the background work finishes.
+private struct BackgroundCompletionBox: @unchecked Sendable {
+    let finish: (NSBackgroundActivityScheduler.Result) -> Void
+}
+
 /// Manages an opportunistic macOS NSBackgroundActivityScheduler for periodic forecast updates.
 @MainActor
 final class BackgroundRefreshController: ObservableObject {
@@ -19,7 +26,7 @@ final class BackgroundRefreshController: ObservableObject {
         self.refreshCoordinator = refreshCoordinator
     }
 
-    deinit {
+    isolated deinit {
         scheduler?.invalidate()
     }
 
@@ -33,30 +40,27 @@ final class BackgroundRefreshController: ObservableObject {
         activity.qualityOfService = .utility
 
         activity.schedule { [weak self] completionHandler in
-            guard let self else {
-                completionHandler(.finished)
-                return
-            }
-
-            if activity.shouldDefer {
-                logger.info("Background forecast refresh deferred by system energy management")
-                Task { @MainActor in
-                    self.lastActivityAt = Date()
-                    self.lastDisposition = "deferred"
+            let completion = BackgroundCompletionBox(finish: completionHandler)
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    completion.finish(.finished)
+                    return
                 }
-                completionHandler(.deferred)
-                return
-            }
 
-            logger.info("Starting background forecast refresh")
-            Task {
-                await self.refreshCoordinator.refreshAllStaleLocations(trigger: .backgroundActivity)
-                await MainActor.run {
-                    self.lastActivityAt = Date()
-                    self.lastDisposition = "finished"
+                if scheduler?.shouldDefer == true {
+                    logger.info("Background forecast refresh deferred by system energy management")
+                    lastActivityAt = Date()
+                    lastDisposition = "deferred"
+                    completion.finish(.deferred)
+                    return
                 }
-                self.logger.info("Background forecast refresh completed")
-                completionHandler(.finished)
+
+                logger.info("Starting background forecast refresh")
+                await refreshCoordinator.refreshAllStaleLocations(trigger: .backgroundActivity)
+                lastActivityAt = Date()
+                lastDisposition = "finished"
+                logger.info("Background forecast refresh completed")
+                completion.finish(.finished)
             }
         }
 

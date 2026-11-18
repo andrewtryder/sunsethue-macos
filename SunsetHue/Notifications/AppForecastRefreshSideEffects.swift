@@ -2,8 +2,23 @@ import Foundation
 import SunsetHueCore
 
 /// Allows constructing `ForecastRefreshCoordinator` before `AppModel` finishes wiring side effects.
+/// Safe `@unchecked Sendable` invariant: `_impl` is synchronized via `lock` and assigned once during `AppModel.init`.
 final class ForecastRefreshSideEffectBox: ForecastRefreshSideEffectSink, @unchecked Sendable {
-    var impl: (any ForecastRefreshSideEffectSink)?
+    private let lock = NSLock()
+    private var _impl: (any ForecastRefreshSideEffectSink)?
+
+    var impl: (any ForecastRefreshSideEffectSink)? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _impl
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _impl = newValue
+        }
+    }
 
     func didPersistSnapshot(
         location: SavedLocation,
@@ -21,7 +36,7 @@ final class ForecastRefreshSideEffectBox: ForecastRefreshSideEffectSink, @unchec
 }
 
 /// App-target sink: reload widgets, evaluate threshold alerts, reschedule daily summaries.
-final class AppForecastRefreshSideEffects: ForecastRefreshSideEffectSink, @unchecked Sendable {
+final class AppForecastRefreshSideEffects: ForecastRefreshSideEffectSink {
     private let notificationCoordinator: ForecastNotificationCoordinator
     private let settingsStore: any SharedSettingsStore
     private let forecastCache: any ForecastCache

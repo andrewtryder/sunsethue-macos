@@ -245,13 +245,7 @@ enum WidgetContentResolver {
     }
 
     private static func fallbackStatus(for quality: Double?) -> String {
-        guard let quality else { return "Unavailable" }
-        switch quality {
-        case ..<0.25: return "Poor"
-        case ..<0.50: return "Fair"
-        case ..<0.75: return "Good"
-        default: return "Excellent"
-        }
+        ForecastQualityTier.resolve(quality: quality)?.displayName ?? "Unavailable"
     }
 
     private static func compactWindowLabel(

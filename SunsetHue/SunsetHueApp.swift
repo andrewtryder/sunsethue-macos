@@ -82,7 +82,7 @@ struct SunsetHueApp: App {
             }
         }
 
-        // Compact monochrome status-item label is separate from the richer `.window` popup.
+        // Dynamic quality-tinted status-item label is separate from the richer `.window` popup.
         MenuBarExtra(isInserted: $showMenuBarExtra) {
             SunsetHueMenuBarPopoverView(
                 preferencesStore: menuBarPreferencesStore,

@@ -192,29 +192,32 @@ public enum KeychainStatusMapper {
     }
 }
 
-/// Thread-safe in-memory credentials for tests and SwiftUI previews.
-public final class InMemoryCredentialStore: CredentialStore, @unchecked Sendable {
-    private let lock = NSLock()
-    private var apiKey: String?
+#if DEBUG
+    /// Thread-safe in-memory credentials for tests and SwiftUI previews.
+    /// Safe `@unchecked Sendable` invariant: `apiKey` is exclusively read and mutated while holding `lock`.
+    public final class InMemoryCredentialStore: CredentialStore, @unchecked Sendable {
+        private let lock = NSLock()
+        private var apiKey: String?
 
-    public init(apiKey: String? = nil) {
-        self.apiKey = apiKey
-    }
+        public init(apiKey: String? = nil) {
+            self.apiKey = apiKey
+        }
 
-    public func loadAPIKey() throws -> String? {
-        lock.lock(); defer { lock.unlock() }
-        return apiKey
-    }
+        public func loadAPIKey() throws -> String? {
+            lock.lock(); defer { lock.unlock() }
+            return apiKey
+        }
 
-    public func saveAPIKey(_ apiKey: String) throws {
-        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw SunsetHueError.missingCredentials }
-        lock.lock(); defer { lock.unlock() }
-        self.apiKey = trimmed
-    }
+        public func saveAPIKey(_ apiKey: String) throws {
+            let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { throw SunsetHueError.missingCredentials }
+            lock.lock(); defer { lock.unlock() }
+            self.apiKey = trimmed
+        }
 
-    public func deleteAPIKey() throws {
-        lock.lock(); defer { lock.unlock() }
-        apiKey = nil
+        public func deleteAPIKey() throws {
+            lock.lock(); defer { lock.unlock() }
+            apiKey = nil
+        }
     }
-}
+#endif
