@@ -10,7 +10,19 @@ name: CI
 on:
   push:
     branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/commitlint.yml'
+      - 'LICENSE'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/commitlint.yml'
+      - 'LICENSE'
 
 permissions:
   contents: read
@@ -22,6 +34,11 @@ concurrency:
 jobs:
   package-tests:
     name: Quality gate, tests, and unsigned build
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      !startsWith(github.head_ref, 'release-please--') &&
+      !startsWith(github.event.head_commit.message, 'chore: release') &&
+      !startsWith(github.event.pull_request.title, 'chore: release')
     runs-on: macos-26
     timeout-minutes: 45
 
@@ -128,16 +145,8 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist"
           echo "App bundle present and executable."
 
-      - name: Shell syntax checks
-        run: |
-          set -euo pipefail
-          for sh in $(find scripts -name '*.sh' -type f); do
-            bash -n "$sh"
-            echo "OK $sh"
-          done
-
-  secret-scan:
-    name: Secret scan
+  fast-checks:
+    name: Fast static checks (secrets and shell syntax)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -159,3 +168,11 @@ jobs:
             exit 1
           fi
           echo "Secret scan passed"
+
+      - name: Shell syntax checks
+        run: |
+          set -euo pipefail
+          for sh in $(find scripts -name '*.sh' -type f); do
+            bash -n "$sh"
+            echo "OK $sh"
+          done
