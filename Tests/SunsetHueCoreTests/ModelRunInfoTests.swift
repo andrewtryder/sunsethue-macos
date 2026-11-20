@@ -60,7 +60,8 @@ final class ModelRunInfoTests: XCTestCase {
         XCTAssertEqual(runTransport.requests.count, 1)
         XCTAssertEqual(updated?.modelRunIdentifier, oldRun)
         XCTAssertGreaterThan(try XCTUnwrap(updated?.nextAttemptAt), Date())
-        XCTAssertEqual(updated?.fetchedAt, try XCTUnwrap(await cache.loadSnapshot(for: location.id)?.fetchedAt))
+        let stored = try await cache.loadSnapshot(for: location.id)
+        XCTAssertEqual(updated?.fetchedAt, try XCTUnwrap(stored?.fetchedAt))
     }
 
     func testOneRunInfoCheckSharedAcrossLocations() async throws {
