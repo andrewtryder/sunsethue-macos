@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/andrewtryder/sunsethue-macos/compare/v1.5.0...v1.6.0) (2026-11-20)
+
+
+### Features
+
+* use Sunsethue model run metadata to avoid redundant forecast requests ([b67f813](https://github.com/andrewtryder/sunsethue-macos/commit/b67f8130841e7c15868e6818c6ce755a6b702a05))
+
+
+### Performance Improvements
+
+* **ci:** skip redundant macOS builds on release chores and add path filters ([5179059](https://github.com/andrewtryder/sunsethue-macos/commit/517905915384651fe0b98b92b5da3059827d19ec))
+
 ## [1.5.0](https://github.com/andrewtryder/sunsethue-macos/compare/v1.4.3...v1.5.0) (2026-11-18)
 
 
