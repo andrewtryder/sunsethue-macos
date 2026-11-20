@@ -25,18 +25,21 @@ enum ModelRunInfoParser {
 
     static func parseOptional(_ payload: [String: Any]) -> ModelRunInfo? {
         let root = (payload["data"] as? [String: Any]) ?? payload
+        let runs = root["runs"] as? [String: Any]
         let current = (root["current_run"] as? [String: Any])
             ?? (root["current"] as? [String: Any])
             ?? (root["run"] as? [String: Any])
-            ?? (root["runs"] as? [String: Any])?["current"] as? [String: Any]
+            ?? (root["last_run"] as? [String: Any])
+            ?? (runs?["current"] as? [String: Any])
 
-        let identifier = identifier(in: root, includeNestedID: false)
+        let identifier = identifier(in: payload, includeNestedID: false)
+            ?? identifier(in: root, includeNestedID: false)
             ?? identifier(in: current ?? [:], includeNestedID: true)
         guard let identifier else { return nil }
 
         let next = (root["next_run"] as? [String: Any])
             ?? (root["next"] as? [String: Any])
-            ?? (root["runs"] as? [String: Any])?["next"] as? [String: Any]
+            ?? (runs?["next"] as? [String: Any])
 
         let expected = nextUpdate(in: root, nested: false)
             ?? nextUpdate(in: next ?? [:], nested: true)
