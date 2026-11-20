@@ -218,8 +218,12 @@ public actor ForecastRefreshCoordinator {
             let isFresh = existing.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now)
             let hasCoverage = existing.hasOperationalCoverage(for: location, now: now)
             let hasDisplay = existing.hasDisplayCoverage(for: location, now: now)
-            if !hasCoverage || !hasDisplay { return true }
-            if let next = existing.nextAttemptAt, next > now { return false }
+            if !hasCoverage || !hasDisplay {
+                return true
+            }
+            if let next = existing.nextAttemptAt, next > now {
+                return false
+            }
             return !isFresh
         case .stale:
             if let next = existing.nextAttemptAt, next > now {
@@ -546,10 +550,8 @@ public actor ForecastRefreshCoordinator {
                 }
                 return RefreshExecutionResult(snapshot: nil, performedNetworkRefresh: false)
             }
-            let actual: CachedLocationSnapshot
-            switch saved {
-            case let .committed(snapshot), let .rejectedStale(snapshot):
-                actual = snapshot
+            let actual = switch saved {
+            case let .committed(snapshot), let .rejectedStale(snapshot): snapshot
             }
             await activityRecorder.record(
                 locationID: location.id,
