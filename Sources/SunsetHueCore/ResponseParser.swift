@@ -42,7 +42,9 @@ enum ResponseParser {
             eventTime: optionalDateTime(data, key: "time"),
             direction: parseDirection(data),
             blueHour: optionalMagicWindow(data, name: "blue_hour"),
-            goldenHour: optionalMagicWindow(data, name: "golden_hour")
+            goldenHour: optionalMagicWindow(data, name: "golden_hour"),
+            modelRunIdentifier: ModelRunInfoParser.parseOptional(payload)?.identifier,
+            nextExpectedUpdate: ModelRunInfoParser.parseOptional(payload)?.nextExpectedUpdate
         )
     }
 
