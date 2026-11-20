@@ -418,45 +418,12 @@ public actor ForecastRefreshCoordinator {
             previous: previous?.bundle
         )
 
-        let snapshot: CachedLocationSnapshot
-        var wasSuccessfulNetworkRefresh = false
-        if let bundle = outcome.bundle, !outcome.usedCache {
-            snapshot = CachedLocationSnapshot.fromSuccessful(bundle: bundle, attemptedAt: attemptedAt)
-            wasSuccessfulNetworkRefresh = snapshot.status == .current
-        } else if let error = outcome.error {
-            let status = status(from: error)
-            let rateLimitRetry: Date? = if case let .rateLimited(retryAfter) = status {
-                retryAfter
-            } else {
-                nil
-            }
-            snapshot = makeFailureSnapshot(
-                locationID: location.id,
-                previous: previous,
-                forecasts: outcome.bundle?.forecasts ?? previous?.forecasts ?? [],
-                fetchedAt: outcome.bundle?.fetchedAt ?? previous?.fetchedAt ?? attemptedAt,
-                attemptedAt: attemptedAt,
-                status: status,
-                rateLimitRetryAfter: rateLimitRetry
-            )
-        } else if let bundle = outcome.bundle {
-            snapshot = CachedLocationSnapshot(
-                locationID: location.id,
-                fetchedAt: bundle.fetchedAt,
-                lastAttemptAt: attemptedAt,
-                forecasts: bundle.forecasts,
-                status: .stale,
-                nextAttemptAt: attemptedAt.addingTimeInterval(15 * 60),
-                consecutiveFailureCount: (previous?.consecutiveFailureCount ?? 0) + 1
-            )
-        } else {
-            snapshot = makeFailureSnapshot(
-                locationID: location.id,
-                previous: previous,
-                attemptedAt: attemptedAt,
-                status: .temporarilyUnavailable
-            )
-        }
+        let (snapshot, wasSuccessfulNetworkRefresh) = snapshotForOutcome(
+            location: location,
+            previous: previous,
+            outcome: outcome,
+            attemptedAt: attemptedAt
+        )
 
         let persistenceOutcome = await persistAndEmitSideEffects(
             location: location,
@@ -518,6 +485,55 @@ public actor ForecastRefreshCoordinator {
         }
 
         return RefreshExecutionResult(snapshot: savedSnapshot, performedNetworkRefresh: true)
+    }
+
+    /// Produce the replacement snapshot without involving network or persistence.
+    private func snapshotForOutcome(
+        location: SavedLocation,
+        previous: CachedLocationSnapshot?,
+        outcome: RefreshOutcome,
+        attemptedAt: Date
+    ) -> (CachedLocationSnapshot, Bool) {
+        let snapshot: CachedLocationSnapshot
+        var wasSuccessfulNetworkRefresh = false
+        if let bundle = outcome.bundle, !outcome.usedCache {
+            snapshot = CachedLocationSnapshot.fromSuccessful(bundle: bundle, attemptedAt: attemptedAt)
+            wasSuccessfulNetworkRefresh = snapshot.status == .current
+        } else if let error = outcome.error {
+            let status = status(from: error)
+            let rateLimitRetry: Date? = if case let .rateLimited(retryAfter) = status {
+                retryAfter
+            } else {
+                nil
+            }
+            snapshot = makeFailureSnapshot(
+                locationID: location.id,
+                previous: previous,
+                forecasts: outcome.bundle?.forecasts ?? previous?.forecasts ?? [],
+                fetchedAt: outcome.bundle?.fetchedAt ?? previous?.fetchedAt ?? attemptedAt,
+                attemptedAt: attemptedAt,
+                status: status,
+                rateLimitRetryAfter: rateLimitRetry
+            )
+        } else if let bundle = outcome.bundle {
+            snapshot = CachedLocationSnapshot(
+                locationID: location.id,
+                fetchedAt: bundle.fetchedAt,
+                lastAttemptAt: attemptedAt,
+                forecasts: bundle.forecasts,
+                status: .stale,
+                nextAttemptAt: attemptedAt.addingTimeInterval(15 * 60),
+                consecutiveFailureCount: (previous?.consecutiveFailureCount ?? 0) + 1
+            )
+        } else {
+            snapshot = makeFailureSnapshot(
+                locationID: location.id,
+                previous: previous,
+                attemptedAt: attemptedAt,
+                status: .temporarilyUnavailable
+            )
+        }
+        return (snapshot, wasSuccessfulNetworkRefresh)
     }
 
     /// No event requests when the provider is still serving the cached model run.
