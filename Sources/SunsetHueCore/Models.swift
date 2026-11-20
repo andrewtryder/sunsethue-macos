@@ -65,6 +65,9 @@ public struct EventForecast: Codable, Hashable, Sendable {
     public let blueHour: MagicHourWindow?
     public let goldenHour: MagicHourWindow?
     public let forecastDate: Date?
+    /// Opaque forecast model version supplied by the Sunsethue API, when present.
+    public let modelRunIdentifier: String?
+    public let nextExpectedUpdate: Date?
 
     public init(
         responseTime: Date,
@@ -79,7 +82,9 @@ public struct EventForecast: Codable, Hashable, Sendable {
         direction: Double?,
         blueHour: MagicHourWindow?,
         goldenHour: MagicHourWindow?,
-        forecastDate: Date? = nil
+        forecastDate: Date? = nil,
+        modelRunIdentifier: String? = nil,
+        nextExpectedUpdate: Date? = nil
     ) {
         self.responseTime = responseTime
         self.location = location
@@ -94,6 +99,8 @@ public struct EventForecast: Codable, Hashable, Sendable {
         self.blueHour = blueHour
         self.goldenHour = goldenHour
         self.forecastDate = forecastDate
+        self.modelRunIdentifier = modelRunIdentifier
+        self.nextExpectedUpdate = nextExpectedUpdate
     }
 
     public var isQualityAvailable: Bool {
@@ -114,7 +121,9 @@ public struct EventForecast: Codable, Hashable, Sendable {
             direction: direction,
             blueHour: blueHour,
             goldenHour: goldenHour,
-            forecastDate: date
+            forecastDate: date,
+            modelRunIdentifier: modelRunIdentifier,
+            nextExpectedUpdate: nextExpectedUpdate
         )
     }
 }
@@ -401,6 +410,9 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
     /// Earliest time an automatic retry should run. Nil means status-specific default rules apply.
     public var nextAttemptAt: Date?
     public var consecutiveFailureCount: Int
+    /// Nil for caches saved before the provider exposed run identifiers.
+    public var modelRunIdentifier: String?
+    public var nextExpectedUpdate: Date?
 
     public enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -411,6 +423,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         case status
         case nextAttemptAt
         case consecutiveFailureCount
+        case modelRunIdentifier
+        case nextExpectedUpdate
         // Legacy LocationCacheDocument fields (decode-only migration).
         case lastErrorMessage
         case lastErrorIsAuthentication
@@ -425,7 +439,9 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         forecasts: [EventForecast],
         status: RefreshStatus,
         nextAttemptAt: Date? = nil,
-        consecutiveFailureCount: Int = 0
+        consecutiveFailureCount: Int = 0,
+        modelRunIdentifier: String? = nil,
+        nextExpectedUpdate: Date? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.locationID = locationID
@@ -435,6 +451,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         self.status = status
         self.nextAttemptAt = nextAttemptAt
         self.consecutiveFailureCount = consecutiveFailureCount
+        self.modelRunIdentifier = modelRunIdentifier
+        self.nextExpectedUpdate = nextExpectedUpdate
     }
 
     public init(from decoder: Decoder) throws {
@@ -451,6 +469,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
             self.status = status
             nextAttemptAt = try container.decodeIfPresent(Date.self, forKey: .nextAttemptAt)
             consecutiveFailureCount = try container.decodeIfPresent(Int.self, forKey: .consecutiveFailureCount) ?? 0
+            modelRunIdentifier = try container.decodeIfPresent(String.self, forKey: .modelRunIdentifier)
+            nextExpectedUpdate = try container.decodeIfPresent(Date.self, forKey: .nextExpectedUpdate)
             return
         }
 
@@ -463,6 +483,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         schemaVersion = SunsetHueConstants.currentCacheSchemaVersion
         nextAttemptAt = nil
         consecutiveFailureCount = 0
+        modelRunIdentifier = nil
+        nextExpectedUpdate = nil
         let auth = try container.decodeIfPresent(Bool.self, forKey: .lastErrorIsAuthentication) ?? false
         let hasError = try container.decodeIfPresent(String.self, forKey: .lastErrorMessage) != nil
         if auth {
@@ -486,6 +508,8 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
         try container.encode(status, forKey: .status)
         try container.encodeIfPresent(nextAttemptAt, forKey: .nextAttemptAt)
         try container.encode(consecutiveFailureCount, forKey: .consecutiveFailureCount)
+        try container.encodeIfPresent(modelRunIdentifier, forKey: .modelRunIdentifier)
+        try container.encodeIfPresent(nextExpectedUpdate, forKey: .nextExpectedUpdate)
     }
 
     public var bundle: LocationForecastBundle? {
@@ -522,14 +546,18 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
     }
 
     public static func fromSuccessful(bundle: LocationForecastBundle, attemptedAt: Date = Date()) -> CachedLocationSnapshot {
-        CachedLocationSnapshot(
+        let identifiers = Set(bundle.forecasts.compactMap(\.modelRunIdentifier))
+        let consistentRun = identifiers.count == 1 && bundle.forecasts.allSatisfy { $0.modelRunIdentifier != nil }
+        return CachedLocationSnapshot(
             locationID: bundle.locationID,
             fetchedAt: bundle.fetchedAt,
             lastAttemptAt: attemptedAt,
             forecasts: bundle.forecasts,
             status: .current,
             nextAttemptAt: nil,
-            consecutiveFailureCount: 0
+            consecutiveFailureCount: 0,
+            modelRunIdentifier: consistentRun ? identifiers.first : nil,
+            nextExpectedUpdate: bundle.forecasts.compactMap(\.nextExpectedUpdate).min()
         )
     }
 
@@ -551,11 +579,12 @@ public struct CachedLocationSnapshot: Codable, Hashable, Sendable {
                 ? refreshIntervalHours
                 : SunsetHueConstants.defaultRefreshIntervalHours
             let intervalDate = fetchedAt.addingTimeInterval(TimeInterval(hours * 3600))
+            let nextRunCheck = max(intervalDate, nextAttemptAt ?? intervalDate)
             if let timeZone {
                 let midnight = ForecastDateCalculator().nextMidnightRefresh(timeZone: timeZone, now: now)
-                return min(intervalDate, midnight)
+                return min(nextRunCheck, midnight)
             }
-            return intervalDate
+            return nextRunCheck
         case .stale:
             return nextAttemptAt ?? now
         case .temporarilyUnavailable, .invalidResponse:

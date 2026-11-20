@@ -13,6 +13,7 @@ public actor ForecastRefreshCoordinator {
     private let forecastCache: any ForecastCache
     private let credentialStore: CredentialStore
     private let forecastService: ForecastService
+    private let runInfoMonitor: ModelRunInfoMonitor
     private let sideEffectSink: any ForecastRefreshSideEffectSink
     private let logger = Logger(subsystem: "com.andrewtryder.SunsetHue", category: "Coordinator")
     private var scheduledTask: Task<Void, Never>?
@@ -30,12 +31,14 @@ public actor ForecastRefreshCoordinator {
         credentialStore: CredentialStore = KeychainCredentialStore(),
         forecastService: ForecastService = ForecastService(),
         sideEffectSink: any ForecastRefreshSideEffectSink = NoOpForecastRefreshSideEffectSink(),
-        activityRecorder: RefreshActivityRecorder = RefreshActivityRecorder()
+        activityRecorder: RefreshActivityRecorder = RefreshActivityRecorder(),
+        runInfoMonitor: ModelRunInfoMonitor = ModelRunInfoMonitor()
     ) {
         self.settingsStore = settingsStore
         self.forecastCache = forecastCache
         self.credentialStore = credentialStore
         self.forecastService = forecastService
+        self.runInfoMonitor = runInfoMonitor
         self.sideEffectSink = sideEffectSink
         self.activityRecorder = activityRecorder
     }
@@ -215,7 +218,13 @@ public actor ForecastRefreshCoordinator {
             let isFresh = existing.isFresh(refreshIntervalHours: location.refreshIntervalHours, now: now)
             let hasCoverage = existing.hasOperationalCoverage(for: location, now: now)
             let hasDisplay = existing.hasDisplayCoverage(for: location, now: now)
-            return !isFresh || !hasCoverage || !hasDisplay
+            if !hasCoverage || !hasDisplay {
+                return true
+            }
+            if let next = existing.nextAttemptAt, next > now {
+                return false
+            }
+            return !isFresh
         case .stale:
             if let next = existing.nextAttemptAt, next > now {
                 return false
@@ -383,51 +392,38 @@ public actor ForecastRefreshCoordinator {
             return RefreshExecutionResult(snapshot: savedSnapshot, performedNetworkRefresh: false)
         }
 
+        // Only check the provider's run when this snapshot is due AND its cached
+        // events carried an actual run ID. Legacy responses take the existing TTL path.
+        // Coverage gaps (including local-day rollover) must always be fetched.
+        if !force, let previous, previous.status == .current,
+           let cachedRunID = previous.modelRunIdentifier,
+           previous.hasOperationalCoverage(for: location, now: attemptedAt),
+           previous.hasDisplayCoverage(for: location, now: attemptedAt),
+           let runInfo = await runInfoMonitor.current(apiKey: apiKey),
+           runInfo.identifier == cachedRunID
+        {
+            return await postponeUnchangedRun(
+                location: location,
+                generation: generation,
+                previous: previous,
+                info: runInfo,
+                trigger: trigger,
+                attemptedAt: attemptedAt
+            )
+        }
+
         let outcome = await forecastService.refreshPreservingCache(
             location: location,
             apiKey: apiKey,
             previous: previous?.bundle
         )
 
-        let snapshot: CachedLocationSnapshot
-        var wasSuccessfulNetworkRefresh = false
-        if let bundle = outcome.bundle, !outcome.usedCache {
-            snapshot = CachedLocationSnapshot.fromSuccessful(bundle: bundle, attemptedAt: attemptedAt)
-            wasSuccessfulNetworkRefresh = snapshot.status == .current
-        } else if let error = outcome.error {
-            let status = status(from: error)
-            let rateLimitRetry: Date? = if case let .rateLimited(retryAfter) = status {
-                retryAfter
-            } else {
-                nil
-            }
-            snapshot = makeFailureSnapshot(
-                locationID: location.id,
-                previous: previous,
-                forecasts: outcome.bundle?.forecasts ?? previous?.forecasts ?? [],
-                fetchedAt: outcome.bundle?.fetchedAt ?? previous?.fetchedAt ?? attemptedAt,
-                attemptedAt: attemptedAt,
-                status: status,
-                rateLimitRetryAfter: rateLimitRetry
-            )
-        } else if let bundle = outcome.bundle {
-            snapshot = CachedLocationSnapshot(
-                locationID: location.id,
-                fetchedAt: bundle.fetchedAt,
-                lastAttemptAt: attemptedAt,
-                forecasts: bundle.forecasts,
-                status: .stale,
-                nextAttemptAt: attemptedAt.addingTimeInterval(15 * 60),
-                consecutiveFailureCount: (previous?.consecutiveFailureCount ?? 0) + 1
-            )
-        } else {
-            snapshot = makeFailureSnapshot(
-                locationID: location.id,
-                previous: previous,
-                attemptedAt: attemptedAt,
-                status: .temporarilyUnavailable
-            )
-        }
+        let (snapshot, wasSuccessfulNetworkRefresh) = snapshotForOutcome(
+            location: location,
+            previous: previous,
+            outcome: outcome,
+            attemptedAt: attemptedAt
+        )
 
         let persistenceOutcome = await persistAndEmitSideEffects(
             location: location,
@@ -489,6 +485,102 @@ public actor ForecastRefreshCoordinator {
         }
 
         return RefreshExecutionResult(snapshot: savedSnapshot, performedNetworkRefresh: true)
+    }
+
+    /// Produce the replacement snapshot without involving network or persistence.
+    private func snapshotForOutcome(
+        location: SavedLocation,
+        previous: CachedLocationSnapshot?,
+        outcome: RefreshOutcome,
+        attemptedAt: Date
+    ) -> (CachedLocationSnapshot, Bool) {
+        let snapshot: CachedLocationSnapshot
+        var wasSuccessfulNetworkRefresh = false
+        if let bundle = outcome.bundle, !outcome.usedCache {
+            snapshot = CachedLocationSnapshot.fromSuccessful(bundle: bundle, attemptedAt: attemptedAt)
+            wasSuccessfulNetworkRefresh = snapshot.status == .current
+        } else if let error = outcome.error {
+            let status = status(from: error)
+            let rateLimitRetry: Date? = if case let .rateLimited(retryAfter) = status {
+                retryAfter
+            } else {
+                nil
+            }
+            snapshot = makeFailureSnapshot(
+                locationID: location.id,
+                previous: previous,
+                forecasts: outcome.bundle?.forecasts ?? previous?.forecasts ?? [],
+                fetchedAt: outcome.bundle?.fetchedAt ?? previous?.fetchedAt ?? attemptedAt,
+                attemptedAt: attemptedAt,
+                status: status,
+                rateLimitRetryAfter: rateLimitRetry
+            )
+        } else if let bundle = outcome.bundle {
+            snapshot = CachedLocationSnapshot(
+                locationID: location.id,
+                fetchedAt: bundle.fetchedAt,
+                lastAttemptAt: attemptedAt,
+                forecasts: bundle.forecasts,
+                status: .stale,
+                nextAttemptAt: attemptedAt.addingTimeInterval(15 * 60),
+                consecutiveFailureCount: (previous?.consecutiveFailureCount ?? 0) + 1
+            )
+        } else {
+            snapshot = makeFailureSnapshot(
+                locationID: location.id,
+                previous: previous,
+                attemptedAt: attemptedAt,
+                status: .temporarilyUnavailable
+            )
+        }
+        return (snapshot, wasSuccessfulNetworkRefresh)
+    }
+
+    /// No event requests when the provider is still serving the cached model run.
+    /// This does not update fetchedAt or emit forecast-changed notifications.
+    private func postponeUnchangedRun(
+        location: SavedLocation,
+        generation: Int,
+        previous: CachedLocationSnapshot,
+        info: ModelRunInfo,
+        trigger: RefreshTrigger,
+        attemptedAt: Date
+    ) async -> RefreshExecutionResult {
+        guard canPersist(locationID: location.id, generation: generation) else {
+            return RefreshExecutionResult(snapshot: nil, performedNetworkRefresh: false)
+        }
+        var deferred = previous
+        deferred.lastAttemptAt = attemptedAt
+        deferred.nextExpectedUpdate = info.nextExpectedUpdate
+        // A delayed publication should be polled politely, never in a tight loop.
+        let retryFloor = attemptedAt.addingTimeInterval(15 * 60)
+        deferred.nextAttemptAt = max(retryFloor, (info.nextExpectedUpdate ?? retryFloor).addingTimeInterval(2 * 60))
+
+        do {
+            let saved = try await forecastCache.saveSnapshot(deferred)
+            guard canPersist(locationID: location.id, generation: generation) else {
+                if removedLocationIDs.contains(location.id) {
+                    try? await forecastCache.deleteLocation(location.id)
+                } else if let cached = try? await forecastCache.loadSnapshot(for: location.id), cached == deferred {
+                    try? await forecastCache.deleteLocation(location.id)
+                }
+                return RefreshExecutionResult(snapshot: nil, performedNetworkRefresh: false)
+            }
+            let actual = switch saved {
+            case let .committed(snapshot), let .rejectedStale(snapshot): snapshot
+            }
+            await activityRecorder.record(
+                locationID: location.id,
+                locationName: location.name,
+                trigger: trigger,
+                result: .skippedFresh,
+                details: "Forecast model run unchanged"
+            )
+            return RefreshExecutionResult(snapshot: actual, performedNetworkRefresh: false)
+        } catch {
+            logger.error("Failed to persist unchanged-run check: \\(error.localizedDescription, privacy: .public)")
+            return RefreshExecutionResult(snapshot: previous, performedNetworkRefresh: false)
+        }
     }
 
     private enum PersistenceOutcome: Sendable {
@@ -601,7 +693,9 @@ public actor ForecastRefreshCoordinator {
             forecasts: forecasts ?? previous?.forecasts ?? [],
             status: status,
             nextAttemptAt: backoff.nextAttemptAt,
-            consecutiveFailureCount: backoff.consecutiveFailureCount
+            consecutiveFailureCount: backoff.consecutiveFailureCount,
+            modelRunIdentifier: previous?.modelRunIdentifier,
+            nextExpectedUpdate: previous?.nextExpectedUpdate
         )
     }
 }
