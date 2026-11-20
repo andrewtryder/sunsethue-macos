@@ -120,8 +120,12 @@ public actor ModelRunInfoMonitor {
 
     public func current(apiKey: String) async -> ModelRunInfo? {
         let now = Date()
-        if now < validUntil { return cached }
-        if let inFlight { return await inFlight.value }
+        if now < validUntil {
+            return cached
+        }
+        if let inFlight {
+            return await inFlight.value
+        }
 
         let task = Task { [service] in try? await service.fetch(apiKey: apiKey) }
         inFlight = task
