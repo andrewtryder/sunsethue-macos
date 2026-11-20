@@ -64,7 +64,7 @@ final class ModelRunInfoTests: XCTestCase {
         XCTAssertEqual(updated?.fetchedAt, try XCTUnwrap(stored?.fetchedAt))
     }
 
-    func testOneRunInfoCheckSharedAcrossLocations() async throws {
+    func testOneRunInfoCheckSharedAcrossLocations() async {
         let first = makeLocation()
         let second = SavedLocation(
             name: "Second location",
